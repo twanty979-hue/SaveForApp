@@ -861,7 +861,7 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                                           ),
                                                           const SizedBox(width: 2),
                                                           Text(
-                                                            hasPaid ? 'จ่ายครบแล้ว' : 'ค้างจ่าย ฿${(amount - paidAmt).toStringAsFixed(0)}',
+                                                            hasPaid ? 'จ่ายแล้ว ฿${paidAmt.toStringAsFixed(0)}' : 'ยังไม่ได้จ่าย',
                                                             style: TextStyle(
                                                               fontSize: 8,
                                                               fontWeight: FontWeight.bold,
