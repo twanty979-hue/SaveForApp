@@ -76,30 +76,23 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
     }
   }
 
-  bool _isPaidThisMonth(String id) {
-    final now = DateTime.now();
-    return _transactions.any((tx) {
-      final dateStr = tx['transaction_date'] ?? '';
-      final date = DateTime.tryParse(dateStr);
-      return date != null &&
-          date.year == now.year &&
-          date.month == now.month &&
-          tx['fixed_expense_id'] == id &&
-          tx['type'] == 'expense';
-    });
-  }
 
-  double _getPaidAmountThisMonth(String id) {
+
+  double _getPaidAmountThisMonth(String id, String name) {
     final now = DateTime.now();
     double total = 0.0;
     for (var tx in _transactions) {
       final dateStr = tx['transaction_date'] ?? '';
       final date = DateTime.tryParse(dateStr);
+      final txFixedExpenseId = tx['fixed_expense_id']?.toString();
+      final note = tx['note']?.toString() ?? '';
       if (date != null &&
           date.year == now.year &&
           date.month == now.month &&
-          tx['fixed_expense_id'] == id &&
-          tx['type'] == 'expense') {
+          tx['type'] == 'expense' &&
+          (txFixedExpenseId == id ||
+           note == '[รายจ่ายประจำ] $name' ||
+           note == name)) {
         total += (tx['amount'] as num?)?.toDouble() ?? 0.0;
       }
     }
@@ -622,8 +615,10 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
       final amt = (exp['amount'] as num).toDouble();
       totalExpenseExpected += amt;
       final id = exp['id'] as String? ?? '';
-      if (_isPaidThisMonth(id)) {
-        totalExpensePaid += amt;
+      final name = exp['name'] as String? ?? '';
+      final paidAmt = _getPaidAmountThisMonth(id, name);
+      totalExpensePaid += paidAmt;
+      if (paidAmt >= amt) {
         itemsPaid++;
       }
     }
@@ -792,7 +787,7 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                 final amount = (expense['amount'] as num).toDouble();
                                 final category = expense['category'] ?? 'ทั่วไป';
                                 final dueDay = expense['due_day'] ?? 1;
-                                final paidAmt = _getPaidAmountThisMonth(id);
+                                final paidAmt = _getPaidAmountThisMonth(id, name);
                                 final hasPaid = paidAmt > 0;
 
                                 return Container(

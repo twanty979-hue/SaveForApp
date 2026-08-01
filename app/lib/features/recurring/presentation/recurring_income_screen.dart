@@ -72,30 +72,23 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
     }
   }
 
-  bool _isReceivedThisMonth(String id) {
-    final now = DateTime.now();
-    return _transactions.any((tx) {
-      final dateStr = tx['transaction_date'] ?? '';
-      final date = DateTime.tryParse(dateStr);
-      return date != null &&
-          date.year == now.year &&
-          date.month == now.month &&
-          tx['income_source_id'] == id &&
-          tx['type'] == 'income';
-    });
-  }
 
-  double _getReceivedAmountThisMonth(String id) {
+
+  double _getReceivedAmountThisMonth(String id, String name) {
     final now = DateTime.now();
     double total = 0.0;
     for (var tx in _transactions) {
       final dateStr = tx['transaction_date'] ?? '';
       final date = DateTime.tryParse(dateStr);
+      final txIncomeSourceId = tx['income_source_id']?.toString();
+      final note = tx['note']?.toString() ?? '';
       if (date != null &&
           date.year == now.year &&
           date.month == now.month &&
-          tx['income_source_id'] == id &&
-          tx['type'] == 'income') {
+          tx['type'] == 'income' &&
+          (txIncomeSourceId == id ||
+           note == '[รายรับประจำ] $name' ||
+           note == name)) {
         total += (tx['amount'] as num?)?.toDouble() ?? 0.0;
       }
     }
@@ -619,8 +612,10 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
       final amt = (source['amount'] as num).toDouble();
       totalIncomeExpected += amt;
       final id = source['id'] as String? ?? '';
-      totalIncomeReceived += _getReceivedAmountThisMonth(id);
-      if (_isReceivedThisMonth(id)) {
+      final name = source['name'] as String? ?? '';
+      final receivedAmt = _getReceivedAmountThisMonth(id, name);
+      totalIncomeReceived += receivedAmt;
+      if (receivedAmt >= amt) {
         itemsReceived++;
       }
     }
@@ -788,7 +783,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                 final amount = (source['amount'] as num).toDouble();
                                 final category = source['category'] ?? 'ทั่วไป';
                                 final dueDay = source['due_day'] ?? 1;
-                                final receivedAmt = _getReceivedAmountThisMonth(id);
+                                final receivedAmt = _getReceivedAmountThisMonth(id, name);
                                 final hasReceived = receivedAmt > 0;
 
                                 return Container(
