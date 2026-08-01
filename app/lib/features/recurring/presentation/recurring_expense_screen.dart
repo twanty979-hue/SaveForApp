@@ -89,6 +89,23 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
     });
   }
 
+  double _getPaidAmountThisMonth(String id) {
+    final now = DateTime.now();
+    double total = 0.0;
+    for (var tx in _transactions) {
+      final dateStr = tx['transaction_date'] ?? '';
+      final date = DateTime.tryParse(dateStr);
+      if (date != null &&
+          date.year == now.year &&
+          date.month == now.month &&
+          tx['fixed_expense_id'] == id &&
+          tx['type'] == 'expense') {
+        total += (tx['amount'] as num?)?.toDouble() ?? 0.0;
+      }
+    }
+    return total;
+  }
+
   Future<void> _recordExpensePayment(String id, String name, double amount) async {
     try {
       final body = {
@@ -109,6 +126,124 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
     }
   }
 
+  void _showRecordPaymentDialog(String id, String name, double defaultAmt) {
+    final amountController = TextEditingController(text: defaultAmt <= 0 ? '' : defaultAmt.toStringAsFixed(0));
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            'บันทึกจ่ายเงิน: $name',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'ระบุจำนวนเงินที่จ่าย (บาท)',
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: amountController,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: '0.00',
+                  isDense: true,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ยกเลิก', style: TextStyle(color: Color(0xFF64748B))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                final amt = double.tryParse(amountController.text.trim()) ?? 0.0;
+                if (amt > 0) {
+                  Navigator.pop(context);
+                  _recordExpensePayment(id, name, amt);
+                }
+              },
+              child: const Text('บันทึก', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDeleteConfirmation(String id) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444)),
+              SizedBox(width: 8),
+              Text(
+                'ยืนยันการลบ',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'คุณแน่ใจหรือไม่ว่าต้องการลบรายการรายจ่ายประจำนี้? ข้อมูลนี้จะหายไปอย่างถาวร',
+            style: TextStyle(
+              fontSize: 14,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          actionsPadding: const EdgeInsets.only(right: 16, bottom: 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'ยกเลิก',
+                style: TextStyle(
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteExpense(id);
+              },
+              child: const Text(
+                'ลบข้อมูล',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _deleteExpense(String id) async {
     try {
       final response = await _apiClient.post('/recurring/expenses?id=eq.$id', body: null);
@@ -121,11 +256,11 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
   }
 
   // หน้าต่างเพิ่มรายจ่ายประจำดีไซน์พรีเมียม ถอดแบบจากภาพที่สองและสามเป๊ะๆ
-  void _showAddExpenseBottomSheet() {
-    final nameController = TextEditingController();
-    final amountController = TextEditingController();
-    final dueDayController = TextEditingController(text: '5'); // ค่าเริ่มต้นตามภาพ
-    String selectedCategory = 'ค่าเช่า'; // เลือกค่าเริ่มต้น
+  void _showAddExpenseBottomSheet({Map<String, dynamic>? expenseToEdit}) {
+    final nameController = TextEditingController(text: expenseToEdit?['name']?.toString());
+    final amountController = TextEditingController(text: expenseToEdit?['amount']?.toString());
+    final dueDayController = TextEditingController(text: expenseToEdit?['due_day']?.toString() ?? '5');
+    String selectedCategory = expenseToEdit?['category']?.toString() ?? 'ค่าเช่า';
     int activeStep = 0;
 
     showModalBottomSheet(
@@ -168,7 +303,9 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                               const SizedBox(width: 8),
                             ],
                             Text(
-                              activeStep == 0 ? 'เลือกหมวดหมู่รายจ่าย' : 'กรอกรายละเอียดรายจ่าย',
+                              expenseToEdit != null
+                                  ? (activeStep == 0 ? 'แก้ไขหมวดหมู่รายจ่าย' : 'แก้ไขรายละเอียดรายจ่าย')
+                                  : (activeStep == 0 ? 'เลือกหมวดหมู่รายจ่าย' : 'กรอกรายละเอียดรายจ่าย'),
                               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                             ),
                           ],
@@ -435,8 +572,11 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                 'due_day': dueDay,
                               };
 
-                              final response = await _apiClient.post('/recurring/expenses', body: body);
-                              if (response.statusCode == 200 || response.statusCode == 201) {
+                              final response = expenseToEdit != null
+                                  ? await _apiClient.patch('/recurring/expenses?id=eq.${expenseToEdit['id']}', body: body)
+                                  : await _apiClient.post('/recurring/expenses', body: body);
+
+                              if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
                                 if (context.mounted) {
                                   Navigator.pop(context);
                                 }
@@ -446,9 +586,9 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                               // จัดการข้อผิดพลาดเงียบ
                             }
                           },
-                          child: const Text(
-                            '+ เพิ่มรายจ่ายประจำ',
-                            style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                          child: Text(
+                            expenseToEdit != null ? 'บันทึกการแก้ไข' : '+ เพิ่มรายจ่ายประจำ',
+                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
@@ -493,7 +633,7 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
     final double amountRemaining = totalExpenseExpected - totalExpensePaid;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFFFAFBFD),
       body: Stack(
         children: [
           const Positioned.fill(
@@ -652,7 +792,8 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                 final amount = (expense['amount'] as num).toDouble();
                                 final category = expense['category'] ?? 'ทั่วไป';
                                 final dueDay = expense['due_day'] ?? 1;
-                                final isPaid = _isPaidThisMonth(id);
+                                final paidAmt = _getPaidAmountThisMonth(id);
+                                final hasPaid = paidAmt > 0;
 
                                 return Container(
                                   margin: const EdgeInsets.only(bottom: 12),
@@ -708,10 +849,10 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                                     Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                                       decoration: BoxDecoration(
-                                                        color: isPaid ? const Color(0xFFE6F4F1) : const Color(0xFFFFF1F2),
+                                                        color: hasPaid ? const Color(0xFFE6F4F1) : const Color(0xFFFFF1F2),
                                                         borderRadius: BorderRadius.circular(6),
                                                         border: Border.all(
-                                                          color: isPaid ? const Color(0xFF5ED5A8) : const Color(0xFFFECDD3),
+                                                          color: hasPaid ? const Color(0xFF5ED5A8) : const Color(0xFFFECDD3),
                                                           width: 1,
                                                         ),
                                                       ),
@@ -719,17 +860,17 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                                         mainAxisSize: MainAxisSize.min,
                                                         children: [
                                                           Icon(
-                                                            isPaid ? Icons.check_circle_outlined : Icons.watch_later_outlined,
+                                                            hasPaid ? Icons.check_circle_outlined : Icons.watch_later_outlined,
                                                             size: 10,
-                                                            color: isPaid ? AppTheme.primaryColor : const Color(0xFFEF4444),
+                                                            color: hasPaid ? AppTheme.primaryColor : const Color(0xFFEF4444),
                                                           ),
                                                           const SizedBox(width: 2),
                                                           Text(
-                                                            isPaid ? 'จ่ายแล้ว' : 'ยังไม่จ่าย',
+                                                            hasPaid ? 'จ่ายครบแล้ว' : 'ค้างจ่าย ฿${(amount - paidAmt).toStringAsFixed(0)}',
                                                             style: TextStyle(
                                                               fontSize: 8,
                                                               fontWeight: FontWeight.bold,
-                                                              color: isPaid ? AppTheme.primaryColor : const Color(0xFFEF4444),
+                                                              color: hasPaid ? AppTheme.primaryColor : const Color(0xFFEF4444),
                                                             ),
                                                           ),
                                                         ],
@@ -758,18 +899,18 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                           // ปุ่มกดเช็กบันทึกการชำระเงินขอบเขียวสด
                                           SizedBox(
                                             height: 36,
-                                            child: isPaid
-                                                ? ElevatedButton.icon(
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: const Color(0xFFF1F5F9),
+                                            child: hasPaid
+                                                ? OutlinedButton.icon(
+                                                    style: OutlinedButton.styleFrom(
+                                                      side: const BorderSide(color: AppTheme.primaryColor, width: 1.2),
                                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                                      elevation: 0,
+                                                      padding: const EdgeInsets.symmetric(horizontal: 16),
                                                     ),
-                                                    onPressed: null,
-                                                    icon: const Icon(Icons.check_circle_outline, color: Color(0xFF64748B), size: 16),
+                                                    onPressed: () => _showRecordPaymentDialog(id, name, amount - paidAmt),
+                                                    icon: const Icon(Icons.check_circle_outline, color: AppTheme.primaryColor, size: 16),
                                                     label: const Text(
-                                                      'ชำระเงินแล้วประจำเดือนนี้',
-                                                      style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.bold),
+                                                      'บันทึกจ่ายเงิน',
+                                                      style: TextStyle(color: AppTheme.primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
                                                     ),
                                                   )
                                                 : OutlinedButton.icon(
@@ -788,10 +929,13 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                           ),
                                           Row(
                                             children: [
-                                              const Icon(Icons.edit_outlined, color: Color(0xFF94A3B8), size: 18),
+                                               GestureDetector(
+                                                 onTap: () => _showAddExpenseBottomSheet(expenseToEdit: expense),
+                                                 child: const Icon(Icons.edit_outlined, color: Color(0xFF94A3B8), size: 18),
+                                               ),
                                               const SizedBox(width: 12),
                                               GestureDetector(
-                                                onTap: () => _deleteExpense(id),
+                                                onTap: () => _showDeleteConfirmation(id),
                                                 child: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 18),
                                               ),
                                             ],

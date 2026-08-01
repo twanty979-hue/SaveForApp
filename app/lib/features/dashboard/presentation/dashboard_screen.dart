@@ -4,9 +4,6 @@ import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../transactions/presentation/transactions_screen.dart';
-import '../../dreams/presentation/dreams_screen.dart';
-import '../../recurring/presentation/recurring_expense_screen.dart';
-import '../../recurring/presentation/recurring_income_screen.dart';
 import './summary_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -17,7 +14,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _selectedIndex = 4; // เริ่มต้นที่หน้าสรุปยอด (Dashboard)
+  int _selectedIndex = 1; // เริ่มต้นที่หน้าสรุปยอด (Dashboard)
 
   final ApiClient _apiClient = ApiClient();
   final String _activeUserId = AuthSession.userId ?? '5b2d488d-75a0-4ea4-8f14-43047d256c8d';
@@ -86,9 +83,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final List<Widget> screens = [
       const TransactionsScreen(),
-      const RecurringExpenseScreen(),
-      const RecurringIncomeScreen(),
-      const DreamsScreen(),
       SummaryScreen(onRefreshHeader: _fetchHeaderTotals),
     ];
 
@@ -144,7 +138,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
                     ),
                   ),
-                  if (_selectedIndex != 4)
+                  // แสดงปุ่มปฏิทินในหน้ารายงานสรุปยอด
+                  if (_selectedIndex == 1)
                     IconButton(
                       icon: const Icon(
                         Icons.calendar_today_outlined,
@@ -159,7 +154,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Expanded(
               child: screens[_selectedIndex],
             ),
-            // แผงแถบเมนูนำทางล่างสุด (Bottom Navigation Bar) ปรับดีไซน์ตามรูปแบบที่ถูกแก้ตรงตามภาพครอป
+            // แผงแถบเมนูนำทางล่างสุด (Bottom Navigation Bar)
             Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -168,10 +163,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Row(
                 children: [
                   _buildBottomTab(0, Icons.chat_bubble_outline, Icons.chat_bubble, 'แชต', const Color(0xFF00A88F)),
-                  _buildBottomTab(1, Icons.assignment_outlined, Icons.assignment, 'รายจ่าย', const Color(0xFFFF1744)),
-                  _buildBottomTab(2, Icons.trending_up_outlined, Icons.trending_up, 'รายรับ', const Color(0xFF10B981)),
-                  _buildBottomTab(3, Icons.star_outline, Icons.star, 'ความฝัน', const Color(0xFFF59E0B)),
-                  _buildBottomTab(4, Icons.bar_chart_outlined, Icons.bar_chart, 'สรุปยอด', const Color(0xFF1E293B)),
+                  _buildBottomTab(1, Icons.bar_chart_outlined, Icons.bar_chart, 'สรุปยอด', const Color(0xFF1E293B)),
                 ],
               ),
             ),

@@ -120,15 +120,76 @@ class _DreamsScreenState extends State<DreamsScreen> {
   // ลบความฝันออกจากคลาวด์จริง
   Future<void> _deleteDream(String id) async {
     try {
-      // ใน Supabase การลบเรียกใช้ POST หรือ method คล้ายคลึงในการทำ API proxy
-      final response = await _apiClient.post('/dreams?id=eq.$id', headers: {'Prefer': 'return=representation'}, body: null); // หรือใช้ DELETE
-      // เพื่อความสะดวกในการใช้งานกับ Proxy ปัจจุบัน หากส่งผลลัพธ์ผ่าน
-      if (response.statusCode == 200) {
+      final response = await _apiClient.delete('/dreams?id=eq.$id');
+      if (response.statusCode == 200 || response.statusCode == 204) {
         _fetchData();
       }
     } catch (e) {
       // จัดการผิดพลาด
     }
+  }
+
+  void _showDeleteConfirmation(String id) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444)),
+              SizedBox(width: 8),
+              Text(
+                'ยืนยันการลบ',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'คุณแน่ใจหรือไม่ว่าต้องการลบเป้าหมายความฝันนี้? ข้อมูลเงินออมทั้งหมดในเป้าหมายนี้จะหายไปอย่างถาวร',
+            style: TextStyle(
+              fontSize: 14,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          actionsPadding: const EdgeInsets.only(right: 16, bottom: 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'ยกเลิก',
+                style: TextStyle(
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteDream(id);
+              },
+              child: const Text(
+                'ยืนยันลบ',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // หน้าต่างยืนยันการหยอดกระปุกเก็บออมจริง (Quick Deposit Bottom Sheet)
@@ -248,12 +309,12 @@ class _DreamsScreenState extends State<DreamsScreen> {
   }
 
   // หน้าต่างสร้างเป้าหมายใหม่ (ตามดีไซน์รูปที่สอง)
-  void _showAddDreamBottomSheet() {
-    final titleController = TextEditingController();
-    final targetController = TextEditingController();
-    final initialController = TextEditingController();
-    final monthlyController = TextEditingController();
-    String selectedIcon = 'Home';
+  void _showAddDreamBottomSheet({Map<String, dynamic>? dreamToEdit}) {
+    final titleController = TextEditingController(text: dreamToEdit?['title']?.toString());
+    final targetController = TextEditingController(text: dreamToEdit?['target_amount']?.toString());
+    final initialController = TextEditingController(text: dreamToEdit?['current_amount']?.toString());
+    final monthlyController = TextEditingController(text: dreamToEdit?['monthly_saving_target']?.toString());
+    String selectedIcon = dreamToEdit?['icon']?.toString() ?? 'Home';
 
     int activeStep = 0;
 
@@ -296,7 +357,9 @@ class _DreamsScreenState extends State<DreamsScreen> {
                               const SizedBox(width: 8),
                             ],
                             Text(
-                              activeStep == 0 ? 'เลือกหมวดหมู่เป้าหมาย' : 'กรอกรายละเอียดเป้าหมาย',
+                              dreamToEdit != null
+                                  ? (activeStep == 0 ? 'แก้ไขหมวดหมู่เป้าหมาย' : 'แก้ไขรายละเอียดเป้าหมาย')
+                                  : (activeStep == 0 ? 'เลือกหมวดหมู่เป้าหมาย' : 'กรอกรายละเอียดเป้าหมาย'),
                               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                             ),
                           ],
@@ -409,12 +472,12 @@ class _DreamsScreenState extends State<DreamsScreen> {
                         ),
                       ),
                     ] else ...[
-                      const Text('ชื่อเป้าหมาย', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569))),
+                      const Text('ความฝัน / เป้าหมายการออม', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569))),
                       const SizedBox(height: 6),
                       TextField(
                         controller: titleController,
                         decoration: InputDecoration(
-                          hintText: 'เช่น ซื้อ iPhone 16',
+                          hintText: 'เช่น ซื้อบ้าน, เที่ยวญี่ปุ่น',
                           isDense: true,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -422,13 +485,13 @@ class _DreamsScreenState extends State<DreamsScreen> {
                       ),
                       const SizedBox(height: 16),
                       
-                      const Text('ราคาเป้าหมาย (บาท)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569))),
+                      const Text('จำนวนเงินเป้าหมาย (บาท)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569))),
                       const SizedBox(height: 6),
                       TextField(
                         controller: targetController,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          hintText: 'เช่น 40000',
+                          hintText: '0.00',
                           isDense: true,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -498,11 +561,14 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                 'current_amount': initial,
                                 'icon': selectedIcon,
                                 'monthly_saving_target': monthly,
-                                'is_starred': false,
+                                'is_starred': dreamToEdit?['is_starred'] ?? false,
                               };
 
-                              final response = await _apiClient.post('/dreams', body: body);
-                              if (response.statusCode == 200 || response.statusCode == 201) {
+                              final response = dreamToEdit != null
+                                  ? await _apiClient.patch('/dreams?id=eq.${dreamToEdit['id']}', body: body)
+                                  : await _apiClient.post('/dreams', body: body);
+
+                              if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
                                 if (context.mounted) {
                                   Navigator.pop(context);
                                 }
@@ -512,9 +578,9 @@ class _DreamsScreenState extends State<DreamsScreen> {
                               // จัดการผิดพลาด
                             }
                           },
-                          child: const Text(
-                            'สร้างเป้าหมาย',
-                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                          child: Text(
+                            dreamToEdit != null ? 'บันทึกการแก้ไข' : 'สร้างเป้าหมาย',
+                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
@@ -532,7 +598,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFFFAFBFD),
       body: Stack(
         children: [
           const Positioned.fill(
@@ -542,37 +608,44 @@ class _DreamsScreenState extends State<DreamsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // สหส่วนหัวแบบพรีเมียมของหน้าความฝัน
-                Padding(
+                // หัวข้อเรื่องและปุ่มเพิ่ม (FAB) ปรับขึ้นไปอยู่ด้านบนสุดแทน Profile Bar
+                Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
+                  ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'กระปุกความฝัน',
-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'เก็บเงินทีละนิด พิชิตเป้าหมาย',
-                            style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-                          ),
-                        ],
+                      if (Navigator.canPop(context)) ...[
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF0F172A), size: 18),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        const SizedBox(width: 10),
+                      ],
+                      const Text(
+                        'กระปุกความฝัน',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
                       ),
-                      // ปุ่มบวกกลมสีชมพูขวาบน (FAB สไตล์หัวแอนดรอยด์ตามรูปที่หนึ่ง)
+                      const Spacer(),
                       GestureDetector(
-                        onTap: _showAddDreamBottomSheet,
+                        onTap: () => _showAddDreamBottomSheet(),
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: 32,
+                          height: 32,
                           decoration: const BoxDecoration(
-                            color: Color(0xFFFF1744), // สีชมพูแดงสว่าง
+                            color: Color(0xFFFF1744), // สีแดงชมพูสด
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.add, color: Colors.white, size: 24),
+                          child: const Icon(Icons.add, color: Colors.white, size: 18),
                         ),
                       ),
                     ],
@@ -676,10 +749,13 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
-                                              const Icon(Icons.edit_outlined, color: Color(0xFFCBD5E1), size: 20),
+                                              GestureDetector(
+                                                onTap: () => _showAddDreamBottomSheet(dreamToEdit: dream),
+                                                child: const Icon(Icons.edit_outlined, color: Color(0xFFCBD5E1), size: 20),
+                                              ),
                                               const SizedBox(width: 8),
                                               GestureDetector(
-                                                onTap: () => _deleteDream(id),
+                                                onTap: () => _showDeleteConfirmation(id),
                                                 child: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 20),
                                               ),
                                             ],

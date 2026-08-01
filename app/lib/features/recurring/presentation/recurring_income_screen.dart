@@ -85,6 +85,23 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
     });
   }
 
+  double _getReceivedAmountThisMonth(String id) {
+    final now = DateTime.now();
+    double total = 0.0;
+    for (var tx in _transactions) {
+      final dateStr = tx['transaction_date'] ?? '';
+      final date = DateTime.tryParse(dateStr);
+      if (date != null &&
+          date.year == now.year &&
+          date.month == now.month &&
+          tx['income_source_id'] == id &&
+          tx['type'] == 'income') {
+        total += (tx['amount'] as num?)?.toDouble() ?? 0.0;
+      }
+    }
+    return total;
+  }
+
   Future<void> _recordIncomeReceipt(String id, String name, double amount) async {
     try {
       final body = {
@@ -105,10 +122,68 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
     }
   }
 
+  void _showRecordIncomeDialog(String id, String name, double defaultAmt) {
+    final amountController = TextEditingController(text: defaultAmt <= 0 ? '' : defaultAmt.toStringAsFixed(0));
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            'บันทึกรับเงิน: $name',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'ระบุจำนวนเงินที่ได้รับ (บาท)',
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: amountController,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: '0.00',
+                  isDense: true,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ยกเลิก', style: TextStyle(color: Color(0xFF64748B))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                final amt = double.tryParse(amountController.text.trim()) ?? 0.0;
+                if (amt > 0) {
+                  Navigator.pop(context);
+                  _recordIncomeReceipt(id, name, amt);
+                }
+              },
+              child: const Text('บันทึก', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _deleteSource(String id) async {
     try {
-      final response = await _apiClient.post('/recurring/sources?id=eq.$id', body: null);
-      if (response.statusCode == 200) {
+      final response = await _apiClient.delete('/recurring/sources?id=eq.$id');
+      if (response.statusCode == 200 || response.statusCode == 204) {
         _fetchData();
       }
     } catch (e) {
@@ -116,11 +191,74 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
     }
   }
 
-  void _showAddIncomeBottomSheet() {
-    final nameController = TextEditingController();
-    final amountController = TextEditingController();
-    final dueDayController = TextEditingController(text: '5');
-    String selectedCategory = 'เงินเดือน';
+  void _showDeleteConfirmation(String id) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444)),
+              SizedBox(width: 8),
+              Text(
+                'ยืนยันการลบ',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'คุณแน่ใจหรือไม่ว่าต้องการลบรายการรายรับประจำนี้? ข้อมูลนี้จะหายไปอย่างถาวร',
+            style: TextStyle(
+              fontSize: 14,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          actionsPadding: const EdgeInsets.only(right: 16, bottom: 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'ยกเลิก',
+                style: TextStyle(
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteSource(id);
+              },
+              child: const Text(
+                'ยืนยันลบ',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showAddIncomeBottomSheet({Map<String, dynamic>? incomeToEdit}) {
+    final nameController = TextEditingController(text: incomeToEdit?['name']?.toString());
+    final amountController = TextEditingController(text: incomeToEdit?['amount']?.toString());
+    final dueDayController = TextEditingController(text: incomeToEdit?['due_day']?.toString() ?? '5');
+    String selectedCategory = incomeToEdit?['category']?.toString() ?? 'เงินเดือน';
     int activeStep = 0;
 
     showModalBottomSheet(
@@ -163,7 +301,9 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                               const SizedBox(width: 8),
                             ],
                             Text(
-                              activeStep == 0 ? 'เลือกหมวดหมู่รายรับ' : 'กรอกรายละเอียดรายรับ',
+                              incomeToEdit != null
+                                  ? (activeStep == 0 ? 'แก้ไขหมวดหมู่รายรับ' : 'แก้ไขรายละเอียดรายรับ')
+                                  : (activeStep == 0 ? 'เลือกหมวดหมู่รายรับ' : 'กรอกรายละเอียดรายรับ'),
                               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                             ),
                           ],
@@ -264,8 +404,8 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                         height: 38,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryColor,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                            backgroundColor: const Color(0xFF0F172A),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             elevation: 0,
                             minimumSize: const Size(double.infinity, 38),
                             padding: EdgeInsets.zero,
@@ -291,7 +431,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                       TextField(
                         controller: nameController,
                         decoration: InputDecoration(
-                          hintText: 'เช่น เงินเดือน, Freelance Web',
+                          hintText: 'เช่น เงินเดือนประจำ',
                           hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
                           filled: true,
                           fillColor: const Color(0xFFF8FAFC),
@@ -393,7 +533,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 28),
                       const Align(
                         alignment: Alignment.center,
                         child: Text(
@@ -407,8 +547,8 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                         height: 38,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryColor,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                            backgroundColor: const Color(0xFF0F172A),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             elevation: 0,
                             minimumSize: const Size(double.infinity, 38),
                             padding: EdgeInsets.zero,
@@ -429,8 +569,11 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                 'due_day': dueDay,
                               };
 
-                              final response = await _apiClient.post('/recurring/sources', body: body);
-                              if (response.statusCode == 200 || response.statusCode == 201) {
+                              final response = incomeToEdit != null
+                                  ? await _apiClient.patch('/recurring/sources?id=eq.${incomeToEdit['id']}', body: body)
+                                  : await _apiClient.post('/recurring/sources', body: body);
+
+                              if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
                                 if (context.mounted) {
                                   Navigator.pop(context);
                                 }
@@ -440,9 +583,9 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                               // จัดการข้อผิดพลาดเงียบ
                             }
                           },
-                          child: const Text(
-                            '+ เพิ่มรายรับประจำ',
-                            style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                          child: Text(
+                            incomeToEdit != null ? 'บันทึกการแก้ไข' : '+ เพิ่มรายรับประจำ',
+                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
@@ -476,8 +619,8 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
       final amt = (source['amount'] as num).toDouble();
       totalIncomeExpected += amt;
       final id = source['id'] as String? ?? '';
+      totalIncomeReceived += _getReceivedAmountThisMonth(id);
       if (_isReceivedThisMonth(id)) {
-        totalIncomeReceived += amt;
         itemsReceived++;
       }
     }
@@ -487,7 +630,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
     final double amountRemaining = totalIncomeExpected - totalIncomeReceived;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFFFAFBFD),
       body: Stack(
         children: [
           const Positioned.fill(
@@ -497,45 +640,44 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // หัวเรื่องและปุ่มเพิ่ม (FAB) ดีไซน์พรีเมียม
-                Padding(
+                // หัวข้อเรื่องและปุ่มเพิ่ม (FAB) ปรับขึ้นไปอยู่ด้านบนสุดแทน Profile Bar
+                Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
+                  ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Row(
-                            children: [
-                              Text(
-                                'รายรับประจำ',
-                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                              ),
-                              SizedBox(width: 6),
-                              Text(
-                                '💼',
-                                style: TextStyle(fontSize: 20),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'รายรับประจำที่ได้รับทุกเดือน',
-                            style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-                          ),
-                        ],
+                      if (Navigator.canPop(context)) ...[
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF0F172A), size: 18),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        const SizedBox(width: 10),
+                      ],
+                      const Text(
+                        'รายรับประจำ',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
                       ),
+                      const Spacer(),
                       GestureDetector(
                         onTap: _showAddIncomeBottomSheet,
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: 32,
+                          height: 32,
                           decoration: const BoxDecoration(
                             color: Color(0xFF10B981), // สีเขียวมิ้นต์สด
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.add, color: Colors.white, size: 24),
+                          child: const Icon(Icons.add, color: Colors.white, size: 18),
                         ),
                       ),
                     ],
@@ -646,7 +788,8 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                 final amount = (source['amount'] as num).toDouble();
                                 final category = source['category'] ?? 'ทั่วไป';
                                 final dueDay = source['due_day'] ?? 1;
-                                final isReceived = _isReceivedThisMonth(id);
+                                final receivedAmt = _getReceivedAmountThisMonth(id);
+                                final hasReceived = receivedAmt > 0;
 
                                 return Container(
                                   margin: const EdgeInsets.only(bottom: 12),
@@ -702,10 +845,10 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                                     Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                                       decoration: BoxDecoration(
-                                                        color: isReceived ? const Color(0xFFE6F4F1) : const Color(0xFFF1F5F9),
+                                                        color: hasReceived ? const Color(0xFFE6F4F1) : const Color(0xFFF1F5F9),
                                                         borderRadius: BorderRadius.circular(6),
                                                         border: Border.all(
-                                                          color: isReceived ? const Color(0xFF5ED5A8) : const Color(0xFFCBD5E1),
+                                                          color: hasReceived ? const Color(0xFF5ED5A8) : const Color(0xFFCBD5E1),
                                                           width: 1,
                                                         ),
                                                       ),
@@ -713,17 +856,17 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                                         mainAxisSize: MainAxisSize.min,
                                                         children: [
                                                           Icon(
-                                                            isReceived ? Icons.check_circle_outline : Icons.watch_later_outlined,
+                                                            hasReceived ? Icons.check_circle_outline : Icons.watch_later_outlined,
                                                             size: 10,
-                                                            color: isReceived ? AppTheme.primaryColor : const Color(0xFF64748B),
+                                                            color: hasReceived ? AppTheme.primaryColor : const Color(0xFF64748B),
                                                           ),
                                                           const SizedBox(width: 2),
                                                           Text(
-                                                            isReceived ? 'รับเงินแล้ว' : 'ยังไม่ได้รับ',
+                                                            hasReceived ? 'รับแล้ว ฿${receivedAmt.toStringAsFixed(0)}' : 'ยังไม่ได้รับ',
                                                             style: TextStyle(
                                                               fontSize: 8,
                                                               fontWeight: FontWeight.bold,
-                                                              color: isReceived ? AppTheme.primaryColor : const Color(0xFF64748B),
+                                                              color: hasReceived ? AppTheme.primaryColor : const Color(0xFF64748B),
                                                             ),
                                                           ),
                                                         ],
@@ -752,18 +895,18 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                           // ปุ่มกดบันทึกการชำระเงินขอบเขียวสด
                                           SizedBox(
                                             height: 36,
-                                            child: isReceived
-                                                ? ElevatedButton.icon(
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: const Color(0xFFF1F5F9),
+                                            child: hasReceived
+                                                ? OutlinedButton.icon(
+                                                    style: OutlinedButton.styleFrom(
+                                                      side: const BorderSide(color: AppTheme.primaryColor, width: 1.2),
                                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                                      elevation: 0,
+                                                      padding: const EdgeInsets.symmetric(horizontal: 16),
                                                     ),
-                                                    onPressed: null,
-                                                    icon: const Icon(Icons.check_circle_outline, color: Color(0xFF64748B), size: 16),
+                                                    onPressed: () => _showRecordIncomeDialog(id, name, amount - receivedAmt),
+                                                    icon: const Icon(Icons.check_circle_outline, color: AppTheme.primaryColor, size: 16),
                                                     label: const Text(
-                                                      'ได้รับเงินแล้วประจำเดือนนี้',
-                                                      style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.bold),
+                                                      'บันทึกรับเงิน',
+                                                      style: TextStyle(color: AppTheme.primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
                                                     ),
                                                   )
                                                 : OutlinedButton.icon(
@@ -782,10 +925,13 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                           ),
                                           Row(
                                             children: [
-                                              const Icon(Icons.edit_outlined, color: Color(0xFF94A3B8), size: 18),
+                                              GestureDetector(
+                                                onTap: () => _showAddIncomeBottomSheet(incomeToEdit: source),
+                                                child: const Icon(Icons.edit_outlined, color: Color(0xFF94A3B8), size: 18),
+                                              ),
                                               const SizedBox(width: 12),
                                               GestureDetector(
-                                                onTap: () => _deleteSource(id),
+                                                onTap: () => _showDeleteConfirmation(id),
                                                 child: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 18),
                                               ),
                                             ],

@@ -28,4 +28,33 @@ class ApiClient {
     };
     return await http.post(url, headers: defaultHeaders, body: encodedBody);
   }
+
+  Future<http.Response> delete(String path, {Map<String, String>? headers}) async {
+    final url = Uri.parse('$_baseUrl$path');
+    final defaultHeaders = {
+      'Content-Type': 'application/json',
+      ...?headers,
+    };
+    return await http.delete(url, headers: defaultHeaders);
+  }
+
+  Future<http.Response> patch(String path, {Map<String, String>? headers, dynamic body}) async {
+    final url = Uri.parse('$_baseUrl$path');
+    final encodedBody = body != null ? jsonEncode(body) : null;
+    final defaultHeaders = {
+      'Content-Type': 'application/json',
+      ...?headers,
+    };
+    return await http.patch(url, headers: defaultHeaders, body: encodedBody);
+  }
+
+  Future<http.Response> put(String path, {Map<String, String>? headers, dynamic body}) async {
+    final url = Uri.parse('$_baseUrl$path');
+    final encodedBody = body != null ? jsonEncode(body) : null;
+    final defaultHeaders = {
+      'Content-Type': 'application/json',
+      ...?headers,
+    };
+    return await http.put(url, headers: defaultHeaders, body: encodedBody);
+  }
 }

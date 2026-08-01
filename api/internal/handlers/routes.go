@@ -50,6 +50,9 @@ func SetupRouter() *gin.Engine {
 		v1.POST("/transactions", func(c *gin.Context) {
 			handleSupabaseProxy(c, "POST", "/rest/v1/transactions")
 		})
+		v1.DELETE("/transactions", func(c *gin.Context) {
+			handleSupabaseProxy(c, "DELETE", "/rest/v1/transactions")
+		})
 
 		// Proxy ระบบเป้าหมายความฝัน (Dreams)
 		v1.GET("/dreams", func(c *gin.Context) {
@@ -57,6 +60,9 @@ func SetupRouter() *gin.Engine {
 		})
 		v1.POST("/dreams", func(c *gin.Context) {
 			handleSupabaseProxy(c, "POST", "/rest/v1/dreams")
+		})
+		v1.DELETE("/dreams", func(c *gin.Context) {
+			handleSupabaseProxy(c, "DELETE", "/rest/v1/dreams")
 		})
 
 		// Proxy แผนค่าใช้จ่ายประจำและรายรับประจำ
@@ -66,11 +72,17 @@ func SetupRouter() *gin.Engine {
 		v1.POST("/recurring/expenses", func(c *gin.Context) {
 			handleSupabaseProxy(c, "POST", "/rest/v1/fixed_expenses")
 		})
+		v1.DELETE("/recurring/expenses", func(c *gin.Context) {
+			handleSupabaseProxy(c, "DELETE", "/rest/v1/fixed_expenses")
+		})
 		v1.GET("/recurring/sources", func(c *gin.Context) {
 			handleSupabaseProxy(c, "GET", "/rest/v1/income_sources")
 		})
 		v1.POST("/recurring/sources", func(c *gin.Context) {
 			handleSupabaseProxy(c, "POST", "/rest/v1/income_sources")
+		})
+		v1.DELETE("/recurring/sources", func(c *gin.Context) {
+			handleSupabaseProxy(c, "DELETE", "/rest/v1/income_sources")
 		})
 	}
 
