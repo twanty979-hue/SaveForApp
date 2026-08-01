@@ -613,7 +613,6 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
   Widget build(BuildContext context) {
     double totalExpenseExpected = 0.0;
     double totalExpensePaid = 0.0;
-    int itemsPaid = 0;
 
     for (var exp in _fixedExpenses) {
       final amt = (exp['amount'] as num).toDouble();
@@ -622,14 +621,9 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
       final name = exp['name'] as String? ?? '';
       final paidAmt = _getPaidAmountThisMonth(id, name);
       totalExpensePaid += paidAmt;
-      if (paidAmt >= amt) {
-        itemsPaid++;
-      }
     }
 
-    final double progress = totalExpenseExpected > 0 ? (totalExpensePaid / totalExpenseExpected).clamp(0.0, 1.0) : 0.0;
-    final int itemsRemaining = _fixedExpenses.length - itemsPaid;
-    final double amountRemaining = totalExpenseExpected - totalExpensePaid;
+
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAFBFD),
@@ -701,70 +695,18 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'รายจ่ายประจำเดือนนี้',
+                        'ยอดชำระรายจ่ายสะสมเดือนนี้',
                         style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          RichText(
-                            text: TextSpan(
-                              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                              children: [
-                                TextSpan(text: '฿${totalExpensePaid.toStringAsFixed(0)}'),
-                                TextSpan(
-                                  text: ' / ฿${totalExpenseExpected.toStringAsFixed(0)}',
-                                  style: TextStyle(fontSize: 18, color: Colors.grey[400], fontWeight: FontWeight.normal),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF0FDF4),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${(progress * 100).toStringAsFixed(0)}% จ่ายแล้ว',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
-                            ),
-                          ),
-                        ],
+                      Text(
+                        '฿${totalExpensePaid.toStringAsFixed(0)}',
+                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                       ),
-                      const SizedBox(height: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          backgroundColor: const Color(0xFFF1F5F9),
-                          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF10B981)), // แถบสีเขียว
-                          minHeight: 4,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'จ่ายแล้ว $itemsPaid รายการ',
-                            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                          ),
-                          RichText(
-                            text: TextSpan(
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                              children: [
-                                const TextSpan(text: 'เหลืออีก '),
-                                TextSpan(
-                                  text: '฿${amountRemaining.toStringAsFixed(0)}',
-                                  style: const TextStyle(color: Color(0xFFFF1744), fontWeight: FontWeight.bold),
-                                ),
-                                TextSpan(text: ' ($itemsRemaining รายการ)'),
-                              ],
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 4),
+                      Text(
+                        'จากเป้าหมายตามแผนทั้งหมด ฿${totalExpenseExpected.toStringAsFixed(0)}',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                       ),
                     ],
                   ),
