@@ -308,8 +308,12 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPastTransactions();
-    _loadQuickSuggestions();
+    _initData();
+  }
+
+  Future<void> _initData() async {
+    await _loadQuickSuggestions();
+    await _loadPastTransactions();
   }
 
   @override
@@ -426,6 +430,20 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         final botId = widget.bot['id'] as String;
+        final now = DateTime.now();
+
+        // Pre-calculate monthly accumulated sums by item name
+        final Map<String, double> accumulatedMap = {};
+        for (var tx in data) {
+          final dateStr = tx['transaction_date'] ?? '';
+          final date = DateTime.tryParse(dateStr);
+          if (date != null && date.year == now.year && date.month == now.month) {
+            final noteText = tx['note']?.toString() ?? '';
+            final txAmount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+            final cleanNote = noteText.replaceAll('[รายจ่ายประจำ]', '').replaceAll('[รายรับประจำ]', '').replaceAll('[ออม] หยอดกระปุก:', '').trim().toLowerCase();
+            accumulatedMap[cleanNote] = (accumulatedMap[cleanNote] ?? 0.0) + txAmount;
+          }
+        }
 
         setState(() {
           _messages.clear();
@@ -470,6 +488,25 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
             }
 
             if (isMatching) {
+              final cleanName = displayName.trim().toLowerCase();
+              double budget = 0.0;
+              bool hasBudget = false;
+
+              for (var sugg in _rawSuggestions) {
+                final suggName = (botId == 'dream' ? sugg['title'] : sugg['name'])?.toString().toLowerCase();
+                if (suggName == cleanName) {
+                  hasBudget = true;
+                  if (botId == 'expense' || botId == 'income') {
+                    budget = (sugg['amount'] as num?)?.toDouble() ?? 0.0;
+                  } else if (botId == 'dream') {
+                    budget = (sugg['target_amount'] as num?)?.toDouble() ?? 0.0;
+                  }
+                  break;
+                }
+              }
+
+              final totalAccumulated = accumulatedMap[cleanName] ?? amount;
+
               _messages.add(
                 Message(
                   text: '',
@@ -479,6 +516,9 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                     'name': displayName,
                     'amount': amount,
                     'category': category,
+                    'hasBudget': hasBudget,
+                    'budget': budget,
+                    'totalAccumulated': totalAccumulated,
                   },
                 ),
               );
@@ -732,10 +772,50 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
               }
             }
 
+            double budget = 0.0;
+            bool hasBudget = false;
+            if (matchedSuggestion != null) {
+              hasBudget = true;
+              if (botId == 'expense' || botId == 'income') {
+                budget = (matchedSuggestion['amount'] as num?)?.toDouble() ?? 0.0;
+              } else if (botId == 'dream') {
+                budget = (matchedSuggestion['target_amount'] as num?)?.toDouble() ?? 0.0;
+              }
+            }
+
+            double totalAccumulated = 0.0;
+            try {
+              final txResponseForSum = await _apiClient.get('/transactions?user_id=eq.$_activeUserId');
+              if (txResponseForSum.statusCode == 200) {
+                final List<dynamic> txList = jsonDecode(txResponseForSum.body);
+                final now = DateTime.now();
+                for (var tx in txList) {
+                  final dateStr = tx['transaction_date'] ?? '';
+                  final date = DateTime.tryParse(dateStr);
+                  final noteText = tx['note']?.toString() ?? '';
+                  final txAmount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+                  
+                  if (date != null && date.year == now.year && date.month == now.month) {
+                    final cleanNote = noteText.replaceAll('[รายจ่ายประจำ]', '').replaceAll('[รายรับประจำ]', '').replaceAll('[ออม] หยอดกระปุก:', '').trim().toLowerCase();
+                    final cleanName = name.trim().toLowerCase();
+                    if (cleanNote == cleanName || (cleanNote.isNotEmpty && cleanName.isNotEmpty && (cleanNote.contains(cleanName) || cleanName.contains(cleanNote)))) {
+                      totalAccumulated += txAmount;
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              totalAccumulated = amount;
+            }
+
+            final String replyText = hasBudget
+                ? widget.bot['successMsg'] as String
+                : 'คุณยังไม่ได้สร้างรายการนี้ที่หน้า Planning ลองไปสร้างดูนะ!';
+
             setState(() {
               _messages.add(
                 Message(
-                  text: widget.bot['successMsg'] as String,
+                  text: replyText,
                   isUser: false,
                   timestamp: DateTime.now(),
                 ),
@@ -749,6 +829,9 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                     'name': name,
                     'amount': amount,
                     'category': category,
+                    'hasBudget': hasBudget,
+                    'budget': budget,
+                    'totalAccumulated': totalAccumulated,
                   },
                 ),
               );
@@ -784,6 +867,9 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
             'name': name,
             'amount': amount,
             'category': category,
+            'hasBudget': false,
+            'budget': 0.0,
+            'totalAccumulated': amount,
           },
         ),
       );
@@ -811,19 +897,32 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       final name = card['name'] ?? '';
       final amount = (card['amount'] as num?)?.toDouble() ?? 0.0;
       final category = card['category'] ?? 'รายจ่าย';
+      
+      final bool hasBudget = card['hasBudget'] as bool? ?? false;
+      final double budget = (card['budget'] as num?)?.toDouble() ?? 0.0;
+      final double totalAccumulated = (card['totalAccumulated'] as num?)?.toDouble() ?? amount;
 
       Color categoryColor = const Color(0xFF10B981);
+      Color headerBgColor = const Color(0xFFE6F4F1); // Emerald pastel
+      IconData headerIcon = Icons.trending_up_outlined;
+
       if (category == 'รายจ่าย') {
         categoryColor = const Color(0xFFEF4444);
+        headerBgColor = const Color(0xFFFEE2E2); // Rose-100 pastel
+        headerIcon = Icons.trending_down_outlined;
       } else if (category == 'เงินออม') {
         categoryColor = const Color(0xFFF59E0B);
+        headerBgColor = const Color(0xFFFEF3C7); // Amber-100 pastel
+        headerIcon = Icons.auto_awesome;
       }
+
+      final double progress = budget > 0 ? (totalAccumulated / budget).clamp(0.0, 1.0) : 0.0;
 
       return Align(
         alignment: Alignment.centerLeft,
         child: Container(
+          width: 280,
           margin: const EdgeInsets.only(left: 48, right: 48, top: 4, bottom: 8),
-          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
@@ -839,64 +938,114 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
+              // ส่วนหัวการ์ด (Header Block)
+              Container(
+                height: 100,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: headerBgColor,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: Stack(
+                  children: [
+                    Center(
+                      child: Icon(
+                        headerIcon,
+                        size: 40,
+                        color: categoryColor.withValues(alpha: 0.8),
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '฿${amount.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: categoryColor,
-                    ),
-                  ),
-                ],
+                    if (!hasBudget)
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFEF4444), width: 1),
+                          ),
+                          child: const Text(
+                            'ไม่มีงบ',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFEF4444),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: categoryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
+              // ส่วนรายละเอียด
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '฿${amount.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: categoryColor,
+                          ),
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      category,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: categoryColor,
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${totalAccumulated.toStringAsFixed(0)} / ${budget.toStringAsFixed(0)} บาท',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          '${(progress * 100).toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: categoryColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          hasBudget ? categoryColor : const Color(0xFFEF4444),
+                        ),
+                        minHeight: 4,
                       ),
                     ),
-                  ),
-                  const Spacer(),
-                  const Text(
-                    'บันทึกแล้ว',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.check_circle,
-                    size: 12,
-                    color: categoryColor,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
