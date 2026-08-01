@@ -1,0 +1,35 @@
+# IDEs
+.idea/
+.vscode/
+
+# Env and Secrets
+.env
+*.env
+api/.env
+app/.env
+
+# Binaries / Executables (หลีกเลี่ยงการอัปโหลด exe ขนาดใหญ่)
+*.exe
+*.dll
+*.so
+*.dylib
+*.bin
+api/*.exe
+api/savefor-api
+api/savefor-api-test
+
+# Log files
+*.log
+
+# Flutter/Dart build and dependency folders
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.pub/
+app/build/
