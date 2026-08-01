@@ -86,13 +86,17 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
       final date = DateTime.tryParse(dateStr);
       final txFixedExpenseId = tx['fixed_expense_id']?.toString();
       final note = tx['note']?.toString() ?? '';
+      final cleanNote = note.replaceAll('[รายจ่ายประจำ]', '').trim().toLowerCase();
+      final cleanName = name.trim().toLowerCase();
+      final isMatch = txFixedExpenseId == id ||
+                      cleanNote == cleanName ||
+                      (cleanNote.isNotEmpty && cleanName.isNotEmpty && (cleanNote.contains(cleanName) || cleanName.contains(cleanNote)));
+
       if (date != null &&
           date.year == now.year &&
           date.month == now.month &&
           tx['type'] == 'expense' &&
-          (txFixedExpenseId == id ||
-           note == '[รายจ่ายประจำ] $name' ||
-           note == name)) {
+          isMatch) {
         total += (tx['amount'] as num?)?.toDouble() ?? 0.0;
       }
     }
@@ -751,7 +755,7 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                             text: TextSpan(
                               style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                               children: [
-                                const TextSpan(text: 'ค้างจ่ายอีก '),
+                                const TextSpan(text: 'เหลืออีก '),
                                 TextSpan(
                                   text: '฿${amountRemaining.toStringAsFixed(0)}',
                                   style: const TextStyle(color: Color(0xFFFF1744), fontWeight: FontWeight.bold),

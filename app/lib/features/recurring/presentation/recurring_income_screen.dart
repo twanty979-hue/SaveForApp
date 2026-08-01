@@ -82,13 +82,17 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
       final date = DateTime.tryParse(dateStr);
       final txIncomeSourceId = tx['income_source_id']?.toString();
       final note = tx['note']?.toString() ?? '';
+      final cleanNote = note.replaceAll('[รายรับประจำ]', '').trim().toLowerCase();
+      final cleanName = name.trim().toLowerCase();
+      final isMatch = txIncomeSourceId == id ||
+                      cleanNote == cleanName ||
+                      (cleanNote.isNotEmpty && cleanName.isNotEmpty && (cleanNote.contains(cleanName) || cleanName.contains(cleanNote)));
+
       if (date != null &&
           date.year == now.year &&
           date.month == now.month &&
           tx['type'] == 'income' &&
-          (txIncomeSourceId == id ||
-           note == '[รายรับประจำ] $name' ||
-           note == name)) {
+          isMatch) {
         total += (tx['amount'] as num?)?.toDouble() ?? 0.0;
       }
     }
