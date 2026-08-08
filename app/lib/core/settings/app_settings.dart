@@ -1,9 +1,20 @@
 import 'package:app/core/localization/app_material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+enum ThemeStyle {
+  emerald,
+  cartoon,
+  sakura,
+  cyberpunk,
+  luxury,
+}
+
 class AppSettings {
   static final ValueNotifier<ThemeMode> themeMode = ValueNotifier(
     ThemeMode.light,
+  );
+  static final ValueNotifier<ThemeStyle> themeStyle = ValueNotifier(
+    ThemeStyle.emerald,
   );
   static final ValueNotifier<Locale> locale = ValueNotifier(const Locale('th'));
 
@@ -17,6 +28,9 @@ class AppSettings {
     themeMode.value = _themeModeFromName(
       prefs.getString('themeMode') ?? 'light',
     );
+    themeStyle.value = _themeStyleFromName(
+      prefs.getString('themeStyle') ?? 'emerald',
+    );
     locale.value = Locale(prefs.getString('locale') ?? 'th');
     notificationsEnabled = prefs.getBool('notificationsEnabled') ?? true;
     appLockEnabled = prefs.getBool('appLockEnabled') ?? false;
@@ -28,6 +42,12 @@ class AppSettings {
     themeMode.value = mode;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('themeMode', mode.name);
+  }
+
+  static Future<void> setThemeStyle(ThemeStyle style) async {
+    themeStyle.value = style;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('themeStyle', style.name);
   }
 
   static Future<void> setLocale(Locale value) async {
@@ -68,6 +88,23 @@ class AppSettings {
         return ThemeMode.dark;
       default:
         return ThemeMode.light;
+    }
+  }
+
+  static ThemeStyle _themeStyleFromName(String value) {
+    switch (value) {
+      case 'emerald':
+        return ThemeStyle.emerald;
+      case 'cartoon':
+        return ThemeStyle.cartoon;
+      case 'sakura':
+        return ThemeStyle.sakura;
+      case 'cyberpunk':
+        return ThemeStyle.cyberpunk;
+      case 'luxury':
+        return ThemeStyle.luxury;
+      default:
+        return ThemeStyle.emerald;
     }
   }
 }

@@ -316,6 +316,100 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     );
   }
 
+  Future<void> _showThemeStyleSettings() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _SheetHandle(),
+              const SizedBox(height: 18),
+              Text(
+                context.tr('เลือกสไตล์ธีม', 'Select Theme Style'),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: context.primaryTextColor,
+                ),
+              ),
+              const SizedBox(height: 10),
+              for (final style in ThemeStyle.values)
+                ListTile(
+                  title: Text(_themeStyleName(style)),
+                  leading: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: _getThemeStylePreviewColor(style),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppSettings.themeStyle.value == style
+                            ? AppTheme.primaryColor
+                            : const Color(0xFFCBD5E1),
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                  trailing: AppSettings.themeStyle.value == style
+                      ? const Icon(
+                          Icons.check_circle,
+                          color: AppTheme.primaryColor,
+                        )
+                      : const Icon(
+                          Icons.circle_outlined,
+                          color: Color(0xFFCBD5E1),
+                        ),
+                  onTap: () async {
+                    await AppSettings.setThemeStyle(style);
+                    if (mounted) setState(() {});
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _themeStyleName(ThemeStyle style) {
+    switch (style) {
+      case ThemeStyle.emerald:
+        return context.tr('เอเมอรัลด์ (เขียว)', 'Emerald (Green)');
+      case ThemeStyle.cartoon:
+        return context.tr('การ์ตูนแมวส้ม 🐱', 'Orange Cat Cartoon 🐱');
+      case ThemeStyle.sakura:
+        return context.tr('ซากุระพาสเทล 🌸', 'Sakura Pastel 🌸');
+      case ThemeStyle.cyberpunk:
+        return context.tr('ไซเบอร์พังก์นีออน ⚡', 'Cyberpunk Neon ⚡');
+      case ThemeStyle.luxury:
+        return context.tr('ลักชัวรีสีทอง 👑', 'Luxury Gold 👑');
+    }
+  }
+
+  Color _getThemeStylePreviewColor(ThemeStyle style) {
+    switch (style) {
+      case ThemeStyle.emerald:
+        return const Color(0xFF00A88F);
+      case ThemeStyle.cartoon:
+        return const Color(0xFFFF9233);
+      case ThemeStyle.sakura:
+        return const Color(0xFFFF8FA3);
+      case ThemeStyle.cyberpunk:
+        return const Color(0xFFFF007F);
+      case ThemeStyle.luxury:
+        return const Color(0xFFD4AF37);
+    }
+  }
+
   Future<void> _showLanguageSettings() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -508,6 +602,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                         title: context.tr('ธีม', 'Theme'),
                         trailingText: _themeName(AppSettings.themeMode.value),
                         onTap: _showThemeSettings,
+                      ),
+                      _SettingsTile(
+                        icon: Icons.brush_outlined,
+                        title: context.tr('สไตล์ธีม', 'Theme style'),
+                        trailingText: _themeStyleName(AppSettings.themeStyle.value),
+                        onTap: _showThemeStyleSettings,
                       ),
                       _SettingsTile(
                         icon: Icons.notifications_none_rounded,

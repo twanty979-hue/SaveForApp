@@ -330,7 +330,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                     height: 48,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
+                        backgroundColor: Theme.of(context).primaryColor,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -537,7 +537,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                         decoration: BoxDecoration(
                                           color: isSelected
                                               ? (Theme.of(context).brightness == Brightness.dark
-                                                  ? AppTheme.primaryColor.withValues(alpha: 0.18)
+                                                  ? Theme.of(context).primaryColor.withValues(alpha: 0.18)
                                                   : const Color(0xFFE6F4F1))
                                               : (Theme.of(context).brightness == Brightness.dark
                                                   ? const Color(0xFF1E293B)
@@ -545,7 +545,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                           borderRadius: BorderRadius.circular(12),
                                           border: Border.all(
                                             color: isSelected
-                                                ? AppTheme.primaryColor
+                                                ? Theme.of(context).primaryColor
                                                 : (Theme.of(context).brightness == Brightness.dark
                                                     ? const Color(0xFF334155)
                                                     : const Color(0xFFE2E8F0)),
@@ -560,7 +560,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                               catIcon,
                                               size: 16,
                                               color: isSelected
-                                                  ? AppTheme.primaryColor
+                                                  ? Theme.of(context).primaryColor
                                                   : (Theme.of(context).brightness == Brightness.dark
                                                       ? const Color(0xFF94A3B8)
                                                       : const Color(0xFF64748B)),
@@ -574,7 +574,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                                     ? FontWeight.bold
                                                     : FontWeight.normal,
                                                 color: isSelected
-                                                    ? AppTheme.primaryColor
+                                                    ? Theme.of(context).primaryColor
                                                     : (Theme.of(context).brightness == Brightness.dark
                                                         ? const Color(0xFFE2E8F0)
                                                         : const Color(0xFF475569)),
@@ -607,7 +607,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                           borderRadius: BorderRadius.circular(12),
                                           border: Border.all(
                                             color: isSelected
-                                                ? AppTheme.primaryColor
+                                                ? Theme.of(context).primaryColor
                                                 : const Color(0xFFE2E8F0),
                                             width: isSelected ? 1.5 : 1,
                                           ),
@@ -620,7 +620,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                               catKey,
                                               size: 16,
                                               color: isSelected
-                                                  ? AppTheme.primaryColor
+                                                  ? Theme.of(context).primaryColor
                                                   : const Color(0xFF64748B),
                                             ),
                                             const SizedBox(height: 2),
@@ -632,7 +632,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                                     ? FontWeight.bold
                                                     : FontWeight.normal,
                                                 color: isSelected
-                                                    ? AppTheme.primaryColor
+                                                    ? Theme.of(context).primaryColor
                                                     : const Color(0xFF475569),
                                               ),
                                               maxLines: 1,
@@ -993,7 +993,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppTheme.primaryColor),
+                        borderSide: BorderSide(color: Theme.of(context).primaryColor),
                       ),
                     ),
                   ),
@@ -1027,7 +1027,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                       Expanded(
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryColor,
+                            backgroundColor: Theme.of(context).primaryColor,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -1141,10 +1141,10 @@ class _DreamsScreenState extends State<DreamsScreen> {
           color: Theme.of(context).brightness == Brightness.dark
               ? (textColor == const Color(0xFF94A3B8)
                   ? const Color(0xFF334155)
-                  : AppTheme.primaryColor.withValues(alpha: 0.2))
+                  : Theme.of(context).primaryColor.withValues(alpha: 0.2))
               : (textColor == const Color(0xFF64748B)
                   ? const Color(0xFFE2E8F0)
-                  : AppTheme.primaryColor.withValues(alpha: 0.3)),
+                  : Theme.of(context).primaryColor.withValues(alpha: 0.3)),
         ),
       ),
       child: Text(
@@ -1170,7 +1170,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
     required int depositCount,
     required int monthsRemaining,
   }) {
-    final accent = isStarred ? const Color(0xFFFF9800) : AppTheme.primaryColor;
+    final accent = isStarred ? const Color(0xFFFF9800) : Theme.of(context).primaryColor;
     return SplitListCard(
       height: 148,
       leadingWidth: 94,
@@ -1416,9 +1416,9 @@ class _DreamsScreenState extends State<DreamsScreen> {
 
                 Expanded(
                   child: _isLoading
-                      ? const Center(
+                      ? Center(
                           child: CircularProgressIndicator(
-                            color: AppTheme.primaryColor,
+                            color: Theme.of(context).primaryColor,
                           ),
                         )
                       : _dreams.isEmpty
@@ -1610,7 +1610,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                           size: 12,
                                           color: isStarred
                                               ? const Color(0xFFD97706)
-                                              : AppTheme.primaryColor,
+                                              : Theme.of(context).primaryColor,
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
@@ -1620,7 +1620,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                             fontWeight: FontWeight.bold,
                                             color: isStarred
                                                 ? const Color(0xFFD97706)
-                                                : AppTheme.primaryColor,
+                                                : Theme.of(context).primaryColor,
                                           ),
                                         ),
                                       ],
@@ -1764,8 +1764,8 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                           )
                                         : OutlinedButton.icon(
                                             style: OutlinedButton.styleFrom(
-                                              side: const BorderSide(
-                                                color: AppTheme.primaryColor,
+                                              side: BorderSide(
+                                                color: Theme.of(context).primaryColor,
                                               ),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
@@ -1778,15 +1778,15 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                               current,
                                               target,
                                             ),
-                                            icon: const Icon(
+                                            icon: Icon(
                                               Icons.savings_outlined,
-                                              color: AppTheme.primaryColor,
+                                              color: Theme.of(context).primaryColor,
                                               size: 18,
                                             ),
-                                            label: const Text(
+                                            label: Text(
                                               'หยอดกระปุก',
                                               style: TextStyle(
-                                                color: AppTheme.primaryColor,
+                                                color: Theme.of(context).primaryColor,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
@@ -1869,8 +1869,8 @@ class _DreamInputField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: AppTheme.primaryColor,
+              borderSide: BorderSide(
+                color: Theme.of(context).primaryColor,
                 width: 2,
               ),
             ),
@@ -1949,8 +1949,8 @@ class _DreamAmountInputField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: AppTheme.primaryColor,
+              borderSide: BorderSide(
+                color: Theme.of(context).primaryColor,
                 width: 2,
               ),
             ),

@@ -6,6 +6,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/shared_icon_selector.dart';
 import '../../auth/domain/auth_session.dart';
+import '../../../core/settings/app_settings.dart';
 
 class Message {
   final String text;
@@ -1074,6 +1075,45 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           ? (totalAccumulated / budget).clamp(0.0, 1.0)
           : 0.0;
 
+      final style = AppSettings.themeStyle.value;
+      BorderRadius cardRadius = BorderRadius.circular(16);
+      Border cardBorder = Border.all(color: context.borderColor);
+      
+      switch (style) {
+        case ThemeStyle.emerald:
+          cardRadius = BorderRadius.circular(16);
+          cardBorder = Border.all(color: context.borderColor, width: 1);
+          break;
+        case ThemeStyle.cartoon:
+          cardRadius = BorderRadius.circular(20);
+          cardBorder = Border.all(
+            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFFFFDF5) : const Color(0xFF2B1A0E),
+            width: 2.0,
+          );
+          break;
+        case ThemeStyle.sakura:
+          cardRadius = BorderRadius.circular(24);
+          cardBorder = Border.all(
+            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF4C2731) : const Color(0xFFFFE3E7),
+            width: 1.2,
+          );
+          break;
+        case ThemeStyle.cyberpunk:
+          cardRadius = BorderRadius.circular(12);
+          cardBorder = Border.all(
+            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF00FFF0) : const Color(0xFFFF007F),
+            width: 1.5,
+          );
+          break;
+        case ThemeStyle.luxury:
+          cardRadius = BorderRadius.circular(16);
+          cardBorder = Border.all(
+            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF4A3E20) : const Color(0xFFE5D5A1),
+            width: 1.2,
+          );
+          break;
+      }
+
       return Align(
         alignment: Alignment.centerLeft,
         child: ConstrainedBox(
@@ -1082,8 +1122,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             margin: const EdgeInsets.only(right: 16, top: 4, bottom: 8),
             decoration: BoxDecoration(
               color: context.surfaceColor,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: context.borderColor),
+              borderRadius: cardRadius,
+              border: cardBorder,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.02),
@@ -1095,53 +1135,14 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  height: 100,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: headerBgColor,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
-                  ),
-                  child: Stack(
-                    children: [
-                      Center(
-                        child: Icon(
-                          headerIcon,
-                          size: 40,
-                          color: categoryColor.withValues(alpha: 0.8),
-                        ),
-                      ),
-                      if (!hasBudget)
-                        Positioned(
-                          top: 12,
-                          right: 12,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: context.surfaceColor,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: const Color(0xFFEF4444),
-                                width: 1,
-                              ),
-                            ),
-                            child: const Text(
-                              'ไม่มีงบ',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFFEF4444),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                _buildCardHeader(
+                  style,
+                  category,
+                  msgType,
+                  headerIcon,
+                  categoryColor,
+                  headerBgColor,
+                  hasBudget,
                 ),
                 Padding(
                   padding: const EdgeInsets.all(16),
@@ -1154,10 +1155,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                           Expanded(
                             child: Text(
                               name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF1E293B),
+                                color: context.primaryTextColor,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1179,9 +1180,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                         children: [
                           Text(
                             '${totalAccumulated.toStringAsFixed(0)} / ${budget.toStringAsFixed(0)} บาท',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10,
-                              color: Color(0xFF64748B),
+                              color: context.secondaryTextColor,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -1235,7 +1236,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           ),
           decoration: BoxDecoration(
             color: isUser
-                ? AppTheme.primaryColor
+                ? Theme.of(context).primaryColor
                 : (Theme.of(context).brightness == Brightness.dark
                     ? const Color(0xFF1E293B)
                     : const Color(0xFFF1F5F9)),
@@ -1287,6 +1288,14 @@ class _TransactionsScreenState extends State<TransactionsScreen>
       resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: ThemePatternPainter(
+                style: AppSettings.themeStyle.value,
+                brightness: Theme.of(context).brightness,
+              ),
+            ),
+          ),
           Column(
             children: [
               Expanded(
@@ -1308,13 +1317,13 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ),
               ),
               if (_isLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
-                      color: AppTheme.primaryColor,
+                      color: Theme.of(context).primaryColor,
                       strokeWidth: 2,
                     ),
                   ),
@@ -1360,7 +1369,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                                 ? Icons.grid_view_rounded
                                 : Icons.add_rounded,
                             key: ValueKey(_showQuickSuggestions),
-                            color: AppTheme.primaryColor,
+                            color: Theme.of(context).primaryColor,
                             size: 20,
                           ),
                         ),
@@ -1403,13 +1412,13 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                         height: 42,
                         decoration: BoxDecoration(
                           color: _canSend
-                              ? AppTheme.primaryColor
+                              ? Theme.of(context).primaryColor
                               : const Color(0xFFE2E8F0),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: _canSend
                               ? [
                                   BoxShadow(
-                                    color: AppTheme.primaryColor.withValues(
+                                    color: Theme.of(context).primaryColor.withValues(
                                       alpha: 0.24,
                                     ),
                                     blurRadius: 10,
@@ -1547,4 +1556,381 @@ class _TransactionsScreenState extends State<TransactionsScreen>
         return 'บันทึกรายจ่ายเรียบร้อยแล้วครับ';
     }
   }
+
+  Widget _buildCardHeader(
+    ThemeStyle style,
+    String category,
+    String msgType,
+    IconData headerIcon,
+    Color categoryColor,
+    Color headerBgColor,
+    bool hasBudget,
+  ) {
+    final isExpense = msgType == 'expense' || category == 'รายจ่าย';
+    final isDream = msgType == 'dream' || category == 'เงินออม';
+    final title = isExpense 
+        ? context.tr('บันทึกรายจ่าย', 'EXPENSE RECORD') 
+        : (isDream ? context.tr('หยอดเป้าหมาย', 'SAVINGS GOAL') : context.tr('รายการใหม่', 'NEW ENTRY'));
+
+    final badge = !hasBudget
+        ? Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFEF4444), width: 1),
+              ),
+              child: const Text(
+                'ไม่มีงบ',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFEF4444),
+                ),
+              ),
+            ),
+          )
+        : const SizedBox.shrink();
+
+    switch (style) {
+      case ThemeStyle.cartoon:
+        return Container(
+          height: 100,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFE3CC),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _CardCheckeredPainter(color: const Color(0xFFFFC08D).withValues(alpha: 0.3)),
+                ),
+              ),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF9233),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF2B1A0E), width: 1.8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        isExpense ? '🐱💸' : '🐱🎯',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: Color(0xFF2B1A0E),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              badge,
+            ],
+          ),
+        );
+
+      case ThemeStyle.sakura:
+        return Container(
+          height: 100,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFFFD1DC), Color(0xFFFFB5C2)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    headerIcon,
+                    size: 34,
+                    color: const Color(0xFFFF6B8B),
+                  ),
+                ),
+              ),
+              const Positioned(
+                top: 8,
+                left: 12,
+                child: Text('🌸', style: TextStyle(fontSize: 16)),
+              ),
+              const Positioned(
+                bottom: 8,
+                right: 12,
+                child: Text('🌸', style: TextStyle(fontSize: 16)),
+              ),
+              badge,
+            ],
+          ),
+        );
+
+      case ThemeStyle.cyberpunk:
+        return Container(
+          height: 100,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            color: Color(0xFF140D24),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _CardCyberGridPainter(color: const Color(0xFFFF007F).withValues(alpha: 0.15)),
+                ),
+              ),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F0D3D),
+                    border: Border.all(color: const Color(0xFF00FFF0), width: 1.5),
+                  ),
+                  child: Text(
+                    '[ $title ]',
+                    style: const TextStyle(
+                      color: Color(0xFF00FFF0),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+              badge,
+            ],
+          ),
+        );
+
+      case ThemeStyle.luxury:
+        return Container(
+          height: 100,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF121824), Color(0xFF080B11)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('👑', style: TextStyle(fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Color(0xFFD4AF37),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 1.5,
+                  color: const Color(0xFFD4AF37).withValues(alpha: 0.4),
+                ),
+              ),
+              badge,
+            ],
+          ),
+        );
+
+      case ThemeStyle.emerald:
+      default:
+        return Container(
+          height: 100,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: headerBgColor,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(20),
+            ),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Icon(
+                  headerIcon,
+                  size: 40,
+                  color: categoryColor.withValues(alpha: 0.8),
+                ),
+              ),
+              badge,
+            ],
+          ),
+        );
+    }
+  }
+}
+
+class ThemePatternPainter extends CustomPainter {
+  final ThemeStyle style;
+  final Brightness brightness;
+
+  ThemePatternPainter({required this.style, required this.brightness});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final isDark = brightness == Brightness.dark;
+
+    switch (style) {
+      case ThemeStyle.emerald:
+        final paint = Paint()
+          ..color = isDark ? Colors.white.withValues(alpha: 0.015) : Colors.black.withValues(alpha: 0.015)
+          ..strokeWidth = 1.0;
+        const double step = 32.0;
+        for (double x = 0; x < size.width; x += step) {
+          canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+        }
+        for (double y = 0; y < size.height; y += step) {
+          canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+        }
+        break;
+
+      case ThemeStyle.cartoon:
+        final paint = Paint()
+          ..color = isDark ? const Color(0xFFFFF3E6).withValues(alpha: 0.03) : const Color(0xFFFF9233).withValues(alpha: 0.04)
+          ..strokeWidth = 2.0;
+        const double step = 28.0;
+        for (double x = 0; x < size.width; x += step) {
+          canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+        }
+        for (double y = 0; y < size.height; y += step) {
+          canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+        }
+        break;
+
+      case ThemeStyle.sakura:
+        final paint = Paint()
+          ..color = isDark ? const Color(0xFFFF8FA3).withValues(alpha: 0.03) : const Color(0xFFFF8FA3).withValues(alpha: 0.05)
+          ..strokeWidth = 3.0;
+        const double step = 40.0;
+        for (double i = -size.height; i < size.width; i += step) {
+          canvas.drawLine(Offset(i, 0), Offset(i + size.height, size.height), paint);
+        }
+        break;
+
+      case ThemeStyle.cyberpunk:
+        final gridPaint = Paint()
+          ..color = const Color(0xFF00FFF0).withValues(alpha: 0.06)
+          ..strokeWidth = 1.5;
+        
+        final horizonY = size.height * 0.15;
+        
+        const int numLines = 16;
+        for (int i = 0; i <= numLines; i++) {
+          final xBottom = size.width * (i / numLines);
+          final xTop = size.width * 0.5 + (xBottom - size.width * 0.5) * 0.1;
+          canvas.drawLine(Offset(xBottom, size.height), Offset(xTop, horizonY), gridPaint);
+        }
+
+        double currentY = size.height;
+        double spacing = 45.0;
+        while (currentY > horizonY) {
+          final ratio = (currentY - horizonY) / (size.height - horizonY);
+          gridPaint.color = const Color(0xFFFF007F).withValues(alpha: 0.04 + (0.06 * ratio));
+          canvas.drawLine(Offset(0, currentY), Offset(size.width, currentY), gridPaint);
+          currentY -= spacing;
+          spacing *= 0.85;
+          if (spacing < 4.0) break;
+        }
+        break;
+
+      case ThemeStyle.luxury:
+        final paint = Paint()
+          ..color = const Color(0xFFD4AF37).withValues(alpha: isDark ? 0.03 : 0.05)
+          ..strokeWidth = 1.0;
+        const double step = 45.0;
+        for (double i = -size.height; i < size.width; i += step) {
+          canvas.drawLine(Offset(i, 0), Offset(i + size.height, size.height), paint);
+        }
+        for (double i = 0; i < size.width + size.height; i += step) {
+          canvas.drawLine(Offset(i, 0), Offset(i - size.height, size.height), paint);
+        }
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class _CardCheckeredPainter extends CustomPainter {
+  final Color color;
+  _CardCheckeredPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    const double step = 20.0;
+    for (double x = 0; x < size.width; x += step * 2) {
+      for (double y = 0; y < size.height; y += step * 2) {
+        canvas.drawRect(Rect.fromLTWH(x, y, step, step), paint);
+        canvas.drawRect(Rect.fromLTWH(x + step, y + step, step, step), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CardCyberGridPainter extends CustomPainter {
+  final Color color;
+  _CardCyberGridPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.0;
+    const double step = 15.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
