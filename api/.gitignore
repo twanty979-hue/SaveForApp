@@ -1,2 +1,5 @@
 # Environments
 .env
+
+# Private Firebase service-account credentials
+secrets/*.json

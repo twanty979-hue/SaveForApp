@@ -49,6 +49,10 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>ใช้กล้องเพื่อถ่ายรูปโปรไฟล์ของคุณ</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>เลือกรูปจากคลังภาพเพื่อใช้เป็นรูปโปรไฟล์</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

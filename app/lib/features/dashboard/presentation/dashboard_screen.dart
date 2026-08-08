@@ -1,11 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/localization/app_localizations.dart';
+import '../../../core/notifications/notification_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/floating_background.dart';
 import '../../auth/domain/auth_session.dart';
+import '../../profile/presentation/profile_settings_screen.dart';
+import '../../planning/presentation/planning_hub_screen.dart';
 import '../../transactions/presentation/transactions_screen.dart';
-import './summary_screen.dart';
-
+import 'notification_inbox_sheet.dart';
+import 'compact_calendar_sheet.dart';
+import 'finance_dashboard_screen.dart';
+import 'package:app/icon_selector_demo.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -14,23 +22,46 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _selectedIndex = 1; // เริ่มต้นที่หน้าสรุปยอด (Dashboard)
-
   final ApiClient _apiClient = ApiClient();
-  final String _activeUserId = AuthSession.userId ?? '5b2d488d-75a0-4ea4-8f14-43047d256c8d';
+  final String _activeUserId =
+      AuthSession.userId ?? '5b2d488d-75a0-4ea4-8f14-43047d256c8d';
 
   double _todaySpent = 0.0;
   double _monthSpent = 0.0;
+  String? _avatarUrl = AuthSession.avatarUrl;
 
   @override
   void initState() {
     super.initState();
+    unawaited(_apiClient.preloadCoreData(_activeUserId));
     _fetchHeaderTotals();
+    _fetchHeaderAvatar();
+    NotificationService.instance.registerDevice();
+  }
+
+  Future<void> _fetchHeaderAvatar() async {
+    if (AuthSession.accessToken?.isNotEmpty != true) return;
+    try {
+      final response = await _apiClient.get('/profile/avatar');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final avatarPath = data['avatar_url']?.toString();
+        final avatarUrl = avatarPath == null
+            ? null
+            : _apiClient.absoluteUrl(avatarPath);
+        await AuthSession.setAvatarUrl(avatarUrl);
+        if (mounted) setState(() => _avatarUrl = avatarUrl);
+      }
+    } catch (_) {
+      // ใช้รูปที่บันทึกไว้ในเครื่องเมื่อเครือข่ายไม่พร้อม
+    }
   }
 
   Future<void> _fetchHeaderTotals() async {
     try {
-      final response = await _apiClient.get('/transactions?user_id=eq.$_activeUserId');
+      final response = await _apiClient.get(
+        '/transactions?user_id=eq.$_activeUserId',
+      );
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         final now = DateTime.now();
@@ -41,16 +72,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         for (var tx in data) {
           if (tx['type'] == 'expense') {
             final dateStr = tx['transaction_date'] ?? '';
-            final date = DateTime.tryParse(dateStr);
+            final date = DateTime.tryParse(dateStr)?.toLocal();
             if (date == null) continue;
-
-            final amt = (tx['amount'] as num).toDouble();
-
+            final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
             if (date.year == now.year && date.month == now.month) {
-              monthSum += amt;
+              monthSum += amount;
             }
-            if (date.year == now.year && date.month == now.month && date.day == now.day) {
-              todaySum += amt;
+            if (date.year == now.year &&
+                date.month == now.month &&
+                date.day == now.day) {
+              todaySum += amount;
             }
           }
         }
@@ -69,145 +100,384 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return const _CalendarBottomSheet();
+        return const CompactCalendarSheet();
       },
     );
   }
 
+  void _showNotificationBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const NotificationInboxSheet(),
+    ).then((_) => NotificationService.instance.refreshUnreadCount());
+  }
+
+  Future<void> _openProfileSettings() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ProfileSettingsScreen()),
+    );
+    if (mounted) {
+      setState(() {});
+      _fetchHeaderTotals();
+      _fetchHeaderAvatar();
+    }
+  }
+
+  void _openSettingsPage(String destination) {
+    final Widget page;
+    switch (destination) {
+      case 'summary':
+        page = FinanceDashboardScreen(onRefreshHeader: _fetchHeaderTotals);
+      case 'dream':
+        page = const PlanningHubScreen(initialSection: PlanningSection.dream);
+      case 'expense':
+        page = const PlanningHubScreen(initialSection: PlanningSection.expense);
+      case 'plans':
+        page = const PlanningHubScreen();
+      case 'icon_picker':
+        page = const IconSelectorDemo();
+      default:
+        page = const PlanningHubScreen(initialSection: PlanningSection.income);
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => page),
+    ).then((_) => _fetchHeaderTotals());
+  }
+
   @override
   Widget build(BuildContext context) {
-    final List<Widget> screens = [
-      const TransactionsScreen(),
-      SummaryScreen(onRefreshHeader: _fetchHeaderTotals),
-    ];
-
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFBFD),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // แผงโปรไฟล์ผู้ใช้งานด้านบนสุด (Profile Bar)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE6F4F1),
-                      shape: BoxShape.circle,
+      backgroundColor: context.pageColor,
+      body: Stack(
+        children: [
+          const Positioned.fill(child: FloatingBackground()),
+          SafeArea(
+            child: Stack(
+              children: [
+                const Positioned.fill(
+                  child: TransactionsScreen(topPadding: 86),
+                ),
+                Positioned(
+                  top: 10,
+                  left: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: context.surfaceColor,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: context.borderColor),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.07),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
                     ),
-                    child: const Icon(
-                      Icons.person_outline,
-                      color: AppTheme.primaryColor,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          AuthSession.displayName ?? 'วรธน นำทอง',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
+                        Tooltip(
+                          message: context.tr(
+                            'ตั้งค่าโปรไฟล์',
+                            'Profile settings',
+                          ),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: _openProfileSettings,
+                            child: Container(
+                              width: 42,
+                              height: 42,
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Color(0xFF16BFA5),
+                                    AppTheme.primaryColor,
+                                  ],
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: _avatarUrl?.isNotEmpty == true
+                                  ? Image.network(
+                                      _avatarUrl!,
+                                      fit: BoxFit.cover,
+                                      headers: _apiClient.imageHeaders(
+                                        _avatarUrl!,
+                                      ),
+                                      errorBuilder: (_, _, _) => const Icon(
+                                        Icons.person_outline_rounded,
+                                        color: Colors.white,
+                                        size: 21,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.person_outline_rounded,
+                                      color: Colors.white,
+                                      size: 21,
+                                    ),
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'วันนี้: ฿${_todaySpent.toStringAsFixed(0)}  |  เดือนนี้: ฿${_monthSpent.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF64748B),
+                        const SizedBox(width: 11),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                AuthSession.displayName ??
+                                    context.tr('บัญชีของฉัน', 'My account'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.primaryTextColor,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  Text(
+                                    '${context.tr('วันนี้', 'Today')} ฿${_todaySpent.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFEF4444),
+                                    ),
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                    ),
+                                    child: SizedBox(
+                                      width: 3,
+                                      height: 3,
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          color: Color(0xFFCBD5E1),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Flexible(
+                                    child: Text(
+                                      '${context.tr('เดือนนี้', 'This month')} ฿${_monthSpent.toStringAsFixed(0)}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Tooltip(
+                          message: context.tr('ปฏิทิน', 'Calendar'),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(13),
+                            onTap: _showCalendarBottomSheet,
+                            child: const _HeaderIcon(
+                              icon: Icons.calendar_today_outlined,
+                              color: Color(0xFF64748B),
+                              backgroundColor: Color(0xFFF1F5F9),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        ValueListenableBuilder<int>(
+                          valueListenable:
+                              NotificationService.instance.unreadCount,
+                          builder: (context, unreadCount, _) => Tooltip(
+                            message: context.tr(
+                              'การแจ้งเตือน',
+                              'Notifications',
+                            ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(13),
+                              onTap: _showNotificationBottomSheet,
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  const _HeaderIcon(
+                                    icon: Icons.notifications_none_rounded,
+                                    color: Color(0xFF64748B),
+                                    backgroundColor: Color(0xFFF1F5F9),
+                                  ),
+                                  if (unreadCount > 0)
+                                    Positioned(
+                                      top: -2,
+                                      right: -2,
+                                      child: Container(
+                                        width: 9,
+                                        height: 9,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEF4444),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        PopupMenuButton<String>(
+                          tooltip: context.tr('เมนูหน้าหลัก', 'Home menu'),
+                          onSelected: _openSettingsPage,
+                          offset: const Offset(0, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          itemBuilder: (context) => [
+                            PopupMenuItem<String>(
+                              value: 'summary',
+                              child: _HomeMenuItem(
+                                icon: Icons.bar_chart_outlined,
+                                color: Color(0xFF1E293B),
+                                label: context.tr('สรุปยอด', 'Dashboard'),
+                              ),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'plans',
+                              child: _HomeMenuItem(
+                                icon: Icons.dashboard_customize_outlined,
+                                color: AppTheme.primaryColor,
+                                label: context.tr('รายการที่ตั้งไว้', 'Plans'),
+                              ),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'icon_picker',
+                              child: _HomeMenuItem(
+                                icon: Icons.emoji_emotions_outlined,
+                                color: Colors.purple,
+                                label: context.tr('เทสไอคอน', 'Test Icon'),
+                              ),
+                            ),
+                          ],
+                          child: const _HeaderAssetIcon(
+                            assetPath: 'assets/images/home_menu_icon.png',
+                            color: AppTheme.primaryColor,
+                            backgroundColor: Color(0xFFE6F4F1),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  // แสดงปุ่มปฏิทินในหน้ารายงานสรุปยอด
-                  if (_selectedIndex == 1)
-                    IconButton(
-                      icon: const Icon(
-                        Icons.calendar_today_outlined,
-                        color: Color(0xFF64748B),
-                        size: 20,
-                      ),
-                      onPressed: _showCalendarBottomSheet,
-                    ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Expanded(
-              child: screens[_selectedIndex],
-            ),
-            // แผงแถบเมนูนำทางล่างสุด (Bottom Navigation Bar)
-            Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-              ),
-              child: Row(
-                children: [
-                  _buildBottomTab(0, Icons.chat_bubble_outline, Icons.chat_bubble, 'แชต', const Color(0xFF00A88F)),
-                  _buildBottomTab(1, Icons.bar_chart_outlined, Icons.bar_chart, 'สรุปยอด', const Color(0xFF1E293B)),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  // ตัวสร้างปุ่มแบบเรียบหรู คลาสสิก ไม่มีขอบกรอบสี่เหลี่ยมหนาๆ ครอบไอคอนอีกต่อไปตามความพึงพอใจและภาพครอปของผู้ใช้
-  Widget _buildBottomTab(int index, IconData outlineIcon, IconData filledIcon, String label, Color activeColor) {
-    final isSelected = _selectedIndex == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedIndex = index;
-          });
-          _fetchHeaderTotals();
-        },
-        child: Container(
-          color: Colors.transparent,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isSelected ? filledIcon : outlineIcon,
-                color: isSelected ? activeColor : const Color(0xFF94A3B8),
-                size: 22,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  color: isSelected ? activeColor : const Color(0xFF94A3B8),
-                ),
-              ),
-            ],
+class _HeaderIcon extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final Color backgroundColor;
+
+  const _HeaderIcon({
+    required this.icon,
+    required this.color,
+    required this.backgroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Icon(icon, color: color, size: 19),
+    );
+  }
+}
+
+class _HeaderAssetIcon extends StatelessWidget {
+  final String assetPath;
+  final Color color;
+  final Color backgroundColor;
+
+  const _HeaderAssetIcon({
+    required this.assetPath,
+    required this.color,
+    required this.backgroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 38,
+      height: 38,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Image.asset(
+        assetPath,
+        color: color,
+        colorBlendMode: BlendMode.srcIn,
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+}
+
+class _HomeMenuItem extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+
+  const _HomeMenuItem({
+    required this.icon,
+    required this.color,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1E293B),
           ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -235,19 +505,24 @@ class _CalendarBottomSheet extends StatefulWidget {
 
 class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
   final ApiClient _apiClient = ApiClient();
-  final String _activeUserId = AuthSession.userId ?? '5b2d488d-75a0-4ea4-8f14-43047d256c8d';
+  final String _activeUserId =
+      AuthSession.userId ?? '5b2d488d-75a0-4ea4-8f14-43047d256c8d';
 
   bool _isLoading = true;
   List<dynamic> _transactions = [];
-  double _grandTotal = 0.0;
+  final double _grandTotal = 0.0;
 
-  int _currentYear = 2026;
-  int _currentMonth = 8;
-  int _selectedDay = 1;
+  late int _currentYear;
+  late int _currentMonth;
+  late int _selectedDay;
 
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _currentYear = now.year;
+    _currentMonth = now.month;
+    _selectedDay = now.day;
     _fetchTransactions();
   }
 
@@ -258,15 +533,8 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
       );
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        double total = 0.0;
-        for (var tx in data) {
-          if (tx['type'] == 'expense') {
-            total += (tx['amount'] as num).toDouble();
-          }
-        }
         setState(() {
           _transactions = data;
-          _grandTotal = total;
           _isLoading = false;
         });
       } else {
@@ -292,31 +560,37 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
 
     int prevMonthDays = prevMonthEnd.day;
     for (int i = startOffset - 1; i >= 0; i--) {
-      cells.add(_CalendarCell(
-        day: prevMonthDays - i,
-        month: _currentMonth == 1 ? 12 : _currentMonth - 1,
-        year: _currentMonth == 1 ? _currentYear - 1 : _currentYear,
-        isCurrentMonth: false,
-      ));
+      cells.add(
+        _CalendarCell(
+          day: prevMonthDays - i,
+          month: _currentMonth == 1 ? 12 : _currentMonth - 1,
+          year: _currentMonth == 1 ? _currentYear - 1 : _currentYear,
+          isCurrentMonth: false,
+        ),
+      );
     }
 
     for (int i = 1; i <= currentMonthEnd.day; i++) {
-      cells.add(_CalendarCell(
-        day: i,
-        month: _currentMonth,
-        year: _currentYear,
-        isCurrentMonth: true,
-      ));
+      cells.add(
+        _CalendarCell(
+          day: i,
+          month: _currentMonth,
+          year: _currentYear,
+          isCurrentMonth: true,
+        ),
+      );
     }
 
     int remaining = 42 - cells.length;
     for (int i = 1; i <= remaining; i++) {
-      cells.add(_CalendarCell(
-        day: i,
-        month: _currentMonth == 12 ? 1 : _currentMonth + 1,
-        year: _currentMonth == 12 ? _currentYear + 1 : _currentYear,
-        isCurrentMonth: false,
-      ));
+      cells.add(
+        _CalendarCell(
+          day: i,
+          month: _currentMonth == 12 ? 1 : _currentMonth + 1,
+          year: _currentMonth == 12 ? _currentYear + 1 : _currentYear,
+          isCurrentMonth: false,
+        ),
+      );
     }
 
     return cells;
@@ -324,8 +598,18 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
 
   String _getMonthName(int month) {
     const names = [
-      'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-      'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+      'มกราคม',
+      'กุมภาพันธ์',
+      'มีนาคม',
+      'เมษายน',
+      'พฤษภาคม',
+      'มิถุนายน',
+      'กรกฎาคม',
+      'สิงหาคม',
+      'กันยายน',
+      'ตุลาคม',
+      'พฤศจิกายน',
+      'ธันวาคม',
     ];
     return names[month - 1];
   }
@@ -381,11 +665,18 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                       children: const [
                         Text(
                           'ปฏิทินรายจ่าย',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
                         ),
                         Text(
                           'ดูรายจ่ายแยกตามวัน',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                          ),
                         ),
                       ],
                     ),
@@ -402,12 +693,19 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                   children: [
                     Text(
                       '${_getMonthName(_currentMonth)} $thYear',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
                     ),
                     Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.chevron_left, color: Color(0xFF64748B)),
+                          icon: const Icon(
+                            Icons.chevron_left,
+                            color: Color(0xFF64748B),
+                          ),
                           onPressed: () {
                             setState(() {
                               if (_currentMonth == 1) {
@@ -421,7 +719,10 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                           },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.chevron_right, color: Color(0xFF64748B)),
+                          icon: const Icon(
+                            Icons.chevron_right,
+                            color: Color(0xFF64748B),
+                          ),
                           onPressed: () {
                             setState(() {
                               if (_currentMonth == 12) {
@@ -442,34 +743,92 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: const [
-                    Text('อา.', style: TextStyle(color: Color(0xFF00A88F), fontWeight: FontWeight.bold, fontSize: 13)),
-                    Text('จ.', style: TextStyle(color: Color(0xFF00A88F), fontWeight: FontWeight.bold, fontSize: 13)),
-                    Text('อ.', style: TextStyle(color: Color(0xFF00A88F), fontWeight: FontWeight.bold, fontSize: 13)),
-                    Text('พ.', style: TextStyle(color: Color(0xFF00A88F), fontWeight: FontWeight.bold, fontSize: 13)),
-                    Text('พฤ.', style: TextStyle(color: Color(0xFF00A88F), fontWeight: FontWeight.bold, fontSize: 13)),
-                    Text('ศ.', style: TextStyle(color: Color(0xFF00A88F), fontWeight: FontWeight.bold, fontSize: 13)),
-                    Text('ส.', style: TextStyle(color: Color(0xFF00A88F), fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text(
+                      'อา.',
+                      style: TextStyle(
+                        color: Color(0xFF00A88F),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      'จ.',
+                      style: TextStyle(
+                        color: Color(0xFF00A88F),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      'อ.',
+                      style: TextStyle(
+                        color: Color(0xFF00A88F),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      'พ.',
+                      style: TextStyle(
+                        color: Color(0xFF00A88F),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      'พฤ.',
+                      style: TextStyle(
+                        color: Color(0xFF00A88F),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      'ศ.',
+                      style: TextStyle(
+                        color: Color(0xFF00A88F),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      'ส.',
+                      style: TextStyle(
+                        color: Color(0xFF00A88F),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 _isLoading
                     ? const SizedBox(
                         height: 280,
-                        child: Center(child: CircularProgressIndicator(color: AppTheme.primaryColor)),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
                       )
                     : GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 7,
-                          mainAxisSpacing: 8,
-                          crossAxisSpacing: 8,
-                          childAspectRatio: 0.95,
-                        ),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 7,
+                              mainAxisSpacing: 8,
+                              crossAxisSpacing: 8,
+                              childAspectRatio: 0.95,
+                            ),
                         itemCount: 42,
                         itemBuilder: (context, index) {
                           final cell = cells[index];
-                          final date = DateTime(cell.year, cell.month, cell.day);
+                          final date = DateTime(
+                            cell.year,
+                            cell.month,
+                            cell.day,
+                          );
 
                           double spent = 0.0;
                           for (var tx in _transactions) {
@@ -484,7 +843,8 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                             }
                           }
 
-                          final isSelected = cell.isCurrentMonth && _selectedDay == cell.day;
+                          final isSelected =
+                              cell.isCurrentMonth && _selectedDay == cell.day;
 
                           return GestureDetector(
                             onTap: () {
@@ -498,12 +858,16 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                               decoration: BoxDecoration(
                                 color: isSelected
                                     ? const Color(0xFFE6F4F1)
-                                    : (cell.isCurrentMonth ? const Color(0xFFF8FAFC) : Colors.transparent),
+                                    : (cell.isCurrentMonth
+                                          ? const Color(0xFFF8FAFC)
+                                          : Colors.transparent),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: isSelected
                                       ? AppTheme.primaryColor
-                                      : (cell.isCurrentMonth ? const Color(0xFFF1F5F9) : Colors.transparent),
+                                      : (cell.isCurrentMonth
+                                            ? const Color(0xFFF1F5F9)
+                                            : Colors.transparent),
                                   width: isSelected ? 1.5 : 1,
                                 ),
                               ),
@@ -515,7 +879,9 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: cell.isCurrentMonth
-                                          ? (isSelected ? AppTheme.primaryColor : const Color(0xFF1E293B))
+                                          ? (isSelected
+                                                ? AppTheme.primaryColor
+                                                : const Color(0xFF1E293B))
                                           : const Color(0xFFCBD5E1),
                                       fontSize: 13,
                                     ),
@@ -542,19 +908,30 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Text(
                         'รายการเดือน${_getMonthName(_currentMonth)} $thYear',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                        ),
                       ),
                     ),
                     Text(
                       'รวม ฿${monthlyTotal.toStringAsFixed(0)}',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFEF4444)),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFEF4444),
+                      ),
                     ),
                   ],
                 ),
@@ -565,7 +942,10 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                       ? Center(
                           child: Text(
                             'ไม่มีรายจ่ายในเดือนนี้',
-                            style: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[400],
+                            ),
                           ),
                         )
                       : ListView.builder(
@@ -579,11 +959,22 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                               margin: const EdgeInsets.only(bottom: 6),
                               child: ListTile(
                                 dense: true,
-                                title: Text(tx['note'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                subtitle: Text('หมวดหมู่: ค่าใช้จ่ายรายวัน', style: TextStyle(color: Colors.grey[500])),
+                                title: Text(
+                                  tx['note'] ?? '',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'หมวดหมู่: ค่าใช้จ่ายรายวัน',
+                                  style: TextStyle(color: Colors.grey[500]),
+                                ),
                                 trailing: Text(
                                   '-฿${amount.toStringAsFixed(0)}',
-                                  style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                    color: Color(0xFFEF4444),
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             );
@@ -598,12 +989,18 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                   children: [
                     RichText(
                       text: TextSpan(
-                        style: const TextStyle(fontSize: 14, color: Color(0xFF475569)),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF475569),
+                        ),
                         children: [
                           const TextSpan(text: 'รายจ่ายรวมทุกวัน: '),
                           TextSpan(
                             text: '฿${_grandTotal.toStringAsFixed(0)}',
-                            style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              color: Color(0xFFEF4444),
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
@@ -611,14 +1008,22 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF1E293B),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         elevation: 0,
                       ),
                       onPressed: () => Navigator.pop(context),
                       child: const Text(
                         'ปิดหน้าต่าง',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],

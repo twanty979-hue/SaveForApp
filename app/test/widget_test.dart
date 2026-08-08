@@ -1,30 +1,32 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' as material;
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:app/main.dart';
+import 'package:app/core/localization/localized_text.dart' as localized;
+import 'package:app/core/settings/app_settings.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('shared text follows the selected app language', (tester) async {
+    AppSettings.locale.value = const material.Locale('en');
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(
+      const material.MaterialApp(
+        home: material.Scaffold(body: localized.Text('ภาษา')),
+      ),
+    );
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    expect(find.text('Language'), findsOneWidget);
+    expect(find.text('ภาษา'), findsNothing);
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('user-entered text is not modified', (tester) async {
+    AppSettings.locale.value = const material.Locale('en');
+
+    await tester.pumpWidget(
+      const material.MaterialApp(
+        home: material.Scaffold(body: localized.Text('ค่าห้องของน้องเมย์')),
+      ),
+    );
+
+    expect(find.text('ค่าห้องของน้องเมย์'), findsOneWidget);
   });
 }

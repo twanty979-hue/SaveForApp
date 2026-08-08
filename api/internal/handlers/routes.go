@@ -17,7 +17,7 @@ func SetupRouter() *gin.Engine {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, apikey")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
@@ -42,6 +42,29 @@ func SetupRouter() *gin.Engine {
 		v1.POST("/auth/login", func(c *gin.Context) {
 			handleSupabaseProxy(c, "POST", "/auth/v1/token?grant_type=password")
 		})
+		v1.POST("/auth/refresh", func(c *gin.Context) {
+			handleSupabaseProxy(c, "POST", "/auth/v1/token?grant_type=refresh_token")
+		})
+		v1.POST("/auth/change-password", handleChangePassword)
+
+		// Proxy ข้อมูลโปรไฟล์ผู้ใช้
+		v1.GET("/profile", func(c *gin.Context) {
+			handleSupabaseProxy(c, "GET", "/rest/v1/profiles")
+		})
+		v1.POST("/profile", func(c *gin.Context) {
+			handleSupabaseProxy(c, "POST", "/rest/v1/profiles")
+		})
+		v1.PATCH("/profile", func(c *gin.Context) {
+			handleSupabaseProxy(c, "PATCH", "/rest/v1/profiles")
+		})
+		v1.GET("/profile/avatar", handleGetProfileAvatar)
+		v1.GET("/profile/avatar/file", handleProfileAvatarFile)
+		v1.POST("/profile/avatar", handleUploadProfileAvatar)
+		v1.DELETE("/profile/avatar", handleDeleteProfileAvatar)
+		v1.POST("/notifications/device-token", handleNotificationDeviceToken)
+		v1.GET("/notifications", handleListNotifications)
+		v1.GET("/notifications/unread-count", handleUnreadNotificationCount)
+		v1.PATCH("/notifications/:id/read", handleReadNotification)
 
 		// Proxy การจัดเก็บข้อมูลธุรกรรมไปยังฐานข้อมูล Supabase PostgreSQL
 		v1.GET("/transactions", func(c *gin.Context) {
@@ -75,6 +98,9 @@ func SetupRouter() *gin.Engine {
 		v1.DELETE("/recurring/expenses", func(c *gin.Context) {
 			handleSupabaseProxy(c, "DELETE", "/rest/v1/fixed_expenses")
 		})
+		v1.PATCH("/recurring/expenses", func(c *gin.Context) {
+			handleSupabaseProxy(c, "PATCH", "/rest/v1/fixed_expenses")
+		})
 		v1.GET("/recurring/sources", func(c *gin.Context) {
 			handleSupabaseProxy(c, "GET", "/rest/v1/income_sources")
 		})
@@ -83,6 +109,9 @@ func SetupRouter() *gin.Engine {
 		})
 		v1.DELETE("/recurring/sources", func(c *gin.Context) {
 			handleSupabaseProxy(c, "DELETE", "/rest/v1/income_sources")
+		})
+		v1.PATCH("/recurring/sources", func(c *gin.Context) {
+			handleSupabaseProxy(c, "PATCH", "/rest/v1/income_sources")
 		})
 	}
 
@@ -119,7 +148,7 @@ func handleSupabaseProxy(c *gin.Context, method string, path string) {
 	req.Header.Set("apikey", supabaseKey)
 	req.Header.Set("Authorization", "Bearer "+supabaseKey)
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// สั่งให้คืนค่า JSON ก้อนที่บันทึกกลับมาเมื่อทำรายการแบบ POST
 	if method == "POST" {
 		req.Header.Set("Prefer", "return=representation")

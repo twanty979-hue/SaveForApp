@@ -13,6 +13,7 @@ func Run() {
 
 	// ตั้งค่าเราต์
 	router := handlers.SetupRouter()
+	handlers.StartNotificationScheduler()
 
 	// รันเซิร์ฟเวอร์
 	log.Printf("Starting SaveFor API server on port %s", cfg.Port)

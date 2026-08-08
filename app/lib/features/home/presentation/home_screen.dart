@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:app/core/localization/app_material.dart';
 import '../../../core/theme/app_theme.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -35,7 +35,10 @@ class HomeScreen extends StatelessWidget {
                         children: [
                           const Text(
                             'Today',
-                            style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                            style: TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 14,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -61,13 +64,18 @@ class HomeScreen extends StatelessWidget {
                         children: [
                           const Text(
                             'This Month',
-                            style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                            style: TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 14,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             '฿0',
                             style: TextStyle(
-                              color: AppTheme.primaryColor.withValues(alpha: 0.8),
+                              color: AppTheme.primaryColor.withValues(
+                                alpha: 0.8,
+                              ),
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
                             ),

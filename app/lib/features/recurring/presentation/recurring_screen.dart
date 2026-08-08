@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:app/core/localization/app_material.dart';
 
 class RecurringScreen extends StatelessWidget {
   const RecurringScreen({super.key});

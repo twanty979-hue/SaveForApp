@@ -1,12 +1,21 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
+import '../../../core/widgets/split_list_card.dart';
 import '../../auth/domain/auth_session.dart';
 
 class RecurringExpenseScreen extends StatefulWidget {
-  const RecurringExpenseScreen({super.key});
+  final bool embedded;
+  final ValueListenable<int>? addRequest;
+
+  const RecurringExpenseScreen({
+    super.key,
+    this.embedded = false,
+    this.addRequest,
+  });
 
   @override
   State<RecurringExpenseScreen> createState() => _RecurringExpenseScreenState();
@@ -14,7 +23,8 @@ class RecurringExpenseScreen extends StatefulWidget {
 
 class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
   final ApiClient _apiClient = ApiClient();
-  final String _activeUserId = AuthSession.userId ?? '5b2d488d-75a0-4ea4-8f14-43047d256c8d';
+  final String _activeUserId =
+      AuthSession.userId ?? '5b2d488d-75a0-4ea4-8f14-43047d256c8d';
 
   bool _isLoading = true;
   List<dynamic> _fixedExpenses = [];
@@ -42,7 +52,27 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
   @override
   void initState() {
     super.initState();
+    widget.addRequest?.addListener(_handleAddRequest);
     _fetchData();
+  }
+
+  @override
+  void didUpdateWidget(covariant RecurringExpenseScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.addRequest != widget.addRequest) {
+      oldWidget.addRequest?.removeListener(_handleAddRequest);
+      widget.addRequest?.addListener(_handleAddRequest);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.addRequest?.removeListener(_handleAddRequest);
+    super.dispose();
+  }
+
+  void _handleAddRequest() {
+    if (mounted) _showAddExpenseBottomSheet();
   }
 
   Future<void> _fetchData() async {
@@ -76,8 +106,6 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
     }
   }
 
-
-
   double _getPaidAmountThisMonth(String id, String name) {
     final now = DateTime.now();
     double total = 0.0;
@@ -86,11 +114,17 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
       final date = DateTime.tryParse(dateStr);
       final txFixedExpenseId = tx['fixed_expense_id']?.toString();
       final note = tx['note']?.toString() ?? '';
-      final cleanNote = note.replaceAll('[รายจ่ายประจำ]', '').trim().toLowerCase();
+      final cleanNote = note
+          .replaceAll('[รายจ่ายประจำ]', '')
+          .trim()
+          .toLowerCase();
       final cleanName = name.trim().toLowerCase();
-      final isMatch = txFixedExpenseId == id ||
-                      cleanNote == cleanName ||
-                      (cleanNote.isNotEmpty && cleanName.isNotEmpty && (cleanNote.contains(cleanName) || cleanName.contains(cleanNote)));
+      final isMatch =
+          txFixedExpenseId == id ||
+          cleanNote == cleanName ||
+          (cleanNote.isNotEmpty &&
+              cleanName.isNotEmpty &&
+              (cleanNote.contains(cleanName) || cleanName.contains(cleanNote)));
 
       if (date != null &&
           date.year == now.year &&
@@ -103,90 +137,14 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
     return total;
   }
 
-  Future<void> _recordExpensePayment(String id, String name, double amount) async {
-    try {
-      final body = {
-        'user_id': _activeUserId,
-        'type': 'expense',
-        'amount': amount,
-        'note': '[รายจ่ายประจำ] $name',
-        'fixed_expense_id': id,
-        'transaction_date': DateTime.now().toUtc().toIso8601String(),
-      };
-
-      final response = await _apiClient.post('/transactions', body: body);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        _fetchData();
-      }
-    } catch (e) {
-      // จัดการข้อผิดพลาดเงียบ
-    }
-  }
-
-  void _showRecordPaymentDialog(String id, String name, double defaultAmt) {
-    final amountController = TextEditingController(text: defaultAmt <= 0 ? '' : defaultAmt.toStringAsFixed(0));
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(
-            'บันทึกจ่ายเงิน: $name',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'ระบุจำนวนเงินที่จ่าย (บาท)',
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: amountController,
-                keyboardType: TextInputType.number,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: '0.00',
-                  isDense: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('ยกเลิก', style: TextStyle(color: Color(0xFF64748B))),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () {
-                final amt = double.tryParse(amountController.text.trim()) ?? 0.0;
-                if (amt > 0) {
-                  Navigator.pop(context);
-                  _recordExpensePayment(id, name, amt);
-                }
-              },
-              child: const Text('บันทึก', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   void _showDeleteConfirmation(String id) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Row(
             children: [
               Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444)),
@@ -203,10 +161,7 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
           ),
           content: const Text(
             'คุณแน่ใจหรือไม่ว่าต้องการลบรายการรายจ่ายประจำนี้? ข้อมูลนี้จะหายไปอย่างถาวร',
-            style: TextStyle(
-              fontSize: 14,
-              color: Color(0xFF64748B),
-            ),
+            style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
           ),
           actionsPadding: const EdgeInsets.only(right: 16, bottom: 16),
           actions: [
@@ -223,7 +178,9 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFEF4444),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 elevation: 0,
               ),
               onPressed: () {
@@ -232,7 +189,10 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
               },
               child: const Text(
                 'ลบข้อมูล',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
@@ -243,7 +203,10 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
 
   Future<void> _deleteExpense(String id) async {
     try {
-      final response = await _apiClient.post('/recurring/expenses?id=eq.$id', body: null);
+      final response = await _apiClient.post(
+        '/recurring/expenses?id=eq.$id',
+        body: null,
+      );
       if (response.statusCode == 200) {
         _fetchData();
       }
@@ -254,16 +217,23 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
 
   // หน้าต่างเพิ่มรายจ่ายประจำดีไซน์พรีเมียม ถอดแบบจากภาพที่สองและสามเป๊ะๆ
   void _showAddExpenseBottomSheet({Map<String, dynamic>? expenseToEdit}) {
-    final nameController = TextEditingController(text: expenseToEdit?['name']?.toString());
-    final amountController = TextEditingController(text: expenseToEdit?['amount']?.toString());
-    final dueDayController = TextEditingController(text: expenseToEdit?['due_day']?.toString() ?? '5');
-    String selectedCategory = expenseToEdit?['category']?.toString() ?? 'ค่าเช่า';
+    final nameController = TextEditingController(
+      text: expenseToEdit?['name']?.toString(),
+    );
+    final amountController = TextEditingController(
+      text: expenseToEdit?['amount']?.toString(),
+    );
+    final dueDayController = TextEditingController(
+      text: expenseToEdit?['due_day']?.toString() ?? '5',
+    );
+    String selectedCategory =
+        expenseToEdit?['category']?.toString() ?? 'ค่าเช่า';
     int activeStep = 0;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: context.surfaceColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -295,15 +265,27 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                     activeStep = 0;
                                   });
                                 },
-                                child: const Icon(Icons.arrow_back_ios, size: 18, color: Color(0xFF0F172A)),
+                                child: const Icon(
+                                  Icons.arrow_back_ios,
+                                  size: 18,
+                                  color: Color(0xFF0F172A),
+                                ),
                               ),
                               const SizedBox(width: 8),
                             ],
                             Text(
                               expenseToEdit != null
-                                  ? (activeStep == 0 ? 'แก้ไขหมวดหมู่รายจ่าย' : 'แก้ไขรายละเอียดรายจ่าย')
-                                  : (activeStep == 0 ? 'เลือกหมวดหมู่รายจ่าย' : 'กรอกรายละเอียดรายจ่าย'),
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                  ? (activeStep == 0
+                                        ? 'แก้ไขหมวดหมู่รายจ่าย'
+                                        : 'แก้ไขรายละเอียดรายจ่าย')
+                                  : (activeStep == 0
+                                        ? 'เลือกหมวดหมู่รายจ่าย'
+                                        : 'กรอกรายละเอียดรายจ่าย'),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                              ),
                             ),
                           ],
                         ),
@@ -315,7 +297,11 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                               color: Color(0xFFF1F5F9),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.close, color: Color(0xFF64748B), size: 16),
+                            child: const Icon(
+                              Icons.close,
+                              color: Color(0xFF64748B),
+                              size: 16,
+                            ),
                           ),
                         ),
                       ],
@@ -325,7 +311,11 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                     if (activeStep == 0) ...[
                       const Text(
                         'หมวดหมู่รายจ่าย',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       SizedBox(
@@ -343,7 +333,8 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                 children: _categoriesList.map((cat) {
                                   final catName = cat['name'] as String;
                                   final catIcon = cat['icon'] as IconData;
-                                  final isSelected = selectedCategory == catName;
+                                  final isSelected =
+                                      selectedCategory == catName;
 
                                   return GestureDetector(
                                     onTap: () {
@@ -355,28 +346,39 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                       width: cardWidth,
                                       height: cardHeight,
                                       decoration: BoxDecoration(
-                                        color: isSelected ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+                                        color: isSelected
+                                            ? const Color(0xFFF0FDF4)
+                                            : const Color(0xFFF8FAFC),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: isSelected ? AppTheme.primaryColor : const Color(0xFFE2E8F0),
+                                          color: isSelected
+                                              ? AppTheme.primaryColor
+                                              : const Color(0xFFE2E8F0),
                                           width: isSelected ? 1.5 : 1,
                                         ),
                                       ),
                                       child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Icon(
                                             catIcon,
                                             size: 16,
-                                            color: isSelected ? AppTheme.primaryColor : const Color(0xFF64748B),
+                                            color: isSelected
+                                                ? AppTheme.primaryColor
+                                                : const Color(0xFF64748B),
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
                                             catName,
                                             style: TextStyle(
                                               fontSize: 10,
-                                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                              color: isSelected ? AppTheme.primaryColor : const Color(0xFF475569),
+                                              fontWeight: isSelected
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
+                                              color: isSelected
+                                                  ? AppTheme.primaryColor
+                                                  : const Color(0xFF475569),
                                             ),
                                           ),
                                         ],
@@ -394,7 +396,11 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                         alignment: Alignment.center,
                         child: Text(
                           '1/2',
-                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.normal, color: Color(0xFFCBD5E1)),
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.normal,
+                            color: Color(0xFFCBD5E1),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -404,7 +410,9 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF0F172A),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             elevation: 0,
                             minimumSize: const Size(double.infinity, 38),
                             padding: EdgeInsets.zero,
@@ -416,7 +424,11 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                           },
                           child: const Text(
                             'ต่อไป',
-                            style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
@@ -424,29 +436,45 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                       // ชื่อรายจ่าย
                       const Text(
                         'ชื่อรายจ่าย',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       TextField(
                         controller: nameController,
                         decoration: InputDecoration(
                           hintText: 'เช่น ค่าเช่าห้อง',
-                          hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                          hintStyle: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF94A3B8),
+                          ),
                           filled: true,
                           fillColor: const Color(0xFFF8FAFC),
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFE2E8F0),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFE2E8F0),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: AppTheme.primaryColor),
+                            borderSide: const BorderSide(
+                              color: AppTheme.primaryColor,
+                            ),
                           ),
                         ),
                       ),
@@ -462,7 +490,11 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                               children: [
                                 const Text(
                                   'จำนวนเงิน (บาท)',
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1E293B),
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                                 TextField(
@@ -470,22 +502,34 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                   keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
                                     hintText: '0',
-                                    hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                                    hintStyle: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF94A3B8),
+                                    ),
                                     filled: true,
                                     fillColor: const Color(0xFFF8FAFC),
                                     isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 8,
+                                    ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE2E8F0),
+                                      ),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE2E8F0),
+                                      ),
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(color: AppTheme.primaryColor),
+                                      borderSide: const BorderSide(
+                                        color: AppTheme.primaryColor,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -500,7 +544,11 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                               children: [
                                 const Text(
                                   'ครบวันที่',
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1E293B),
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                                 TextField(
@@ -508,22 +556,34 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                   keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
                                     hintText: '5',
-                                    hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                                    hintStyle: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF94A3B8),
+                                    ),
                                     filled: true,
                                     fillColor: const Color(0xFFF8FAFC),
                                     isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 8,
+                                    ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE2E8F0),
+                                      ),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE2E8F0),
+                                      ),
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(color: AppTheme.primaryColor),
+                                      borderSide: const BorderSide(
+                                        color: AppTheme.primaryColor,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -537,7 +597,11 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                         alignment: Alignment.center,
                         child: Text(
                           '2/2',
-                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.normal, color: Color(0xFFCBD5E1)),
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.normal,
+                            color: Color(0xFFCBD5E1),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -548,15 +612,20 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF0F172A),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             elevation: 0,
                             minimumSize: const Size(double.infinity, 38),
                             padding: EdgeInsets.zero,
                           ),
                           onPressed: () async {
                             final name = nameController.text.trim();
-                            final amount = double.tryParse(amountController.text.trim()) ?? 0.0;
-                            final dueDay = int.tryParse(dueDayController.text.trim()) ?? 1;
+                            final amount =
+                                double.tryParse(amountController.text.trim()) ??
+                                0.0;
+                            final dueDay =
+                                int.tryParse(dueDayController.text.trim()) ?? 1;
 
                             if (name.isEmpty || amount <= 0) return;
 
@@ -570,10 +639,18 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                               };
 
                               final response = expenseToEdit != null
-                                  ? await _apiClient.patch('/recurring/expenses?id=eq.${expenseToEdit['id']}', body: body)
-                                  : await _apiClient.post('/recurring/expenses', body: body);
+                                  ? await _apiClient.patch(
+                                      '/recurring/expenses?id=eq.${expenseToEdit['id']}',
+                                      body: body,
+                                    )
+                                  : await _apiClient.post(
+                                      '/recurring/expenses',
+                                      body: body,
+                                    );
 
-                              if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
+                              if (response.statusCode == 200 ||
+                                  response.statusCode == 201 ||
+                                  response.statusCode == 204) {
                                 if (context.mounted) {
                                   Navigator.pop(context);
                                 }
@@ -584,8 +661,14 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                             }
                           },
                           child: Text(
-                            expenseToEdit != null ? 'บันทึกการแก้ไข' : '+ เพิ่มรายจ่ายประจำ',
-                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                            expenseToEdit != null
+                                ? 'บันทึกการแก้ไข'
+                                : '+ เพิ่มรายจ่ายประจำ',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
@@ -609,6 +692,107 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
     return Icons.home_outlined;
   }
 
+  Widget _buildExpenseListCard({
+    required dynamic expense,
+    required String id,
+    required String name,
+    required double amount,
+    required String category,
+    required int dueDay,
+    required double paidAmount,
+  }) {
+    final progress = amount > 0
+        ? (paidAmount / amount).clamp(0.0, 1.0).toDouble()
+        : 0.0;
+    final hasPaid = paidAmount > 0;
+    const accent = Color(0xFFEF4444);
+    return SplitListCard(
+      height: 122,
+      leadingWidth: 86,
+      iconContainerSize: 48,
+      iconSize: 25,
+      icon: _getIconForCategory(category),
+      accentColor: accent,
+      leadingColor: const Color(0xFFFFE7E9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              CardActionMenu(
+                onEdit: () =>
+                    _showAddExpenseBottomSheet(expenseToEdit: expense),
+                onDelete: () => _showDeleteConfirmation(id),
+              ),
+            ],
+          ),
+          Text(
+            '$category • ครบวันที่ $dueDay',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8)),
+          ),
+          const Spacer(),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '฿${paidAmount.toStringAsFixed(0)} / ฿${amount.toStringAsFixed(0)}',
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              Text(
+                '${(progress * 100).toStringAsFixed(0)}%',
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: const Color(0xFFEFF1F5),
+              valueColor: const AlwaysStoppedAnimation<Color>(accent),
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            hasPaid
+                ? 'ชำระแล้ว ฿${paidAmount.toStringAsFixed(0)}'
+                : 'ยังไม่ได้ชำระเดือนนี้',
+            style: TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              color: hasPaid ? AppTheme.primaryColor : accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     double totalExpenseExpected = 0.0;
@@ -623,271 +807,357 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
       totalExpensePaid += paidAmt;
     }
 
-
-
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFBFD),
+      backgroundColor: widget.embedded ? Colors.transparent : context.pageColor,
       body: Stack(
         children: [
-          const Positioned.fill(
-            child: FloatingBackground(),
-          ),
+          const Positioned.fill(child: FloatingBackground()),
           SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // หัวข้อเรื่องและปุ่มเพิ่ม (FAB) ดีไซน์พรีเมียมตามรูปภาพแรก
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Row(
-                            children: [
-                              Text(
-                                'รายจ่ายประจำ',
-                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                if (widget.embedded)
+                  const SizedBox(height: 4)
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Row(
+                              children: [
+                                Text(
+                                  'รายจ่ายประจำ',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                                SizedBox(width: 6),
+                                Text('🎟️', style: TextStyle(fontSize: 20)),
+                              ],
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'ค่าใช้จ่ายที่ต้องจ่ายทุกเดือน',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF64748B),
                               ),
-                              SizedBox(width: 6),
-                              Text(
-                                '🎟️',
-                                style: TextStyle(fontSize: 20),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'ค่าใช้จ่ายที่ต้องจ่ายทุกเดือน',
-                            style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-                          ),
-                        ],
-                      ),
-                      GestureDetector(
-                        onTap: _showAddExpenseBottomSheet,
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFF1744), // สีแดงชมพูสด
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.add, color: Colors.white, size: 24),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                        GestureDetector(
+                          onTap: _showAddExpenseBottomSheet,
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFF1744), // สีแดงชมพูสด
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.add,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
 
                 // การ์ดสรุปเปรียบเทียบความคืบหน้ารายเดือน ขอบกรอบสีเขียวสด
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: const Color(0xFF10B981), width: 1.5), // กรอบสีเขียวสด
+                if (!widget.embedded)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: context.surfaceColor,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: const Color(0xFF10B981),
+                        width: 1.5,
+                      ), // กรอบสีเขียวสด
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'ยอดชำระรายจ่ายสะสมเดือนนี้',
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '฿${totalExpensePaid.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'จากเป้าหมายตามแผนทั้งหมด ฿${totalExpenseExpected.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'ยอดชำระรายจ่ายสะสมเดือนนี้',
-                        style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '฿${totalExpensePaid.toStringAsFixed(0)}',
-                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'จากเป้าหมายตามแผนทั้งหมด ฿${totalExpenseExpected.toStringAsFixed(0)}',
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                      ),
-                    ],
-                  ),
-                ),
 
                 // รายการการ์ดประวัติรายจ่ายประจำ
                 Expanded(
                   child: _isLoading
-                      ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: AppTheme.primaryColor,
+                          ),
+                        )
                       : _fixedExpenses.isEmpty
-                          ? Center(
-                              child: Text(
-                                'ยังไม่มีรายการแผนรายจ่ายประจำของคุณ',
-                                style: TextStyle(color: Colors.grey[400], fontSize: 14),
-                              ),
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              itemCount: _fixedExpenses.length,
-                              itemBuilder: (context, index) {
-                                final expense = _fixedExpenses[index];
-                                final id = expense['id'] ?? '';
-                                final name = expense['name'] ?? '';
-                                final amount = (expense['amount'] as num).toDouble();
-                                final category = expense['category'] ?? 'ทั่วไป';
-                                final dueDay = expense['due_day'] ?? 1;
-                                final paidAmt = _getPaidAmountThisMonth(id, name);
-                                final hasPaid = paidAmt > 0;
+                      ? Center(
+                          child: Text(
+                            'ยังไม่มีรายการแผนรายจ่ายประจำของคุณ',
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 14,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                          itemCount: _fixedExpenses.length,
+                          itemBuilder: (context, index) {
+                            final expense = _fixedExpenses[index];
+                            final id = expense['id'] ?? '';
+                            final name = expense['name'] ?? '';
+                            final amount = (expense['amount'] as num)
+                                .toDouble();
+                            final category = expense['category'] ?? 'ทั่วไป';
+                            final dueDay = expense['due_day'] ?? 1;
+                            final paidAmt = _getPaidAmountThisMonth(id, name);
+                            final hasPaid = paidAmt > 0;
 
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(24),
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.01),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
+                            if (expense is Map<String, dynamic>) {
+                              return _buildExpenseListCard(
+                                expense: expense,
+                                id: id.toString(),
+                                name: name.toString(),
+                                amount: amount,
+                                category: category.toString(),
+                                dueDay: dueDay is int
+                                    ? dueDay
+                                    : int.tryParse(dueDay.toString()) ?? 1,
+                                paidAmount: paidAmt,
+                              );
+                            }
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: context.surfaceColor,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.01),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                     children: [
-                                      Row(
-                                        children: [
-                                          // ไอคอนกล่องกลมมนสีฟ้าอ่อนตามภาพอ้างอิงแรก
-                                          Container(
-                                            width: 44,
-                                            height: 44,
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFDBEAFE), // ฟ้าพาสเทล
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            child: Icon(
-                                              _getIconForCategory(category),
-                                              color: const Color(0xFF2563EB), // น้ำเงินน้ำทะเล
-                                              size: 20,
-                                            ),
+                                      // ไอคอนกล่องกลมมนสีฟ้าอ่อนตามภาพอ้างอิงแรก
+                                      Container(
+                                        width: 44,
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          color: const Color(
+                                            0xFFDBEAFE,
+                                          ), // ฟ้าพาสเทล
+                                          borderRadius: BorderRadius.circular(
+                                            12,
                                           ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                        ),
+                                        child: Icon(
+                                          _getIconForCategory(category),
+                                          color: const Color(
+                                            0xFF2563EB,
+                                          ), // น้ำเงินน้ำทะเล
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            // หัวข้อชื่อและป้ายกำกับ inline ชนติดกันตามภาพเป๊ะ
+                                            Row(
                                               children: [
-                                                // หัวข้อชื่อและป้ายกำกับ inline ชนติดกันตามภาพเป๊ะ
-                                                Row(
-                                                  children: [
-                                                    Text(
-                                                      name,
-                                                      style: const TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight: FontWeight.bold,
-                                                        color: Color(0xFF0F172A),
-                                                      ),
+                                                Flexible(
+                                                  child: Text(
+                                                    name,
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Color(0xFF0F172A),
                                                     ),
-                                                    const SizedBox(width: 8),
-                                                    Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                                      decoration: BoxDecoration(
-                                                        color: hasPaid ? const Color(0xFFE6F4F1) : const Color(0xFFFFF1F2),
-                                                        borderRadius: BorderRadius.circular(6),
-                                                        border: Border.all(
-                                                          color: hasPaid ? const Color(0xFF5ED5A8) : const Color(0xFFFECDD3),
-                                                          width: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    maxLines: 1,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 3,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: hasPaid
+                                                        ? const Color(
+                                                            0xFFE6F4F1,
+                                                          )
+                                                        : const Color(
+                                                            0xFFFFF1F2,
+                                                          ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          6,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: hasPaid
+                                                          ? const Color(
+                                                              0xFF5ED5A8,
+                                                            )
+                                                          : const Color(
+                                                              0xFFFECDD3,
+                                                            ),
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        hasPaid
+                                                            ? Icons
+                                                                  .check_circle_outlined
+                                                            : Icons
+                                                                  .watch_later_outlined,
+                                                        size: 10,
+                                                        color: hasPaid
+                                                            ? AppTheme
+                                                                  .primaryColor
+                                                            : const Color(
+                                                                0xFFEF4444,
+                                                              ),
+                                                      ),
+                                                      const SizedBox(width: 2),
+                                                      Text(
+                                                        hasPaid
+                                                            ? 'จ่ายแล้ว ฿${paidAmt.toStringAsFixed(0)}'
+                                                            : 'ยังไม่ได้จ่าย',
+                                                        style: TextStyle(
+                                                          fontSize: 8,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: hasPaid
+                                                              ? AppTheme
+                                                                    .primaryColor
+                                                              : const Color(
+                                                                  0xFFEF4444,
+                                                                ),
                                                         ),
                                                       ),
-                                                      child: Row(
-                                                        mainAxisSize: MainAxisSize.min,
-                                                        children: [
-                                                          Icon(
-                                                            hasPaid ? Icons.check_circle_outlined : Icons.watch_later_outlined,
-                                                            size: 10,
-                                                            color: hasPaid ? AppTheme.primaryColor : const Color(0xFFEF4444),
-                                                          ),
-                                                          const SizedBox(width: 2),
-                                                          Text(
-                                                            hasPaid ? 'จ่ายแล้ว ฿${paidAmt.toStringAsFixed(0)}' : 'ยังไม่ได้จ่าย',
-                                                            style: TextStyle(
-                                                              fontSize: 8,
-                                                              fontWeight: FontWeight.bold,
-                                                              color: hasPaid ? AppTheme.primaryColor : const Color(0xFFEF4444),
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  '$category - ครบวันที่ $dueDay',
-                                                  style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold),
+                                                    ],
+                                                  ),
                                                 ),
                                               ],
                                             ),
-                                          ),
-                                          Text(
-                                            '฿${amount.toStringAsFixed(0)}',
-                                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          // ปุ่มกดเช็กบันทึกการชำระเงินขอบเขียวสด
-                                          SizedBox(
-                                            height: 36,
-                                            child: hasPaid
-                                                ? OutlinedButton.icon(
-                                                    style: OutlinedButton.styleFrom(
-                                                      side: const BorderSide(color: AppTheme.primaryColor, width: 1.2),
-                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                                                    ),
-                                                    onPressed: () => _showRecordPaymentDialog(id, name, amount - paidAmt),
-                                                    icon: const Icon(Icons.check_circle_outline, color: AppTheme.primaryColor, size: 16),
-                                                    label: const Text(
-                                                      'บันทึกจ่ายเงิน',
-                                                      style: TextStyle(color: AppTheme.primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
-                                                    ),
-                                                  )
-                                                : OutlinedButton.icon(
-                                                    style: OutlinedButton.styleFrom(
-                                                      side: const BorderSide(color: AppTheme.primaryColor, width: 1.2),
-                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                                                    ),
-                                                    onPressed: () => _recordExpensePayment(id, name, amount),
-                                                    icon: const Icon(Icons.check_circle_outline, color: AppTheme.primaryColor, size: 16),
-                                                    label: const Text(
-                                                      'บันทึกจ่ายเงิน',
-                                                      style: TextStyle(color: AppTheme.primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
-                                                    ),
-                                                  ),
-                                          ),
-                                          Row(
-                                            children: [
-                                               GestureDetector(
-                                                 onTap: () => _showAddExpenseBottomSheet(expenseToEdit: expense),
-                                                 child: const Icon(Icons.edit_outlined, color: Color(0xFF94A3B8), size: 18),
-                                               ),
-                                              const SizedBox(width: 12),
-                                              GestureDetector(
-                                                onTap: () => _showDeleteConfirmation(id),
-                                                child: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 18),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '$category - ครบวันที่ $dueDay',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                color: Color(0xFF64748B),
+                                                fontWeight: FontWeight.bold,
                                               ),
-                                            ],
-                                          ),
-                                        ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Text(
+                                        '฿${amount.toStringAsFixed(0)}',
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF0F172A),
+                                        ),
                                       ),
                                     ],
                                   ),
-                                );
-                              },
-                            ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () => _showAddExpenseBottomSheet(
+                                          expenseToEdit: expense,
+                                        ),
+                                        child: const Icon(
+                                          Icons.edit_outlined,
+                                          color: Color(0xFF94A3B8),
+                                          size: 18,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      GestureDetector(
+                                        onTap: () =>
+                                            _showDeleteConfirmation(id),
+                                        child: const Icon(
+                                          Icons.delete_outline,
+                                          color: Color(0xFFEF4444),
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                 ),
               ],
             ),

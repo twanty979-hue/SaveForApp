@@ -1,5 +1,5 @@
-import 'dart:convert';
-import 'package:flutter/material.dart';
+﻿import 'dart:convert';
+import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
@@ -38,10 +38,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       final path = _isLoginMode ? '/auth/login' : '/auth/register';
-      final body = {
-        'email': email,
-        'password': password,
-      };
+      final body = {'email': email, 'password': password};
 
       final response = await _apiClient.post(path, body: body);
       final responseData = jsonDecode(response.body);
@@ -49,9 +46,17 @@ class _AuthScreenState extends State<AuthScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final String? userId = responseData['user']?['id'];
         final String? userEmail = responseData['user']?['email'];
+        final String? accessToken = responseData['access_token'];
+        final String? refreshToken = responseData['refresh_token'];
 
         if (userId != null) {
-          await AuthSession.save(userId, null, userEmail);
+          await AuthSession.save(
+            userId,
+            null,
+            userEmail,
+            token: accessToken,
+            refresh: refreshToken,
+          );
 
           if (mounted) {
             Navigator.pushReplacement(
@@ -65,7 +70,10 @@ class _AuthScreenState extends State<AuthScreen> {
           });
         }
       } else {
-        final String errorMsg = responseData['error'] ?? responseData['message'] ?? 'เกิดข้อผิดพลาดจากหลังบ้าน';
+        final String errorMsg =
+            responseData['error'] ??
+            responseData['message'] ??
+            'เกิดข้อผิดพลาดจากหลังบ้าน';
         setState(() {
           _errorMessage = errorMsg;
         });
@@ -86,7 +94,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.pageColor,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -131,8 +139,13 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _isLoginMode ? 'เข้าสู่ระบบเพื่อใช้งานระบบบนคลาวด์' : 'สมัครสมาชิกเพื่อเริ่มบันทึกข้อมูลบนคลาวด์',
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                  _isLoginMode
+                      ? 'เข้าสู่ระบบเพื่อใช้งานระบบบนคลาวด์'
+                      : 'สมัครสมาชิกเพื่อเริ่มบันทึกข้อมูลบนคลาวด์',
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 14,
+                  ),
                 ),
                 const SizedBox(height: 32),
                 if (_errorMessage != null) ...[
@@ -146,7 +159,10 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     child: Text(
                       _errorMessage!,
-                      style: const TextStyle(color: Color(0xFFEF4444), fontSize: 13),
+                      style: const TextStyle(
+                        color: Color(0xFFEF4444),
+                        fontSize: 13,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -158,7 +174,9 @@ class _AuthScreenState extends State<AuthScreen> {
                   decoration: InputDecoration(
                     labelText: 'อีเมล',
                     prefixIcon: const Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -168,7 +186,9 @@ class _AuthScreenState extends State<AuthScreen> {
                   decoration: InputDecoration(
                     labelText: 'รหัสผ่าน',
                     prefixIcon: const Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -178,7 +198,9 @@ class _AuthScreenState extends State<AuthScreen> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       elevation: 0,
                     ),
                     onPressed: _isLoading ? null : _handleSubmit,
@@ -186,11 +208,18 @@ class _AuthScreenState extends State<AuthScreen> {
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
                           )
                         : Text(
                             _isLoginMode ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก',
-                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                   ),
                 ),
@@ -203,7 +232,9 @@ class _AuthScreenState extends State<AuthScreen> {
                     });
                   },
                   child: Text(
-                    _isLoginMode ? 'ยังไม่มีบัญชี? สมัครสมาชิกที่นี่' : 'มีบัญชีอยู่แล้ว? เข้าสู่ระบบที่นี่',
+                    _isLoginMode
+                        ? 'ยังไม่มีบัญชี? สมัครสมาชิกที่นี่'
+                        : 'มีบัญชีอยู่แล้ว? เข้าสู่ระบบที่นี่',
                     style: const TextStyle(color: AppTheme.primaryColor),
                   ),
                 ),

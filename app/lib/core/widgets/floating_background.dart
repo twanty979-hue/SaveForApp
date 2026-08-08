@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'package:flutter/material.dart';
+import 'package:app/core/localization/app_material.dart';
 import '../theme/app_theme.dart';
 
 class FloatingBackground extends StatefulWidget {
@@ -44,7 +44,11 @@ class _FloatingBackgroundState extends State<FloatingBackground>
                 angle: val * 0.2,
                 child: const Opacity(
                   opacity: 0.03,
-                  child: Icon(Icons.diamond, size: 80, color: AppTheme.primaryColor),
+                  child: Icon(
+                    Icons.diamond,
+                    size: 80,
+                    color: AppTheme.primaryColor,
+                  ),
                 ),
               ),
             ),
@@ -54,7 +58,11 @@ class _FloatingBackgroundState extends State<FloatingBackground>
               left: 30 + (val * 15),
               child: const Opacity(
                 opacity: 0.03,
-                child: Icon(Icons.directions_car, size: 80, color: AppTheme.primaryColor),
+                child: Icon(
+                  Icons.directions_car,
+                  size: 80,
+                  color: AppTheme.primaryColor,
+                ),
               ),
             ),
             // ไอคอนกระเป๋าตังค์ (หมุนรอบจุดศูนย์กลางช้าๆ)
@@ -64,7 +72,11 @@ class _FloatingBackgroundState extends State<FloatingBackground>
                   angle: val * 2 * math.pi * 0.04,
                   child: const Opacity(
                     opacity: 0.02,
-                    child: Icon(Icons.account_balance_wallet, size: 120, color: AppTheme.primaryColor),
+                    child: Icon(
+                      Icons.account_balance_wallet,
+                      size: 120,
+                      color: AppTheme.primaryColor,
+                    ),
                   ),
                 ),
               ),
@@ -77,7 +89,11 @@ class _FloatingBackgroundState extends State<FloatingBackground>
                 angle: -val * 0.1,
                 child: const Opacity(
                   opacity: 0.03,
-                  child: Icon(Icons.home, size: 90, color: AppTheme.primaryColor),
+                  child: Icon(
+                    Icons.home,
+                    size: 90,
+                    color: AppTheme.primaryColor,
+                  ),
                 ),
               ),
             ),
@@ -89,7 +105,11 @@ class _FloatingBackgroundState extends State<FloatingBackground>
                 angle: val * 0.15,
                 child: const Opacity(
                   opacity: 0.03,
-                  child: Icon(Icons.credit_card, size: 75, color: AppTheme.primaryColor),
+                  child: Icon(
+                    Icons.credit_card,
+                    size: 75,
+                    color: AppTheme.primaryColor,
+                  ),
                 ),
               ),
             ),
