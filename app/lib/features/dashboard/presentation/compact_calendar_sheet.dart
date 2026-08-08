@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:app/core/localization/app_material.dart';
 
@@ -307,13 +307,17 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
               color: selected
                   ? AppTheme.primaryColor
                   : cell.inCurrentMonth
-                  ? Colors.white
+                  ? (Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF1E293B)
+                      : Colors.white)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: selected
                     ? AppTheme.primaryColor
-                    : const Color(0xFFE9EDF2),
+                    : (Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFE9EDF2)),
               ),
             ),
             child: Column(
@@ -327,8 +331,12 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                     color: selected
                         ? Colors.white
                         : cell.inCurrentMonth
-                        ? const Color(0xFF334155)
-                        : const Color(0xFFB8C1CC),
+                        ? (Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : const Color(0xFF334155))
+                        : (Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF475569)
+                            : const Color(0xFFB8C1CC)),
                   ),
                 ),
                 if (hasTransactions) ...[
@@ -356,19 +364,23 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
         Expanded(
           child: Text(
             '$_day ${_monthName(_month)} ${_year + 543}',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF1E293B),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF1E293B),
             ),
           ),
         ),
         Text(
           '$count รายการ',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF64748B),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF94A3B8)
+                : const Color(0xFF64748B),
           ),
         ),
       ],

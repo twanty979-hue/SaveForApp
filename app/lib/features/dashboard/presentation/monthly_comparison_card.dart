@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:app/core/localization/app_material.dart';
+import 'package:app/core/theme/app_theme.dart';
 
 class MonthlyFinancePoint {
   final DateTime month;
@@ -26,42 +27,38 @@ class MonthlyComparisonCard extends StatefulWidget {
 }
 
 class _MonthlyComparisonCardState extends State<MonthlyComparisonCard> {
-  final ScrollController _controller = ScrollController();
+  late PageController _pageController;
+  int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _scrollToLatest();
+    _currentIndex = widget.points.isNotEmpty ? widget.points.length - 1 : 0;
+    _pageController = PageController(initialPage: _currentIndex);
   }
 
   @override
   void didUpdateWidget(covariant MonthlyComparisonCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.points != widget.points) _scrollToLatest();
+    if (oldWidget.points != widget.points) {
+      _currentIndex = widget.points.isNotEmpty ? widget.points.length - 1 : 0;
+      _pageController.dispose();
+      _pageController = PageController(initialPage: _currentIndex);
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
-  void _scrollToLatest() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_controller.hasClients) {
-        _controller.jumpTo(_controller.position.maxScrollExtent);
-      }
-    });
-  }
-
-  void _move(double direction) {
-    if (!_controller.hasClients) return;
-    final target = (_controller.offset + direction * 250).clamp(
-      0.0,
-      _controller.position.maxScrollExtent,
-    );
-    _controller.animateTo(
-      target,
+  void _move(int delta) {
+    if (widget.points.isEmpty) return;
+    final targetPage = (_currentIndex + delta).clamp(0, widget.points.length - 1);
+    _pageController.animateToPage(
+      targetPage,
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOutCubic,
     );
@@ -69,24 +66,31 @@ class _MonthlyComparisonCardState extends State<MonthlyComparisonCard> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Find maximum only within points to scale correctly
     final maximum = widget.points.fold<double>(1, (current, point) {
       return math.max(
         current,
         math.max(point.income, math.max(point.expense, point.saving)),
       );
     });
-    final groupWidth = (MediaQuery.sizeOf(context).width - 56) / 3;
+
+    final hasPrev = _currentIndex > 0;
+    final hasNext = _currentIndex < widget.points.length - 1;
 
     return Container(
       height: 188,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 9),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+            color: const Color(0xFF0F172A).withValues(alpha: isDark ? 0.2 : 0.06),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -96,7 +100,7 @@ class _MonthlyComparisonCardState extends State<MonthlyComparisonCard> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -105,10 +109,10 @@ class _MonthlyComparisonCardState extends State<MonthlyComparisonCard> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF1E293B),
+                        color: isDark ? Colors.white : const Color(0xFF1E293B),
                       ),
                     ),
-                    Text(
+                    const Text(
                       'ปัดซ้าย–ขวาเพื่อดูเดือนอื่น',
                       style: TextStyle(fontSize: 9, color: Color(0xFF94A3B8)),
                     ),
@@ -117,12 +121,12 @@ class _MonthlyComparisonCardState extends State<MonthlyComparisonCard> {
               ),
               _ChartArrow(
                 icon: Icons.chevron_left_rounded,
-                onTap: () => _move(-1),
+                onTap: hasPrev ? () => _move(-1) : null,
               ),
               const SizedBox(width: 4),
               _ChartArrow(
                 icon: Icons.chevron_right_rounded,
-                onTap: () => _move(1),
+                onTap: hasNext ? () => _move(1) : null,
               ),
             ],
           ),
@@ -130,31 +134,41 @@ class _MonthlyComparisonCardState extends State<MonthlyComparisonCard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _ChartLegend(label: context.tr('รายรับ', 'Income'), color: Color(0xFF21B894)),
-              SizedBox(width: 12),
-              _ChartLegend(label: context.tr('รายจ่าย', 'Expense'), color: Color(0xFFFF7181)),
-              SizedBox(width: 12),
-              _ChartLegend(label: context.tr('เงินออม', 'Savings'), color: Color(0xFF9A74E8)),
+              _ChartLegend(label: context.tr('รายรับ', 'Income'), color: const Color(0xFF21B894)),
+              const SizedBox(width: 12),
+              _ChartLegend(label: context.tr('รายจ่าย', 'Expense'), color: const Color(0xFFFF7181)),
+              const SizedBox(width: 12),
+              _ChartLegend(label: context.tr('เงินออม', 'Savings'), color: const Color(0xFF9A74E8)),
             ],
           ),
           const SizedBox(height: 5),
           Expanded(
-            child: ClipRect(
-              child: SingleChildScrollView(
-                controller: _controller,
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: widget.points.map((point) {
-                    return SizedBox(
-                      width: groupWidth,
-                      child: _MonthBarGroup(point: point, maximum: maximum),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
+            child: widget.points.isEmpty
+                ? const Center(
+                    child: Text(
+                      'ไม่มีข้อมูลการเงิน',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                    ),
+                  )
+                : PageView.builder(
+                    controller: _pageController,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentIndex = index;
+                      });
+                    },
+                    itemCount: widget.points.length,
+                    physics: const BouncingScrollPhysics(),
+                    itemBuilder: (context, index) {
+                      final point = widget.points[index];
+                      return Center(
+                        child: SizedBox(
+                          width: 220,
+                          child: _MonthBarGroup(point: point, maximum: maximum),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -171,11 +185,13 @@ class _MonthBarGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final buddhistYear = (point.month.year + 543).toString();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         SizedBox(
-          height: 76,
+          height: 82,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -185,13 +201,13 @@ class _MonthBarGroup extends StatelessWidget {
                 maximum: maximum,
                 color: const Color(0xFF21B894),
               ),
-              const SizedBox(width: 5),
+              const SizedBox(width: 16),
               _ValueBar(
                 value: point.expense,
                 maximum: maximum,
                 color: const Color(0xFFFF7181),
               ),
-              const SizedBox(width: 5),
+              const SizedBox(width: 16),
               _ValueBar(
                 value: point.saving,
                 maximum: maximum,
@@ -203,10 +219,10 @@ class _MonthBarGroup extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           '${_monthLabel(point.month.month)} ${buddhistYear.substring(2)}',
-          style: const TextStyle(
-            fontSize: 9,
+          style: TextStyle(
+            fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF64748B),
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
           ),
         ),
       ],
@@ -242,19 +258,49 @@ class _ValueBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final height = value <= 0 ? 3.0 : 8 + value / maximum * 64;
-    return Tooltip(
-      message: '฿${value.toStringAsFixed(0)}',
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 360),
-        curve: Curves.easeOutCubic,
-        width: 10,
-        height: height,
-        decoration: BoxDecoration(
-          color: value <= 0 ? const Color(0xFFE2E8F0) : color,
-          borderRadius: BorderRadius.circular(5),
+    final height = value <= 0 ? 3.0 : 8 + (value / maximum * 52);
+    final formattedValue = value >= 1000000 
+        ? '${(value / 1000000).toStringAsFixed(1)}M'
+        : value >= 1000 
+            ? '${(value / 1000).toStringAsFixed(1)}k' 
+            : value.toStringAsFixed(0);
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        if (value > 0)
+          Text(
+            '฿$formattedValue',
+            style: TextStyle(
+              fontSize: 8.5,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          )
+        else
+          const Text(
+            '--',
+            style: TextStyle(
+              fontSize: 8.5,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFCBD5E1),
+            ),
+          ),
+        const SizedBox(height: 3),
+        Tooltip(
+          message: '฿${value.toStringAsFixed(0)}',
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 360),
+            curve: Curves.easeOutCubic,
+            width: 24,
+            height: height,
+            decoration: BoxDecoration(
+              color: value <= 0 ? const Color(0xFFE2E8F0) : color,
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -263,10 +309,11 @@ class _ChartLegend extends StatelessWidget {
   final String label;
   final Color color;
 
-  _ChartLegend({required this.label, required this.color});
+  const _ChartLegend({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -278,7 +325,10 @@ class _ChartLegend extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(fontSize: 8, color: Color(0xFF64748B)),
+          style: TextStyle(
+            fontSize: 9, 
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          ),
         ),
       ],
     );
@@ -287,14 +337,19 @@ class _ChartLegend extends StatelessWidget {
 
 class _ChartArrow extends StatelessWidget {
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
-  const _ChartArrow({required this.icon, required this.onTap});
+  const _ChartArrow({required this.icon, this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final disabled = onTap == null;
+
     return Material(
-      color: const Color(0xFFF1F5F9),
+      color: disabled
+          ? (isDark ? const Color(0xFF1E293B).withValues(alpha: 0.5) : const Color(0xFFF1F5F9).withValues(alpha: 0.5))
+          : (isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9)),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -302,7 +357,13 @@ class _ChartArrow extends StatelessWidget {
         child: SizedBox(
           width: 26,
           height: 26,
-          child: Icon(icon, size: 18, color: const Color(0xFF64748B)),
+          child: Icon(
+            icon, 
+            size: 18, 
+            color: disabled
+                ? const Color(0xFF64748B).withValues(alpha: 0.3)
+                : const Color(0xFF64748B),
+          ),
         ),
       ),
     );

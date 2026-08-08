@@ -84,6 +84,9 @@ func SetupRouter() *gin.Engine {
 		v1.POST("/dreams", func(c *gin.Context) {
 			handleSupabaseProxy(c, "POST", "/rest/v1/dreams")
 		})
+		v1.PATCH("/dreams", func(c *gin.Context) {
+			handleSupabaseProxy(c, "PATCH", "/rest/v1/dreams")
+		})
 		v1.DELETE("/dreams", func(c *gin.Context) {
 			handleSupabaseProxy(c, "DELETE", "/rest/v1/dreams")
 		})

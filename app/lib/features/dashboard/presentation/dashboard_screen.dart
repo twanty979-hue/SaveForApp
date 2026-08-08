@@ -6,6 +6,7 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../core/notifications/notification_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
+import '../../../core/widgets/responsive_layout.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../profile/presentation/profile_settings_screen.dart';
 import '../../planning/presentation/planning_hub_screen.dart';
@@ -159,8 +160,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           const Positioned.fill(child: FloatingBackground()),
           SafeArea(
-            child: Stack(
-              children: [
+            child: ResponsiveLayout(
+              maxWidth: 800,
+              child: Stack(
+                children: [
                 const Positioned.fill(
                   child: TransactionsScreen(topPadding: 86),
                 ),
@@ -390,7 +393,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
           ),
-        ],
+        ),
+      ],
       ),
     );
   }

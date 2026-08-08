@@ -1,7 +1,8 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/responsive_layout.dart';
 import '../../auth/domain/auth_session.dart';
 
 class SummaryScreen extends StatefulWidget {
@@ -220,8 +221,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
         surfaceTintColor: Colors.white,
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      body: ResponsiveLayout(
+        maxWidth: 800,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -675,6 +678,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
           ],
         ),
       ),
+     ),
     );
   }
 

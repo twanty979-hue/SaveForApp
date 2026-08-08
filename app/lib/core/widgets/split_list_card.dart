@@ -1,14 +1,15 @@
-﻿import 'package:app/core/localization/app_material.dart';
+import 'package:app/core/localization/app_material.dart';
 
 class SplitListCard extends StatelessWidget {
   final double height;
   final double leadingWidth;
-  final IconData icon;
+  final dynamic icon;
   final Color accentColor;
   final Color leadingColor;
   final Color borderColor;
   final double iconContainerSize;
   final double iconSize;
+  final Color? glowColor;
   final Widget child;
 
   const SplitListCard({
@@ -22,58 +23,84 @@ class SplitListCard extends StatelessWidget {
     this.borderColor = const Color(0xFFE2E8F0),
     this.iconContainerSize = 54,
     this.iconSize = 28,
+    this.glowColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: height,
-      margin: const EdgeInsets.only(bottom: 14),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? Theme.of(context).colorScheme.outlineVariant
-              : borderColor,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.07),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
+    return Stack(
+      children: [
+        Container(
+          height: height,
+          margin: const EdgeInsets.only(bottom: 14),
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.07),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
+              ),
+              if (glowColor != null)
+                BoxShadow(
+                  color: glowColor!.withValues(alpha: 0.32),
+                  blurRadius: 12,
+                  spreadRadius: 0.8,
+                  offset: const Offset(0, 1),
+                ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            width: leadingWidth,
-            child: ColoredBox(
-              color: leadingColor,
-              child: Center(
-                child: Container(
-                  width: iconContainerSize,
-                  height: iconContainerSize,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.56),
-                    shape: BoxShape.circle,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: leadingWidth,
+                child: ColoredBox(
+                  color: leadingColor,
+                  child: Center(
+                    child: icon is Widget
+                        ? icon as Widget
+                        : Container(
+                            width: iconContainerSize,
+                            height: iconContainerSize,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.56),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(icon as IconData, color: accentColor, size: iconSize),
+                          ),
                   ),
-                  child: Icon(icon, color: accentColor, size: iconSize),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 11, 11, 11),
+                  child: child,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Positioned.fill(
+          bottom: 14,
+          child: IgnorePointer(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Theme.of(context).colorScheme.outlineVariant
+                      : borderColor,
+                  width: glowColor != null ? 2.2 : 1.0,
+                  strokeAlign: BorderSide.strokeAlignInside,
                 ),
               ),
             ),
           ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 11, 11, 11),
-              child: child,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

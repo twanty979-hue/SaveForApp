@@ -1,10 +1,15 @@
 import 'dart:convert';
+import 'package:flutter/services.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
+import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/split_list_card.dart';
+import '../../../core/widgets/shared_icon_selector.dart';
 import '../../auth/domain/auth_session.dart';
 
 class RecurringIncomeScreen extends StatefulWidget {
@@ -29,6 +34,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
   bool _isLoading = true;
   List<dynamic> _incomeSources = [];
   List<dynamic> _transactions = [];
+  List<dynamic> _customCategories = [];
 
   // รายการหมวดหมู่รายรับประจำพร้อมไอคอนสำหรับแสดงผลในแบบกริด (Grid Category Selector)
   final List<Map<String, dynamic>> _categoriesList = [
@@ -83,11 +89,17 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
       final txResp = await _apiClient.get(
         '/transactions?user_id=eq.$_activeUserId',
       );
+      final customCatResponse = await _apiClient.get(
+        '/user_categories?user_id=eq.$_activeUserId&category_type=eq.income',
+      );
 
       if (sourcesResp.statusCode == 200 && txResp.statusCode == 200) {
         setState(() {
           _incomeSources = jsonDecode(sourcesResp.body);
           _transactions = jsonDecode(txResp.body);
+          if (customCatResponse.statusCode == 200) {
+            _customCategories = jsonDecode(customCatResponse.body);
+          }
           _isLoading = false;
         });
       } else {
@@ -257,10 +269,10 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                     activeStep = 0;
                                   });
                                 },
-                                child: const Icon(
+                                child: Icon(
                                   Icons.arrow_back_ios,
                                   size: 18,
-                                  color: Color(0xFF0F172A),
+                                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF0F172A),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -273,10 +285,10 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                   : (activeStep == 0
                                         ? 'เลือกหมวดหมู่รายรับ'
                                         : 'กรอกรายละเอียดรายรับ'),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F172A),
+                                color: Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF0F172A),
                               ),
                             ),
                           ],
@@ -285,8 +297,8 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                           onTap: () => Navigator.pop(context),
                           child: Container(
                             padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFF1F5F9),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
@@ -301,12 +313,12 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                     const SizedBox(height: 20),
 
                     if (activeStep == 0) ...[
-                      const Text(
+                      Text(
                         'ประเภทรายรับ',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
+                          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -322,62 +334,179 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                               child: Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
-                                children: _categoriesList.map((cat) {
-                                  final catName = cat['name'] as String;
-                                  final catIcon = cat['icon'] as IconData;
-                                  final isSelected =
-                                      selectedCategory == catName;
+                                children: [
+                                  ..._categoriesList.map((cat) {
+                                    final catName = cat['name'] as String;
+                                    final catIcon = cat['icon'] as IconData;
+                                    final isSelected =
+                                        selectedCategory == catName;
 
-                                  return GestureDetector(
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setSheetState(() {
+                                          selectedCategory = catName;
+                                        });
+                                      },
+                                      child: Container(
+                                        width: cardWidth,
+                                        height: cardHeight,
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? (Theme.of(context).brightness == Brightness.dark
+                                                  ? AppTheme.primaryColor.withValues(alpha: 0.18)
+                                                  : const Color(0xFFE6F4F1))
+                                              : (Theme.of(context).brightness == Brightness.dark
+                                                  ? const Color(0xFF1E293B)
+                                                  : const Color(0xFFF8FAFC)),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: isSelected
+                                                ? AppTheme.primaryColor
+                                                : (Theme.of(context).brightness == Brightness.dark
+                                                    ? const Color(0xFF334155)
+                                                    : const Color(0xFFE2E8F0)),
+                                            width: isSelected ? 1.5 : 1,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              catIcon,
+                                              size: 16,
+                                              color: isSelected
+                                                  ? AppTheme.primaryColor
+                                                  : (Theme.of(context).brightness == Brightness.dark
+                                                      ? const Color(0xFF94A3B8)
+                                                      : const Color(0xFF64748B)),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              catName,
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: isSelected
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                                color: isSelected
+                                                    ? AppTheme.primaryColor
+                                                    : (Theme.of(context).brightness == Brightness.dark
+                                                        ? const Color(0xFFE2E8F0)
+                                                        : const Color(0xFF475569)),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }),
+
+                                  ..._customCategories.map((cat) {
+                                    final catName = cat['name'] as String;
+                                    final catIconString = cat['icon'] as String;
+                                    final isSelected = selectedCategory == catName;
+
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setSheetState(() {
+                                          selectedCategory = catName;
+                                        });
+                                      },
+                                      child: Container(
+                                        width: cardWidth,
+                                        height: cardHeight,
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? (Theme.of(context).brightness == Brightness.dark
+                                                  ? AppTheme.primaryColor.withValues(alpha: 0.18)
+                                                  : const Color(0xFFE6F4F1))
+                                              : (Theme.of(context).brightness == Brightness.dark
+                                                  ? const Color(0xFF1E293B)
+                                                  : const Color(0xFFF8FAFC)),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: isSelected
+                                                ? AppTheme.primaryColor
+                                                : (Theme.of(context).brightness == Brightness.dark
+                                                    ? const Color(0xFF334155)
+                                                    : const Color(0xFFE2E8F0)),
+                                            width: isSelected ? 1.5 : 1,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            PhosphorIcon(
+                                              SharedIconSelector.getIconData(catIconString),
+                                              size: 16,
+                                              color: isSelected
+                                                  ? AppTheme.primaryColor
+                                                  : (Theme.of(context).brightness == Brightness.dark
+                                                      ? const Color(0xFF94A3B8)
+                                                      : const Color(0xFF64748B)),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              catName,
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                                color: isSelected
+                                                    ? AppTheme.primaryColor
+                                                    : (Theme.of(context).brightness == Brightness.dark
+                                                        ? const Color(0xFFE2E8F0)
+                                                        : const Color(0xFF475569)),
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }),
+
+                                  GestureDetector(
                                     onTap: () {
-                                      setSheetState(() {
-                                        selectedCategory = catName;
-                                      });
+                                      Navigator.pop(context); // ปิด bottom sheet เดิมก่อน
+                                      _startCustomCategoryFlow();
                                     },
                                     child: Container(
                                       width: cardWidth,
                                       height: cardHeight,
                                       decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? const Color(0xFFE6F4F1)
-                                            : const Color(0xFFF8FAFC),
+                                        color: const Color(0xFFF1F5F9),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: isSelected
-                                              ? AppTheme.primaryColor
-                                              : const Color(0xFFE2E8F0),
-                                          width: isSelected ? 1.5 : 1,
+                                          color: const Color(0xFFE2E8F0),
+                                          width: 1,
+                                          style: BorderStyle.solid,
                                         ),
                                       ),
-                                      child: Column(
+                                      child: const Column(
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
                                         children: [
                                           Icon(
-                                            catIcon,
+                                            Icons.add,
                                             size: 16,
-                                            color: isSelected
-                                                ? AppTheme.primaryColor
-                                                : const Color(0xFF64748B),
+                                            color: Color(0xFF475569),
                                           ),
-                                          const SizedBox(height: 2),
+                                          SizedBox(height: 2),
                                           Text(
-                                            catName,
+                                            'เพิ่ม',
                                             style: TextStyle(
                                               fontSize: 10,
-                                              fontWeight: isSelected
-                                                  ? FontWeight.bold
-                                                  : FontWeight.normal,
-                                              color: isSelected
-                                                  ? AppTheme.primaryColor
-                                                  : const Color(0xFF475569),
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF475569),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                  );
-                                }).toList(),
+                                  ),
+                                ],
                               ),
                             );
                           },
@@ -426,25 +555,25 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                       ),
                     ] else ...[
                       // ชื่อรายรับ
-                      const Text(
+                      Text(
                         'ชื่อรายรับ',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
+                          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
                         ),
                       ),
                       const SizedBox(height: 8),
                       TextField(
                         controller: nameController,
                         decoration: InputDecoration(
-                          hintText: 'เช่น เงินเดือนประจำ',
+                          hintText: context.tr('เช่น เงินเดือนประจำ', 'e.g. regular salary'),
                           hintStyle: const TextStyle(
                             fontSize: 13,
                             color: Color(0xFF94A3B8),
                           ),
                           filled: true,
-                          fillColor: const Color(0xFFF8FAFC),
+                          fillColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 14,
@@ -452,14 +581,14 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE2E8F0),
+                            borderSide: BorderSide(
+                              color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                             ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE2E8F0),
+                            borderSide: BorderSide(
+                              color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                             ),
                           ),
                           focusedBorder: OutlineInputBorder(
@@ -480,12 +609,12 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'จำนวนเงิน (บาท)',
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1E293B),
+                                    color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -499,7 +628,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                       color: Color(0xFF94A3B8),
                                     ),
                                     filled: true,
-                                    fillColor: const Color(0xFFF8FAFC),
+                                    fillColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
                                     isDense: true,
                                     contentPadding: const EdgeInsets.symmetric(
                                       horizontal: 14,
@@ -534,12 +663,12 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'รับวันที่',
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1E293B),
+                                    color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -553,7 +682,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                       color: Color(0xFF94A3B8),
                                     ),
                                     filled: true,
-                                    fillColor: const Color(0xFFF8FAFC),
+                                    fillColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
                                     isDense: true,
                                     contentPadding: const EdgeInsets.symmetric(
                                       horizontal: 14,
@@ -655,7 +784,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                             incomeToEdit != null
                                 ? 'บันทึกการแก้ไข'
                                 : '+ เพิ่มรายรับประจำ',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -674,13 +803,236 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
     );
   }
 
-  IconData _getIconForCategory(String category) {
+  dynamic _getIconForCategory(String category) {
     for (var cat in _categoriesList) {
       if (cat['name'] == category) {
         return cat['icon'] as IconData;
       }
     }
+    for (var cat in _customCategories) {
+      if (cat['name'] == category) {
+        return SharedIconSelector.buildIcon(cat['icon'] as String, size: 28);
+      }
+    }
     return Icons.business_center_outlined;
+  }
+
+  void _startCustomCategoryFlow({String? initialIcon}) async {
+    final selectedIcon = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return SharedIconPickerWidget(initialIconRawData: initialIcon);
+      },
+    );
+
+    if (selectedIcon != null) {
+      _showNameCategoryDialog(selectedIcon);
+    } else {
+      _showAddIncomeBottomSheet();
+    }
+  }
+
+  void _showNameCategoryDialog(String selectedIconStr) {
+    String categoryName = '';
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.only(
+                top: 20,
+                left: 20,
+                right: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _startCustomCategoryFlow(initialIcon: selectedIconStr);
+                        },
+                        icon: const Icon(Icons.arrow_back, color: Color(0xFF64748B)),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                      const SizedBox(width: 12),
+                      SharedIconSelector.buildIcon(selectedIconStr, size: 28),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'ตั้งชื่อหมวดหมู่ใหม่',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'ชื่อหมวดหมู่',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    autofocus: true,
+                    onChanged: (value) {
+                      setDialogState(() {
+                        categoryName = value;
+                      });
+                    },
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+                    ),
+                    decoration: InputDecoration(
+                      hintText: context.tr('เช่น เงินปันผล, ค่าเช่า', 'e.g. dividend, rent'),
+                      hintStyle: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF94A3B8),
+                        fontWeight: FontWeight.normal,
+                      ),
+                      filled: true,
+                      fillColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppTheme.primaryColor),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: isSaving ? null : () {
+                            Navigator.pop(context);
+                            _showAddIncomeBottomSheet(); // กลับไปหน้าเดิม
+                          },
+                          child: const Text(
+                            'ยกเลิก',
+                            style: TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            elevation: 0,
+                          ),
+                          onPressed: isSaving || categoryName.trim().isEmpty
+                              ? null
+                              : () async {
+                                  setDialogState(() => isSaving = true);
+                                  try {
+                                    final body = {
+                                      'user_id': _activeUserId,
+                                      'category_type': 'income',
+                                      'name': categoryName.trim(),
+                                      'icon': selectedIconStr,
+                                    };
+                                    final response = await _apiClient.post('/user_categories', body: body);
+                                    if (response.statusCode == 201 || response.statusCode == 200) {
+                                      Navigator.pop(context); // ปิด bottom sheet
+                                      await _fetchData();
+                                      _showAddIncomeBottomSheet();
+                                    } else {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('เกิดข้อผิดพลาดในการบันทึก')),
+                                        );
+                                      }
+                                      setDialogState(() => isSaving = false);
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('เกิดข้อผิดพลาดในการเชื่อมต่อ')),
+                                      );
+                                    }
+                                    setDialogState(() => isSaving = false);
+                                  }
+                                },
+                          child: isSaving
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text(
+                                  'บันทึก',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildIncomeListCard({
@@ -801,11 +1153,14 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
       backgroundColor: widget.embedded ? Colors.transparent : context.pageColor,
       body: Stack(
         children: [
-          const Positioned.fill(child: FloatingBackground()),
+          if (!widget.embedded)
+            const Positioned.fill(child: FloatingBackground()),
           SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            child: ResponsiveLayout(
+              maxWidth: 800,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 // หัวข้อเรื่องและปุ่มเพิ่ม (FAB) ปรับขึ้นไปอยู่ด้านบนสุดแทน Profile Bar
                 if (widget.embedded)
                   const SizedBox(height: 4)
@@ -900,7 +1255,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                         const SizedBox(height: 8),
                         Text(
                           '฿${totalIncomeReceived.toStringAsFixed(0)}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF0F172A),
@@ -909,7 +1264,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                         const SizedBox(height: 4),
                         Text(
                           'จากเป้าหมายตามแผนทั้งหมด ฿${totalIncomeExpected.toStringAsFixed(0)}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             color: Color(0xFF64748B),
                           ),
@@ -1016,7 +1371,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                                 Flexible(
                                                   child: Text(
                                                     name,
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontSize: 16,
                                                       fontWeight:
                                                           FontWeight.bold,
@@ -1100,7 +1455,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                             const SizedBox(height: 4),
                                             Text(
                                               '$category - ครบวันที่ $dueDay',
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 11,
                                                 color: Color(0xFF64748B),
                                                 fontWeight: FontWeight.bold,
@@ -1111,7 +1466,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                       ),
                                       Text(
                                         '฿${amount.toStringAsFixed(0)}',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
                                           color: Color(0xFF0F172A),
@@ -1154,7 +1509,8 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
               ],
             ),
           ),
-        ],
+        ),
+      ],
       ),
     );
   }

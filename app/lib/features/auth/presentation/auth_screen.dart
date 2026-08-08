@@ -1,7 +1,10 @@
-﻿import 'dart:convert';
+import 'dart:convert';
+import 'dart:ui';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/floating_background.dart';
+import '../../../core/widgets/responsive_layout.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../domain/auth_session.dart';
 
@@ -12,13 +15,36 @@ class AuthScreen extends StatefulWidget {
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen> {
+class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateMixin {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _apiClient = ApiClient();
   bool _isLoginMode = true;
   bool _isLoading = false;
   String? _errorMessage;
+
+  late AnimationController _logoController;
+  late Animation<double> _logoAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _logoController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+    _logoAnimation = Tween<double>(begin: -6.0, end: 6.0).animate(
+      CurvedAnimation(parent: _logoController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _logoController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _handleSubmit() async {
     final email = _emailController.text.trim();
@@ -94,154 +120,294 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.pageColor,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // ตกแต่งแสดงวงกลมโลโก้ พร้อมใส่ระบบป้องกันแอปเด้งหาก Asset ยังไม่ถูกรวมเข้าระบบบิลด์หลัก
-                Container(
-                  width: 90,
-                  height: 90,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppTheme.primaryColor, width: 2),
-                  ),
-                  child: ClipOval(
-                    child: Image.asset(
-                      'assets/images/logo.jpg',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        // ป้ายสำรองสีขาวเขียวมินิมอล เมื่อพาร์ทรูปภาพยังคอมไพล์ไม่เข้าระบบเนื่องจากยังไม่ได้สั่งรันบิลด์ใหม่
-                        return Container(
-                          color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                          child: const Icon(
-                            Icons.account_balance_wallet_outlined,
-                            color: AppTheme.primaryColor,
-                            size: 44,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          // 1. Ultra-Premium SaaS Background Gradient
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFE0F2FE), // Light sky blue
+                    Color(0xFFECFDF5), // Light mint green
+                    Color(0xFFF8FAFC), // Off-white
+                  ],
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'SaveFor',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF008B75),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _isLoginMode
-                      ? 'เข้าสู่ระบบเพื่อใช้งานระบบบนคลาวด์'
-                      : 'สมัครสมาชิกเพื่อเริ่มบันทึกข้อมูลบนคลาวด์',
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                if (_errorMessage != null) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFFCA5A5)),
-                    ),
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(
-                        color: Color(0xFFEF4444),
-                        fontSize: 13,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'อีเมล',
-                    prefixIcon: const Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'รหัสผ่าน',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
-                    onPressed: _isLoading ? null : _handleSubmit,
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : Text(
-                            _isLoginMode ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _isLoginMode = !_isLoginMode;
-                      _errorMessage = null;
-                    });
-                  },
-                  child: Text(
-                    _isLoginMode
-                        ? 'ยังไม่มีบัญชี? สมัครสมาชิกที่นี่'
-                        : 'มีบัญชีอยู่แล้ว? เข้าสู่ระบบที่นี่',
-                    style: const TextStyle(color: AppTheme.primaryColor),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+
+          // 2. Animated Floating Background Icons
+          const Positioned.fill(child: FloatingBackground()),
+
+          // 3. Main Glassmorphic Form Card Content
+          SafeArea(
+            child: ResponsiveLayout(
+              maxWidth: 460,
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.65),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.7),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 24,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Logo with floating breathing float animation
+                            AnimatedBuilder(
+                              animation: _logoAnimation,
+                              builder: (context, child) {
+                                return Transform.translate(
+                                  offset: Offset(0, _logoAnimation.value),
+                                  child: child,
+                                );
+                              },
+                              child: Container(
+                                width: 92,
+                                height: 92,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(26),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 3.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.06),
+                                      blurRadius: 15,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                    BoxShadow(
+                                      color: AppTheme.primaryColor.withOpacity(0.2),
+                                      blurRadius: 28,
+                                      offset: const Offset(0, 12),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(22.5),
+                                  child: Image.asset(
+                                    'assets/images/logo.jpg',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        color: AppTheme.primaryColor.withOpacity(0.1),
+                                        child: const Icon(
+                                          Icons.account_balance_wallet_outlined,
+                                          color: AppTheme.primaryColor,
+                                          size: 48,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // App Title
+                            const Text(
+                              'SaveFor',
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF008B75),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+
+                            // Subtitle
+                            Text(
+                              _isLoginMode
+                                  ? 'เข้าสู่ระบบเพื่อใช้งานระบบบนคลาวด์'
+                                  : 'สมัครสมาชิกเพื่อเริ่มบันทึกข้อมูลบนคลาวด์',
+                              style: const TextStyle(
+                                color: Color(0xFF475569),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 28),
+
+                            // Error Message (if any)
+                            if (_errorMessage != null) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF2F2),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                                ),
+                                child: Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(
+                                    color: Color(0xFFEF4444),
+                                    fontSize: 13,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+
+                            // Inputs
+                            TextField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                              decoration: InputDecoration(
+                                labelText: 'อีเมล',
+                                labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                                prefixIcon: const Icon(Icons.email_outlined, color: AppTheme.primaryColor, size: 20),
+                                filled: true,
+                                fillColor: Colors.white.withOpacity(0.75),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppTheme.primaryColor.withOpacity(0.15)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppTheme.primaryColor.withOpacity(0.15)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(color: AppTheme.primaryColor, width: 2),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            TextField(
+                              controller: _passwordController,
+                              obscureText: true,
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                              decoration: InputDecoration(
+                                labelText: 'รหัสผ่าน',
+                                labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                                prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.primaryColor, size: 20),
+                                filled: true,
+                                fillColor: Colors.white.withOpacity(0.75),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppTheme.primaryColor.withOpacity(0.15)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppTheme.primaryColor.withOpacity(0.15)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(color: AppTheme.primaryColor, width: 2),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+
+                            // Login/Register Button (Gradient Emerald-Teal)
+                            Container(
+                              width: double.infinity,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF10B981),
+                                    AppTheme.primaryColor,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.primaryColor.withOpacity(0.35),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                onPressed: _isLoading ? null : _handleSubmit,
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : Text(
+                                        _isLoginMode ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Toggle Link
+                            TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  _isLoginMode = !_isLoginMode;
+                                  _errorMessage = null;
+                                });
+                              },
+                              child: Text(
+                                _isLoginMode
+                                    ? 'ยังไม่มีบัญชี? สมัครสมาชิกที่นี่'
+                                    : 'มีบัญชีอยู่แล้ว? เข้าสู่ระบบที่นี่',
+                                style: const TextStyle(
+                                  color: AppTheme.primaryColor,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:app/core/localization/app_material.dart';
 
@@ -181,7 +181,9 @@ class _NotificationInboxSheetState extends State<NotificationInboxSheet> {
         final color = _colorFor(type);
         final unread = item['read_at'] == null;
         return Material(
-          color: unread ? Colors.white : const Color(0xFFF8FAFC),
+          color: Theme.of(context).brightness == Brightness.dark
+              ? (unread ? const Color(0xFF1E293B) : const Color(0xFF162033))
+              : (unread ? Colors.white : const Color(0xFFF8FAFC)),
           borderRadius: BorderRadius.circular(18),
           child: InkWell(
             borderRadius: BorderRadius.circular(18),
@@ -215,7 +217,9 @@ class _NotificationInboxSheetState extends State<NotificationInboxSheet> {
                                   fontWeight: unread
                                       ? FontWeight.w800
                                       : FontWeight.w600,
-                                  color: const Color(0xFF1E293B),
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.white
+                                      : const Color(0xFF1E293B),
                                 ),
                               ),
                             ),
@@ -231,10 +235,12 @@ class _NotificationInboxSheetState extends State<NotificationInboxSheet> {
                         const SizedBox(height: 4),
                         Text(
                           item['body']?.toString() ?? '',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             height: 1.4,
-                            color: Color(0xFF64748B),
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B),
                           ),
                         ),
                       ],

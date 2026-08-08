@@ -3,6 +3,7 @@ import 'package:app/core/localization/app_material.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
+import '../../../core/widgets/responsive_layout.dart';
 import '../../dreams/presentation/dreams_screen.dart';
 import '../../recurring/presentation/recurring_expense_screen.dart';
 import '../../recurring/presentation/recurring_income_screen.dart';
@@ -64,8 +65,10 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
         children: [
           const Positioned.fill(child: FloatingBackground()),
           SafeArea(
-            child: Column(
-              children: [
+            child: ResponsiveLayout(
+              maxWidth: 800,
+              child: Column(
+                children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 8, 14, 5),
                   child: Row(
@@ -266,7 +269,8 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
               ],
             ),
           ),
-        ],
+        ),
+      ],
       ),
     );
   }

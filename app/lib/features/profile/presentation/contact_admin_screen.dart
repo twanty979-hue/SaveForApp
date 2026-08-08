@@ -1,6 +1,7 @@
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
+import '../../../core/widgets/responsive_layout.dart';
 
 class ContactAdminScreen extends StatelessWidget {
   const ContactAdminScreen({super.key});
@@ -51,7 +52,10 @@ class ContactAdminScreen extends StatelessWidget {
       body: Stack(
         children: [
           const Positioned.fill(child: FloatingBackground()),
-          ListView(
+          SafeArea(
+            child: ResponsiveLayout(
+              maxWidth: 600,
+              child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
               _buildContactCard(
@@ -77,8 +81,10 @@ class ContactAdminScreen extends StatelessWidget {
               ),
             ],
           ),
-        ],
+        ),
       ),
+     ],
+    ),
     );
   }
 }

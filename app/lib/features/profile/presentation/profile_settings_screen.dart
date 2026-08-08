@@ -10,6 +10,7 @@ import '../../../core/notifications/notification_service.dart';
 import '../../../core/settings/app_settings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
+import '../../../core/widgets/responsive_layout.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../auth/presentation/auth_screen.dart';
 import 'privacy_settings_screen.dart';
@@ -452,13 +453,15 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           const Positioned.fill(child: FloatingBackground()),
           SafeArea(
             top: false,
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppTheme.primaryColor,
-                    ),
-                  )
-                : ListView(
+            child: ResponsiveLayout(
+              maxWidth: 600,
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.primaryColor,
+                      ),
+                    )
+                  : ListView(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
                     children: [
                       _buildProfileHeader(),
@@ -559,6 +562,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       ),
                     ],
                   ),
+            ),
           ),
         ],
       ),
@@ -769,13 +773,17 @@ class _SettingsTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
               color: danger
-                  ? const Color(0xFFFFF7F7)
-                  : Colors.white.withValues(alpha: 0.92),
+                  ? (Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF271A1C)
+                      : const Color(0xFFFFF7F7))
+                  : context.surfaceColor,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: danger
-                    ? const Color(0xFFFECACA)
-                    : const Color(0xFFE2E8F0),
+                    ? (Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF7F1D1D)
+                        : const Color(0xFFFECACA))
+                    : context.borderColor,
               ),
               boxShadow: [
                 BoxShadow(
@@ -807,7 +815,7 @@ class _SettingsTile extends StatelessWidget {
                         style: TextStyle(
                           color: danger
                               ? const Color(0xFFDC2626)
-                              : const Color(0xFF1E293B),
+                              : context.primaryTextColor,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
@@ -818,8 +826,8 @@ class _SettingsTile extends StatelessWidget {
                           subtitle!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF64748B),
+                          style: TextStyle(
+                            color: context.secondaryTextColor,
                             fontSize: 10,
                           ),
                         ),
@@ -835,8 +843,8 @@ class _SettingsTile extends StatelessWidget {
                       padding: const EdgeInsets.only(right: 5),
                       child: Text(
                         trailingText!,
-                        style: const TextStyle(
-                          color: Color(0xFF64748B),
+                        style: TextStyle(
+                          color: context.secondaryTextColor,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
@@ -846,7 +854,7 @@ class _SettingsTile extends StatelessWidget {
                     Icons.chevron_right_rounded,
                     color: danger
                         ? const Color(0xFFFCA5A5)
-                        : const Color(0xFF94A3B8),
+                        : context.secondaryTextColor,
                     size: 21,
                   ),
                 ],

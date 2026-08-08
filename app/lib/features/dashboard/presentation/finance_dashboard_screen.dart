@@ -1,10 +1,11 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:app/core/localization/app_material.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
+import '../../../core/widgets/responsive_layout.dart';
 import '../../auth/domain/auth_session.dart';
 import 'dashboard_overview_card.dart';
 import 'monthly_comparison_card.dart';
@@ -193,8 +194,10 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
         children: [
           const Positioned.fill(child: FloatingBackground()),
           SafeArea(
-            child: Column(
-              children: [
+            child: ResponsiveLayout(
+              maxWidth: 800,
+              child: Column(
+                children: [
                 _DashboardHeader(onRefresh: _load),
                 Expanded(
                   child: _loading
@@ -290,7 +293,8 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
               ],
             ),
           ),
-        ],
+        ),
+      ],
       ),
     );
   }

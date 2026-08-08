@@ -1,4 +1,4 @@
-﻿import 'package:app/core/localization/app_material.dart';
+import 'package:app/core/localization/app_material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
@@ -59,6 +59,14 @@ class AppTheme {
           borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
       ),
+      popupMenuTheme: const PopupMenuThemeData(
+        color: cardLight,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          side: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+        ),
+      ),
     );
   }
 
@@ -113,6 +121,10 @@ class AppTheme {
       popupMenuTheme: const PopupMenuThemeData(
         color: cardDark,
         surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          side: BorderSide(color: Color(0xFF334155), width: 1),
+        ),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
+import '../../../core/widgets/responsive_layout.dart';
 
 class FaqScreen extends StatelessWidget {
   const FaqScreen({super.key});
@@ -43,7 +44,10 @@ class FaqScreen extends StatelessWidget {
       body: Stack(
         children: [
           const Positioned.fill(child: FloatingBackground()),
-          ListView.builder(
+          SafeArea(
+            child: ResponsiveLayout(
+              maxWidth: 600,
+              child: ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: faqs.length,
             itemBuilder: (context, index) {
@@ -83,8 +87,10 @@ class FaqScreen extends StatelessWidget {
               );
             },
           ),
-        ],
+        ),
       ),
+     ],
+    ),
     );
   }
 }

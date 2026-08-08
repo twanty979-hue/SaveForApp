@@ -1,9 +1,10 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:app/core/localization/app_material.dart';
 import 'package:flutter/rendering.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/shared_icon_selector.dart';
 import '../../auth/domain/auth_session.dart';
 
 class Message {
@@ -27,7 +28,7 @@ class Message {
 class QuickSuggestion {
   final String id;
   final String name;
-  final IconData icon;
+  final dynamic icon;
   final String type;
 
   const QuickSuggestion({
@@ -222,7 +223,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     Map<String, dynamic> item, {
     required String type,
     required String name,
-    required IconData icon,
+    required dynamic icon,
   }) {
     if (name.trim().isEmpty) return;
     item['quick_type'] = type;
@@ -230,7 +231,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     item['quick_icon'] = icon;
   }
 
-  IconData _getIconForExpenseCategory(String category) {
+  dynamic _getIconForExpenseCategory(String category) {
+    if (category.contains('|')) {
+      return SharedIconSelector.buildIcon(category, size: 28);
+    }
     switch (category) {
       case 'ค่าเช่า':
         return Icons.home_outlined;
@@ -265,7 +269,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     }
   }
 
-  IconData _getIconForIncomeCategory(String category) {
+  dynamic _getIconForIncomeCategory(String category) {
+    if (category.contains('|')) {
+      return SharedIconSelector.buildIcon(category, size: 28);
+    }
     switch (category) {
       case 'เงินเดือน':
         return Icons.work_outline;
@@ -292,7 +299,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     }
   }
 
-  IconData _getIconForDreamKey(String? key) {
+  dynamic _getIconForDreamKey(String? key) {
+    if (key != null && key.contains('|')) {
+      return SharedIconSelector.buildIcon(key, size: 28);
+    }
     switch (key) {
       case 'Home':
         return Icons.home_outlined;
@@ -356,7 +366,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           (item) => QuickSuggestion(
             id: item['id']?.toString() ?? item['quick_name'].toString(),
             name: item['quick_name'].toString(),
-            icon: item['quick_icon'] as IconData,
+            icon: item['quick_icon'] as dynamic,
             type: item['quick_type'].toString(),
           ),
         )
@@ -877,7 +887,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   final dream = matchingDreams.first;
                   final double newSaved =
                       (dream['current_amount'] as num).toDouble() + amount;
-                  await _apiClient.post(
+                  await _apiClient.patch(
                     '/dreams?id=eq.${dream['id']}',
                     body: {'current_amount': newSaved},
                   );
@@ -1224,7 +1234,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             vertical: isUser ? 12 : 9,
           ),
           decoration: BoxDecoration(
-            color: isUser ? AppTheme.primaryColor : const Color(0xFFF1F5F9),
+            color: isUser
+                ? AppTheme.primaryColor
+                : (Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFF1F5F9)),
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(16),
               topRight: const Radius.circular(16),
@@ -1238,8 +1252,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   children: [
                     Text(
                       message.text,
-                      style: const TextStyle(
-                        color: Color(0xFF475569),
+                      style: TextStyle(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF475569),
                         fontSize: 13,
                       ),
                     ),
@@ -1248,7 +1264,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               : Text(
                   message.text,
                   style: TextStyle(
-                    color: isUser ? Colors.white : const Color(0xFF1E293B),
+                    color: isUser
+                        ? Colors.white
+                        : (Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFFE2E8F0)
+                            : const Color(0xFF1E293B)),
                     fontSize: isUser ? 14 : 13,
                   ),
                 ),
@@ -1350,9 +1370,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                           controller: _inputController,
                           focusNode: _focusNode,
                           textInputAction: TextInputAction.send,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: Color(0xFF1E293B),
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white
+                                : const Color(0xFF1E293B),
                             fontWeight: FontWeight.w500,
                           ),
                           decoration: const InputDecoration(
@@ -1363,6 +1385,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                               fontWeight: FontWeight.w400,
                             ),
                             border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            filled: false,
                             isDense: true,
                             contentPadding: EdgeInsets.symmetric(vertical: 12),
                           ),
@@ -1476,7 +1501,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(suggestion.icon, size: 13, color: color),
+                    suggestion.icon is Widget
+                        ? suggestion.icon
+                        : Icon(suggestion.icon as IconData, size: 13, color: color),
                     Text(
                       suggestion.name,
                       maxLines: 1,

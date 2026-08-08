@@ -158,6 +158,11 @@ String _localized(String source) {
 }
 
 const Map<String, String> _dynamicThaiToEnglish = {
+  'ระบุจำนวนเงินเป้าหมายเพื่อคำนวณเวลา': 'Enter target amount to estimate timeframe',
+  'เป้าหมายสำเร็จแล้ว! เงินเริ่มต้นถึงเป้าหมายแล้ว 🎉': 'Goal achieved! Starting balance meets target 🎉',
+  'ระบุยอดเงินที่ต้องการเก็บต่อเดือน': 'Enter monthly savings to calculate timeframe',
+  'คุณจะบรรลุเป้าหมายนี้ได้ในอีกประมาณ ': 'You will achieve this goal in about ',
+  ' เดือน 🚀': ' months 🚀',
   'วันนี้ ฿': 'Today ฿',
   'เดือนนี้ ฿': 'This month ฿',
   'รายการเดือน': 'Entries for ',
@@ -247,6 +252,7 @@ const Map<String, String> _thaiToEnglish = {
   'ลบ': 'Delete',
   'ลบข้อมูล': 'Delete',
   'ยกเลิก': 'Cancel',
+  'ย้อนกลับ': 'Back',
   'บันทึกการแก้ไข': 'Save changes',
   'แก้ไขรายละเอียดเป้าหมาย': 'Edit goal details',
   'แก้ไขหมวดหมู่เป้าหมาย': 'Edit goal category',
@@ -278,6 +284,9 @@ const Map<String, String> _thaiToEnglish = {
   'จำนวนเงิน': 'Amount',
   'เงินตั้งต้นที่มีอยู่แล้ว (บาท)': 'Starting balance (THB)',
   'เป้าหมายที่ต้องเก็บต่อเดือน (บาท)': 'Monthly savings target (THB)',
+  'จำนวนเงินที่ต้องการเก็บ (บาท)': 'Target amount (THB)',
+  'เงินออมเริ่มต้นที่มี (บาท)': 'Starting balance (THB)',
+  'ตั้งเป้าเก็บเงินต่อเดือน (บาท)': 'Monthly savings target (THB)',
   'ชื่อรายจ่าย': 'Expense name',
   'ชื่อรายรับ': 'Income name',
   'เช่น ค่าเช่าห้อง': 'For example, room rent',
