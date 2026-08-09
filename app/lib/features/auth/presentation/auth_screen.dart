@@ -96,10 +96,28 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           });
         }
       } else {
-        final String errorMsg =
-            responseData['error'] ??
-            responseData['message'] ??
-            'เกิดข้อผิดพลาดจากหลังบ้าน';
+        final rawError = responseData['error_description'] ??
+                         responseData['message'] ??
+                         responseData['msg'] ??
+                         responseData['error'];
+        
+        String errorMsg = 'เกิดข้อผิดพลาดจากหลังบ้าน';
+        if (rawError != null) {
+          final errStr = rawError.toString();
+          if (errStr.contains('Invalid login credentials') || 
+              errStr.contains('invalid_grant') || 
+              errStr.contains('invalid login credentials')) {
+            errorMsg = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+          } else if (errStr.contains('Email not confirmed')) {
+            errorMsg = 'กรุณายืนยันอีเมลของคุณก่อนเข้าสู่ระบบ';
+          } else if (errStr.contains('User already exists') ||
+                     errStr.contains('user already exists')) {
+            errorMsg = 'อีเมลนี้ถูกใช้งานแล้ว';
+          } else {
+            errorMsg = errStr;
+          }
+        }
+
         setState(() {
           _errorMessage = errorMsg;
         });
