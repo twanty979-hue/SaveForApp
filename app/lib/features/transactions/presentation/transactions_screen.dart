@@ -217,8 +217,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
         _rawSuggestions = allRaw;
         _quickSuggestions = _quickSuggestionsFromRaw(allRaw);
       });
-    } catch (e) {
-      // Fail silently
+    } catch (e, stackTrace) {
+      debugPrint('Error loading quick suggestions: $e\n$stackTrace');
     }
   }
 
@@ -409,7 +409,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           if (date != null &&
               date.year == now.year &&
               date.month == now.month) {
-            final txAmount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+            final txAmount = num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
             final txFixedExpenseId = tx['fixed_expense_id']?.toString();
             final txIncomeSourceId = tx['income_source_id']?.toString();
 
@@ -451,142 +451,146 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           _messages.add(introMsg);
 
           for (var tx in data) {
-            final name = tx['note'] ?? '';
-            final amount = (tx['amount'] as num).toDouble();
-            final dateStr = tx['transaction_date'] ?? '';
-            final timestamp = DateTime.tryParse(dateStr) ?? DateTime.now();
-            final type = tx['type'] ?? 'expense';
+            try {
+              final name = tx['note']?.toString() ?? '';
+              final amount = num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+              final dateStr = tx['transaction_date']?.toString() ?? '';
+              final timestamp = DateTime.tryParse(dateStr) ?? DateTime.now();
+              final type = tx['type']?.toString() ?? 'expense';
 
-            String displayName = name;
-            String category = 'รายจ่าย';
-            String msgType = 'expense';
+              String displayName = name;
+              String category = 'รายจ่าย';
+              String msgType = 'expense';
 
-            if (name.startsWith('[ออม] หยอดกระปุก: ')) {
-              displayName = name.replaceAll('[ออม] หยอดกระปุก: ', '');
-              category = 'เงินออม';
-              msgType = 'dream';
-            } else if (name.startsWith('[รายจ่ายประจำ] ')) {
-              displayName = name.replaceAll('[รายจ่ายประจำ] ', '');
-              category = 'รายจ่าย';
-              msgType = 'expense';
-            } else if (name.startsWith('[รายรับประจำ] ')) {
-              displayName = name.replaceAll('[รายรับประจำ] ', '');
-              category = 'รายรับ';
-              msgType = 'income';
-            } else if (type == 'income') {
-              category = 'รายรับ';
-              msgType = 'income';
-            } else {
-              category = 'รายจ่าย';
-              msgType = 'expense';
-            }
+              if (name.startsWith('[ออม] หยอดกระปุก: ')) {
+                displayName = name.replaceAll('[ออม] หยอดกระปุก: ', '');
+                category = 'เงินออม';
+                msgType = 'dream';
+              } else if (name.startsWith('[รายจ่ายประจำ] ')) {
+                displayName = name.replaceAll('[รายจ่ายประจำ] ', '');
+                category = 'รายจ่าย';
+                msgType = 'expense';
+              } else if (name.startsWith('[รายรับประจำ] ')) {
+                displayName = name.replaceAll('[รายรับประจำ] ', '');
+                category = 'รายรับ';
+                msgType = 'income';
+              } else if (type == 'income') {
+                category = 'รายรับ';
+                msgType = 'income';
+              } else {
+                category = 'รายจ่าย';
+                msgType = 'expense';
+              }
 
-            final cleanName = displayName.trim().toLowerCase();
-            double budget = 0.0;
-            bool hasBudget = false;
+              final cleanName = displayName.trim().toLowerCase();
+              double budget = 0.0;
+              bool hasBudget = false;
 
-            // ค้นหาข้อแนะนำที่ตรงกันโดยใช้ ID
-            Map<String, dynamic>? matchedSugg;
-            final txFixedExpenseId = tx['fixed_expense_id']?.toString();
-            final txIncomeSourceId = tx['income_source_id']?.toString();
+              // ค้นหาข้อแนะนำที่ตรงกันโดยใช้ ID
+              Map<String, dynamic>? matchedSugg;
+              final txFixedExpenseId = tx['fixed_expense_id']?.toString();
+              final txIncomeSourceId = tx['income_source_id']?.toString();
 
-            if (txFixedExpenseId != null || txIncomeSourceId != null) {
-              for (var sugg in _rawSuggestions) {
-                final suggId = sugg['id']?.toString();
-                if (msgType == 'expense' && suggId == txFixedExpenseId) {
-                  matchedSugg = sugg;
-                  break;
-                } else if (msgType == 'income' && suggId == txIncomeSourceId) {
-                  matchedSugg = sugg;
-                  break;
+              if (txFixedExpenseId != null || txIncomeSourceId != null) {
+                for (var sugg in _rawSuggestions) {
+                  final suggId = sugg['id']?.toString();
+                  if (msgType == 'expense' && suggId == txFixedExpenseId) {
+                    matchedSugg = sugg;
+                    break;
+                  } else if (msgType == 'income' && suggId == txIncomeSourceId) {
+                    matchedSugg = sugg;
+                    break;
+                  }
                 }
               }
-            }
 
-            if (matchedSugg == null) {
-              for (var sugg in _rawSuggestions) {
-                final suggName =
-                    (sugg['bot_type'] == 'dream' ? sugg['title'] : sugg['name'])
-                        ?.toString()
-                        .toLowerCase();
-                if (suggName == cleanName && sugg['bot_type'] == msgType) {
-                  matchedSugg = sugg;
-                  break;
+              if (matchedSugg == null) {
+                for (var sugg in _rawSuggestions) {
+                  final suggName =
+                      (sugg['bot_type'] == 'dream' ? sugg['title'] : sugg['name'])
+                          ?.toString()
+                          .toLowerCase();
+                  if (suggName == cleanName && sugg['bot_type'] == msgType) {
+                    matchedSugg = sugg;
+                    break;
+                  }
                 }
               }
-            }
 
-            // Fallback
-            if (matchedSugg == null && msgType == 'expense') {
-              for (var sugg in _rawSuggestions) {
-                final suggName = sugg['name']?.toString().trim().toLowerCase();
-                if (suggName == 'ค่าใช้จ่ายรายเดือน' &&
-                    sugg['bot_type'] == 'expense') {
-                  matchedSugg = sugg;
-                  break;
+              // Fallback
+              if (matchedSugg == null && msgType == 'expense') {
+                for (var sugg in _rawSuggestions) {
+                  final suggName = sugg['name']?.toString().trim().toLowerCase();
+                  if (suggName == 'ค่าใช้จ่ายรายเดือน' &&
+                      sugg['bot_type'] == 'expense') {
+                    matchedSugg = sugg;
+                    break;
+                  }
                 }
               }
-            }
 
-            if (matchedSugg != null) {
-              hasBudget = true;
-              if (msgType == 'expense' || msgType == 'income') {
-                budget = (matchedSugg['amount'] as num?)?.toDouble() ?? 0.0;
-              } else if (msgType == 'dream') {
-                budget =
-                    (matchedSugg['target_amount'] as num?)?.toDouble() ?? 0.0;
+              if (matchedSugg != null) {
+                hasBudget = true;
+                if (msgType == 'expense' || msgType == 'income') {
+                  budget = num.tryParse(matchedSugg['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+                } else if (msgType == 'dream') {
+                  budget =
+                      num.tryParse(matchedSugg['target_amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+                }
               }
-            }
 
-            final String? matchedId = matchedSugg?['id']?.toString();
-            double totalAccumulated = amount;
-            if (matchedId != null) {
-              if (msgType == 'expense') {
-                totalAccumulated =
-                    accumulatedMap['expense_id_$matchedId'] ??
-                    accumulatedMap[cleanName] ??
-                    amount;
-              } else if (msgType == 'income') {
-                totalAccumulated =
-                    accumulatedMap['income_id_$matchedId'] ??
-                    accumulatedMap[cleanName] ??
-                    amount;
+              final String? matchedId = matchedSugg?['id']?.toString();
+              double totalAccumulated = amount;
+              if (matchedId != null) {
+                if (msgType == 'expense') {
+                  totalAccumulated =
+                      accumulatedMap['expense_id_$matchedId'] ??
+                      accumulatedMap[cleanName] ??
+                      amount;
+                } else if (msgType == 'income') {
+                  totalAccumulated =
+                      accumulatedMap['income_id_$matchedId'] ??
+                      accumulatedMap[cleanName] ??
+                      amount;
+                }
+              } else {
+                totalAccumulated = accumulatedMap[cleanName] ?? amount;
               }
-            } else {
-              totalAccumulated = accumulatedMap[cleanName] ?? amount;
-            }
 
-            _messages.add(
-              Message(
-                text: '$displayName ${amount.toStringAsFixed(0)}',
-                isUser: true,
-                timestamp: timestamp,
-              ),
-            );
-            _messages.add(
-              Message(
-                text: '',
-                isUser: false,
-                timestamp: timestamp,
-                cardData: {
-                  'name': displayName,
-                  'amount': amount,
-                  'category': category,
-                  'hasBudget': hasBudget,
-                  'budget': budget,
-                  'totalAccumulated': totalAccumulated,
-                  'msgType': msgType,
-                },
-              ),
-            );
+              _messages.add(
+                Message(
+                  text: '$displayName ${amount.toStringAsFixed(0)}',
+                  isUser: true,
+                  timestamp: timestamp,
+                ),
+              );
+              _messages.add(
+                Message(
+                  text: '',
+                  isUser: false,
+                  timestamp: timestamp,
+                  cardData: {
+                    'name': displayName,
+                    'amount': amount,
+                    'category': category,
+                    'hasBudget': hasBudget,
+                    'budget': budget,
+                    'totalAccumulated': totalAccumulated,
+                    'msgType': msgType,
+                  },
+                ),
+              );
+            } catch (innerEx) {
+              debugPrint('Error parsing transaction item: $innerEx');
+            }
           }
         });
         _scrollToBottom();
       } else {
-        // fail silently
+        debugPrint('Failed to load transactions: ${response.statusCode}');
       }
-    } catch (e) {
-      // fail silently
+    } catch (e, stackTrace) {
+      debugPrint('Error loading past transactions: $e\n$stackTrace');
     } finally {
       setState(() {
         _isLoading = false;
