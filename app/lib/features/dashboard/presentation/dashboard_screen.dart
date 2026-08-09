@@ -464,33 +464,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildTutorialOverlay() {
     if (_tutorialStep < 0) return const SizedBox.shrink();
 
-    Rect? targetRect;
-    ShapeBorder shape = const CircleBorder();
+    final double screenWidth = MediaQuery.sizeOf(context).width;
+    final double screenHeight = MediaQuery.sizeOf(context).height;
+
+    Rect targetRectVal = Rect.fromCenter(
+      center: Offset(screenWidth / 2, screenHeight / 2),
+      width: 0,
+      height: 0,
+    );
+    double targetRadiusVal = 0.0;
     
     switch (_tutorialStep) {
       case 1:
-        targetRect = _getWidgetRect(_profileKey);
-        shape = const CircleBorder();
+        final rect = _getWidgetRect(_profileKey);
+        if (rect != null) {
+          targetRectVal = rect;
+          targetRadiusVal = rect.width / 2;
+        }
         break;
       case 2:
-        targetRect = _getWidgetRect(_balanceKey);
-        shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+        final rect = _getWidgetRect(_balanceKey);
+        if (rect != null) {
+          targetRectVal = rect;
+          targetRadiusVal = 12.0;
+        }
         break;
       case 3:
-        targetRect = _getWidgetRect(_calendarKey);
-        shape = const CircleBorder();
+        final rect = _getWidgetRect(_calendarKey);
+        if (rect != null) {
+          targetRectVal = rect;
+          targetRadiusVal = rect.width / 2;
+        }
         break;
       case 4:
-        targetRect = _getWidgetRect(_notificationKey);
-        shape = const CircleBorder();
+        final rect = _getWidgetRect(_notificationKey);
+        if (rect != null) {
+          targetRectVal = rect;
+          targetRadiusVal = rect.width / 2;
+        }
         break;
       case 5:
-        targetRect = _getWidgetRect(_homeMenuKey);
-        shape = const CircleBorder();
+        final rect = _getWidgetRect(_homeMenuKey);
+        if (rect != null) {
+          targetRectVal = rect;
+          targetRadiusVal = rect.width / 2;
+        }
         break;
       case 6:
-        targetRect = _getWidgetRect(_inputKey);
-        shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(22));
+        final rect = _getWidgetRect(_inputKey);
+        if (rect != null) {
+          targetRectVal = rect;
+          targetRadiusVal = 22.0;
+        }
         break;
     }
 
@@ -620,6 +645,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
 
+    // Determine layout coordinates dynamically for smooth sliding animation
+    final double cardHeight = 220.0;
+    double animTop = (screenHeight - cardHeight) / 2;
+    if (_tutorialStep == 6) {
+      animTop = 160.0;
+    } else if (_tutorialStep > 0) {
+      animTop = screenHeight - cardHeight - 110;
+    }
+
     return Positioned.fill(
       child: Stack(
         children: [
@@ -635,36 +669,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _finishMainTutorial();
                 }
               },
-              child: CustomPaint(
-                size: Size.infinite,
-                painter: TutorialBackdropPainter(
-                  targetRect: targetRect,
-                  shape: shape,
-                ),
+              child: TweenAnimationBuilder<Rect?>(
+                tween: RectTween(end: targetRectVal),
+                duration: const Duration(milliseconds: 380),
+                curve: Curves.easeInOutCubic,
+                builder: (context, animRect, _) {
+                  return TweenAnimationBuilder<double>(
+                    tween: Tween<double>(end: targetRadiusVal),
+                    duration: const Duration(milliseconds: 380),
+                    curve: Curves.easeInOutCubic,
+                    builder: (context, animRadius, _) {
+                      return CustomPaint(
+                        size: Size.infinite,
+                        painter: TutorialBackdropPainter(
+                          targetRect: animRect,
+                          borderRadius: animRadius,
+                          isWelcomeStep: _tutorialStep == 0,
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
             ),
           ),
-          if (_tutorialStep == 0)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOutCubic,
+            top: animTop,
+            left: 20,
+            right: 20,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 300),
+              opacity: _tutorialStep >= 0 ? 1.0 : 0.0,
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 400),
+                scale: _tutorialStep >= 0 ? 1.0 : 0.95,
+                curve: Curves.easeOutBack,
                 child: cardChild,
               ),
-            )
-          else if (_tutorialStep == 6)
-            Positioned(
-              top: 180,
-              left: 24,
-              right: 24,
-              child: cardChild,
-            )
-          else
-            Positioned(
-              bottom: 120,
-              left: 24,
-              right: 24,
-              child: cardChild,
             ),
+          ),
         ],
       ),
     );
@@ -1658,16 +1703,21 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
 
 class TutorialBackdropPainter extends CustomPainter {
   final Rect? targetRect;
-  final ShapeBorder shape;
+  final double borderRadius;
+  final bool isWelcomeStep;
 
-  TutorialBackdropPainter({this.targetRect, this.shape = const CircleBorder()});
+  TutorialBackdropPainter({
+    this.targetRect,
+    required this.borderRadius,
+    required this.isWelcomeStep,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = Colors.black.withValues(alpha: 0.75);
     
-    if (targetRect == null) {
+    if (isWelcomeStep || targetRect == null || targetRect!.width == 0) {
       canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
       return;
     }
@@ -1679,23 +1729,19 @@ class TutorialBackdropPainter extends CustomPainter {
       ..color = Colors.white
       ..blendMode = BlendMode.clear;
       
-    if (shape is CircleBorder) {
-      final center = targetRect!.center;
-      final radius = math.max(targetRect!.width, targetRect!.height) / 2.0;
-      canvas.drawCircle(center, radius + 8, maskPaint);
-    } else {
-      final rrect = RRect.fromRectAndRadius(
-        targetRect!.inflate(8),
-        const Radius.circular(16),
-      );
-      canvas.drawRRect(rrect, maskPaint);
-    }
+    final rrect = RRect.fromRectAndRadius(
+      targetRect!.inflate(8),
+      Radius.circular(borderRadius + 8),
+    );
+    canvas.drawRRect(rrect, maskPaint);
     
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant TutorialBackdropPainter oldDelegate) {
-    return oldDelegate.targetRect != targetRect || oldDelegate.shape != shape;
+    return oldDelegate.targetRect != targetRect || 
+           oldDelegate.borderRadius != borderRadius ||
+           oldDelegate.isWelcomeStep != isWelcomeStep;
   }
 }
