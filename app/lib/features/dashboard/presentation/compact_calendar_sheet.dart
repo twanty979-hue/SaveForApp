@@ -125,6 +125,250 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
     });
   }
 
+  Future<void> _showTransactionFormModal({Map<String, dynamic>? editingTransaction}) async {
+    final isEdit = editingTransaction != null;
+    final noteController = TextEditingController(text: isEdit ? editingTransaction['note']?.toString() : '');
+    final amountController = TextEditingController(text: isEdit ? (editingTransaction['amount'] as num?)?.toDouble().toStringAsFixed(0) : '');
+    
+    String type = isEdit ? (editingTransaction['type']?.toString() ?? 'expense') : 'expense';
+    String category = isEdit ? (editingTransaction['category']?.toString() ?? 'ค่าอาหาร') : 'ค่าอาหาร';
+
+    final expenseCategories = ['ค่าอาหาร', 'ค่าเช่า', 'ค่าเดินทาง', 'ค่าไฟ', 'ค่าน้ำ', 'ค่าอินเทอร์เน็ต', 'ค่ามือถือ', 'ท่องเที่ยว', 'อื่นๆ'];
+    final incomeCategories = ['เงินเดือน', 'Freelance', 'ธุรกิจ', 'ลงทุน', 'ขายของ', 'โบนัส', 'อื่นๆ'];
+
+    var saving = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final categories = type == 'income' ? incomeCategories : expenseCategories;
+          if (!categories.contains(category)) {
+            category = categories.first;
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                14,
+                20,
+                MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isEdit 
+                              ? context.tr('แก้ไขรายการ', 'Edit Transaction')
+                              : context.tr('จดรายการย้อนหลัง', 'Record Transaction'),
+                          style: TextStyle(
+                            color: context.primaryTextColor,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (isEdit)
+                          IconButton(
+                            onPressed: () async {
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: Text(context.tr('ลบรายการนี้?', 'Delete this?')),
+                                  content: Text(context.tr('คุณต้องการลบรายการนี้ใช่หรือไม่?', 'Are you sure you want to delete this?')),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, false),
+                                      child: Text(context.tr('ยกเลิก', 'Cancel')),
+                                    ),
+                                    FilledButton(
+                                      style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: Text(context.tr('ลบ', 'Delete')),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirmed == true) {
+                                setSheetState(() => saving = true);
+                                try {
+                                  await _apiClient.delete('/transactions?id=eq.${editingTransaction['id']}');
+                                  await _loadTransactions();
+                                } catch (_) {}
+                                if (sheetContext.mounted) {
+                                  Navigator.pop(sheetContext);
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.delete_forever_rounded, color: Color(0xFFEF4444)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: Center(child: Text(context.tr('รายจ่าย', 'Expense'))),
+                            selected: type == 'expense',
+                            onSelected: (val) {
+                              if (val) {
+                                setSheetState(() {
+                                  type = 'expense';
+                                  category = expenseCategories.first;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: Center(child: Text(context.tr('รายรับ', 'Income'))),
+                            selected: type == 'income',
+                            onSelected: (val) {
+                              if (val) {
+                                setSheetState(() {
+                                  type = 'income';
+                                  category = incomeCategories.first;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: noteController,
+                      decoration: InputDecoration(
+                        labelText: context.tr('ชื่อรายการ', 'Item Name'),
+                        hintText: context.tr('เช่น ค่าอาหารกลางวัน, เงินเดือน', 'e.g., Lunch, Salary'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: amountController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: context.tr('จำนวนเงิน', 'Amount'),
+                        prefixText: '฿ ',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      context.tr('หมวดหมู่', 'Category'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: context.secondaryTextColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: category,
+                      decoration: const InputDecoration(
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      items: categories.map((cat) {
+                        return DropdownMenuItem<String>(
+                          value: cat,
+                          child: Text(cat),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setSheetState(() => category = val);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: FilledButton(
+                        onPressed: saving
+                            ? null
+                            : () async {
+                                final note = noteController.text.trim();
+                                final amountStr = amountController.text.trim();
+                                final amount = double.tryParse(amountStr);
+                                if (note.isEmpty || amount == null || amount <= 0) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(context.tr('กรุณากรอกข้อมูลให้ถูกต้อง', 'Please fill in correct info'))),
+                                  );
+                                  return;
+                                }
+
+                                setSheetState(() => saving = true);
+
+                                try {
+                                  final userId = AuthSession.userId;
+                                  if (userId != null) {
+                                    if (isEdit) {
+                                      final body = {
+                                        'note': note,
+                                        'amount': amount,
+                                        'type': type,
+                                        'category': category,
+                                      };
+                                      await _apiClient.patch('/transactions?id=eq.${editingTransaction['id']}', body);
+                                    } else {
+                                      final selectedDate = DateTime(_year, _month, _day, 12, 0, 0);
+                                      final body = {
+                                        'user_id': userId,
+                                        'note': note,
+                                        'amount': amount,
+                                        'type': type,
+                                        'category': category,
+                                        'transaction_date': selectedDate.toUtc().toIso8601String(),
+                                      };
+                                      await _apiClient.post('/transactions', body);
+                                    }
+                                    await _loadTransactions();
+                                  }
+                                } catch (_) {}
+
+                                if (sheetContext.mounted) {
+                                  Navigator.pop(sheetContext);
+                                }
+                              },
+                        child: saving
+                            ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : Text(context.tr('บันทึก', 'Save')),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   void _selectDate(DateTime date) {
     setState(() {
       _year = date.year;
@@ -383,6 +627,23 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                 : const Color(0xFF64748B),
           ),
         ),
+        const SizedBox(width: 8),
+        InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _showTransactionFormModal(),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: const BoxDecoration(
+              color: AppTheme.primaryColor,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.add,
+              size: 16,
+              color: Colors.white,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -418,9 +679,16 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
       physics: const NeverScrollableScrollPhysics(),
       itemCount: transactions.length,
       separatorBuilder: (_, _) => const SizedBox(height: 6),
-      itemBuilder: (context, index) => _TransactionRow(
-        transaction: transactions[index] as Map<String, dynamic>,
-      ),
+      itemBuilder: (context, index) {
+        final tx = transactions[index] as Map<String, dynamic>;
+        return InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => _showTransactionFormModal(editingTransaction: tx),
+          child: _TransactionRow(
+            transaction: tx,
+          ),
+        );
+      },
     );
   }
 }
