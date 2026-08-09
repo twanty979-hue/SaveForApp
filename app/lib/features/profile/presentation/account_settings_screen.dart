@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../auth/domain/auth_session.dart';
+import '../../auth/presentation/auth_screen.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -263,18 +264,39 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       ),
     );
 
-    if (confirmed == true && mounted) {
-      // Note: Full delete implementation may require a backend endpoint.
-      // For now, we show a mock success and sign out.
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.tr('ลบบัญชีเรียบร้อยแล้ว', 'Account deleted.')),
-          backgroundColor: Colors.green,
-        ),
-      );
-      // await _apiClient.delete('/auth/account');
+    if (confirmed != true || !mounted) return;
+
+    // Show loading spinner
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final userId = AuthSession.userId;
+      if (userId != null) {
+        // Cascade delete all user records
+        await _apiClient.delete('/transactions?user_id=eq.$userId');
+        await _apiClient.delete('/dreams?user_id=eq.$userId');
+        await _apiClient.delete('/recurring/expenses?user_id=eq.$userId');
+        await _apiClient.delete('/recurring/sources?user_id=eq.$userId');
+        await _apiClient.delete('/users?id=eq.$userId');
+      }
+    } catch (_) {}
+
+    // Dismiss loading and logout
+    if (mounted) {
+      Navigator.pop(context); // Dismiss loading spinner
       await AuthSession.logout();
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+        (_) => false,
+      );
     }
   }
 
@@ -323,46 +345,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                         },
                       ),
                       
-                      const SizedBox(height: 22),
-                      _SectionLabel(context.tr('การจัดการข้อมูล', 'Data Management')),
-                      const SizedBox(height: 8),
-                      _SettingsTile(
-                        icon: Icons.download_rounded,
-                        title: context.tr('ส่งออกข้อมูล', 'Export Data'),
-                        subtitle: context.tr('ดาวน์โหลดประวัติทั้งหมด', 'Download all history'),
-                        trailing: const Icon(Icons.lock_outline_rounded, size: 16, color: Color(0xFF94A3B8)),
-                        onTap: () {},
-                      ),
-                      _SettingsTile(
-                        icon: Icons.cleaning_services_rounded,
-                        title: context.tr('ล้างข้อมูล', 'Clear Data'),
-                        subtitle: context.tr('ลบประวัติรายรับรายจ่ายทั้งหมด', 'Delete all transaction history'),
-                        trailing: const Icon(Icons.lock_outline_rounded, size: 16, color: Color(0xFF94A3B8)),
-                        onTap: () {},
-                      ),
-
-                      const SizedBox(height: 22),
-                      _SectionLabel(context.tr('การเชื่อมต่อบัญชี', 'Linked Accounts')),
-                      const SizedBox(height: 8),
-                      _SettingsTile(
-                        icon: Icons.link_rounded,
-                        title: context.tr('เชื่อมต่อโซเชียล', 'Connect Social'),
-                        subtitle: context.tr('Google, Apple ID, LINE', 'Google, Apple ID, LINE'),
-                        trailing: const Icon(Icons.lock_outline_rounded, size: 16, color: Color(0xFF94A3B8)),
-                        onTap: () {},
-                      ),
-                      
-                      const SizedBox(height: 22),
-                      _SectionLabel(context.tr('แพ็กเกจการใช้งาน', 'Subscription')),
-                      const SizedBox(height: 8),
-                      _SettingsTile(
-                        icon: Icons.star_rounded,
-                        title: context.tr('แพ็กเกจปัจจุบัน', 'Current Plan'),
-                        subtitle: context.tr('฿0 / เดือน', '฿0 / month'),
-                        trailingText: _tier.toUpperCase(),
-                        onTap: () {},
-                      ),
-
                       const SizedBox(height: 22),
                       _SectionLabel(context.tr('การจัดการบัญชีระดับลึก', 'Danger Zone')),
                       const SizedBox(height: 8),
