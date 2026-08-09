@@ -88,7 +88,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     _effectiveDateFilter.addListener(_handleDateFilterChanged);
     _focusNode.addListener(_handleInputFocusChange);
     _inputController.addListener(_handleInputChanged);
-    _initData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initData();
+    });
   }
 
   Future<void> _initData() async {
