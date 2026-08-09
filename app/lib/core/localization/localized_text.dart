@@ -190,12 +190,15 @@ const Map<String, String> _dynamicThaiToEnglish = {
 
 // Long phrases are intentionally listed before their component words.
 const Map<String, String> _thaiToEnglish = {
-  'สวัสดีครับ ผมผู้ช่วยการเงินของคุณ พิมพ์รายการพร้อมจำนวนเงินได้เลย เช่น “ค่าห้อง 3500” หรือกดรายการด้านล่างเพื่อเติมชื่อให้อัตโนมัติ':
-      'Hi, I’m your finance assistant. Type an item and amount, such as “Rent 3500”, or tap a shortcut below.',
-  'บันทึกเงินออมเรียบร้อยแล้วครับ ความฝันเข้าใกล้อีกก้าวแล้วนะครับ':
-      'Savings recorded. You are one step closer to your dream.',
-  'ขออภัยครับ ฉันไม่เข้าใจรูปแบบของคุณ ลองป้อนใหม่ เช่น "ข้าวผัด 60" หรือ "+เงินเดือน 20000" นะครับ':
-      'Sorry, I could not understand that. Try “Lunch 60” or “+Salary 20000”.',
+  'ระบบบันทึกรายการอัตโนมัติเปิดใช้งานแล้ว ระบุรายการและจำนวนเงินที่ต้องการบันทึก เช่น "ค่าห้อง 3500" หรือเลือกรายการด่วนด้านล่าง':
+      'Automated transaction recording is active. Enter an item and amount, e.g. "Rent 3500", or tap a shortcut below.',
+  'บันทึกยอดเงินออมเข้าระบบสำเร็จเรียบร้อยแล้ว':
+      'Savings have been successfully recorded.',
+  'ไม่พบข้อมูลที่ระบุ กรุณาระบุในรูปแบบ [รายการ] [จำนวนเงิน] เช่น "ข้าวผัด 60" หรือ "+เงินเดือน 20000"':
+      'Format not recognized. Please enter in the format [item] [amount], e.g. "Lunch 60" or "+Salary 20000".',
+  'บันทึกยอดรายรับเข้าระบบสำเร็จเรียบร้อยแล้ว': 'Income has been successfully recorded.',
+  'บันทึกยอดรายจ่ายเข้าระบบสำเร็จเรียบร้อยแล้ว': 'Expense has been successfully recorded.',
+  'ไม่พบแผนงบประมาณที่ตรงกับรายการนี้ ยอดเงินถูกบันทึกสำเร็จแล้ว': 'No matching budget plan found. The amount has been successfully recorded.',
   'เข้าสู่ระบบเพื่อใช้งานระบบบนคลาวด์': 'Sign in to use cloud sync',
   'สมัครสมาชิกเพื่อเริ่มบันทึกข้อมูลบนคลาวด์':
       'Create an account to start cloud syncing',

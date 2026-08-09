@@ -66,7 +66,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   String _inputType = 'expense';
 
   static const String _introText =
-      'สวัสดีครับ ผมผู้ช่วยการเงินของคุณ พิมพ์รายการพร้อมจำนวนเงินได้เลย เช่น “ค่าห้อง 3500” หรือกดรายการด้านล่างเพื่อเติมชื่อให้อัตโนมัติ';
+      'ระบบบันทึกรายการอัตโนมัติเปิดใช้งานแล้ว ระบุรายการและจำนวนเงินที่ต้องการบันทึก เช่น "ค่าห้อง 3500" หรือเลือกรายการด่วนด้านล่าง';
 
   String get _activeUserId {
     if (AuthSession.userId == null) {
@@ -746,7 +746,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           _messages.add(
             Message(
               text:
-                  'ขออภัยครับ ฉันไม่เข้าใจรูปแบบของคุณ ลองป้อนใหม่ เช่น "ข้าวผัด 60" หรือ "+เงินเดือน 20000" นะครับ',
+                  'ไม่พบข้อมูลที่ระบุ กรุณาระบุในรูปแบบ [รายการ] [จำนวนเงิน] เช่น "ข้าวผัด 60" หรือ "+เงินเดือน 20000"',
               isUser: false,
               timestamp: DateTime.now(),
               isError: true,
@@ -969,7 +969,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
             final String replyText = hasBudget
                 ? _successMessage(msgType)
-                : 'ยังไม่พบรายการนี้ในแผนของคุณ ลองเพิ่มรายการไว้ก่อนนะครับ';
+                : 'ไม่พบแผนงบประมาณที่ตรงกับรายการนี้ ยอดเงินถูกบันทึกสำเร็จแล้ว';
 
             setState(() {
               _messages.add(
@@ -1549,11 +1549,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   String _successMessage(String type) {
     switch (type) {
       case 'income':
-        return 'บันทึกรายรับเรียบร้อยแล้วครับ';
+        return 'บันทึกยอดรายรับเข้าระบบสำเร็จเรียบร้อยแล้ว';
       case 'dream':
-        return 'บันทึกเงินออมเรียบร้อยแล้วครับ ความฝันเข้าใกล้อีกก้าวแล้วนะครับ';
+        return 'บันทึกยอดเงินออมเข้าระบบสำเร็จเรียบร้อยแล้ว';
       default:
-        return 'บันทึกรายจ่ายเรียบร้อยแล้วครับ';
+        return 'บันทึกยอดรายจ่ายเข้าระบบสำเร็จเรียบร้อยแล้ว';
     }
   }
 
@@ -1619,23 +1619,13 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFF2B1A0E), width: 1.8),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        isExpense ? '🐱💸' : '🐱🎯',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          color: Color(0xFF2B1A0E),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: Color(0xFF2B1A0E),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ),
@@ -1671,16 +1661,6 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     color: const Color(0xFFFF6B8B),
                   ),
                 ),
-              ),
-              const Positioned(
-                top: 8,
-                left: 12,
-                child: Text('🌸', style: TextStyle(fontSize: 16)),
-              ),
-              const Positioned(
-                bottom: 8,
-                right: 12,
-                child: Text('🌸', style: TextStyle(fontSize: 16)),
               ),
               badge,
             ],
@@ -1740,21 +1720,14 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           child: Stack(
             children: [
               Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('👑', style: TextStyle(fontSize: 16)),
-                    const SizedBox(height: 4),
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Color(0xFFD4AF37),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 2.0,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFFD4AF37),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2.0,
+                  ),
                 ),
               ),
               Positioned(
