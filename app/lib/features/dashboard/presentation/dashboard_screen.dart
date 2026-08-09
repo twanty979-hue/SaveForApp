@@ -430,6 +430,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _finishMainTutorial() {
+    setState(() {
+      _tutorialStep = -1;
+    });
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const PlanningHubScreen(
+          initialSection: PlanningSection.income,
+          startTutorial: true,
+        ),
+      ),
+    ).then((_) => _fetchHeaderTotals());
+  }
+
   Rect? _getWidgetRect(GlobalKey key) {
     try {
       final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
@@ -585,13 +600,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
               FilledButton(
                 onPressed: () {
-                  setState(() {
-                    if (_tutorialStep < totalSteps - 1) {
+                  if (_tutorialStep < totalSteps - 1) {
+                    setState(() {
                       _tutorialStep++;
-                    } else {
-                      _tutorialStep = -1;
-                    }
-                  });
+                    });
+                  } else {
+                    _finishMainTutorial();
+                  }
                 },
                 child: Text(
                   _tutorialStep == totalSteps - 1
@@ -612,13 +627,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ignoring: false,
             child: GestureDetector(
               onTap: () {
-                setState(() {
-                  if (_tutorialStep < totalSteps - 1) {
+                if (_tutorialStep < totalSteps - 1) {
+                  setState(() {
                     _tutorialStep++;
-                  } else {
-                    _tutorialStep = -1;
-                  }
-                });
+                  });
+                } else {
+                  _finishMainTutorial();
+                }
               },
               child: CustomPaint(
                 size: Size.infinite,

@@ -1,4 +1,5 @@
 import 'package:app/core/localization/app_material.dart';
+import 'dart:math' as math;
 
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_theme.dart';
@@ -12,10 +13,12 @@ enum PlanningSection { income, dream, expense }
 
 class PlanningHubScreen extends StatefulWidget {
   final PlanningSection initialSection;
+  final bool startTutorial;
 
   const PlanningHubScreen({
     super.key,
     this.initialSection = PlanningSection.dream,
+    this.startTutorial = false,
   });
 
   @override
@@ -24,6 +27,11 @@ class PlanningHubScreen extends StatefulWidget {
 
 class _PlanningHubScreenState extends State<PlanningHubScreen> {
   late PlanningSection _section;
+  final GlobalKey _tabIncomeKey = GlobalKey();
+  final GlobalKey _tabDreamKey = GlobalKey();
+  final GlobalKey _tabExpenseKey = GlobalKey();
+  final GlobalKey _editButtonKey = GlobalKey();
+  int _tutorialStep = -1;
   final ValueNotifier<int> _incomeAddRequest = ValueNotifier(0);
   final ValueNotifier<int> _dreamAddRequest = ValueNotifier(0);
   final ValueNotifier<int> _expenseAddRequest = ValueNotifier(0);
@@ -35,6 +43,15 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
     super.initState();
     _section = widget.initialSection;
     _pageController = PageController(initialPage: _section.index);
+    if (widget.startTutorial) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          if (mounted) {
+            _changeTutorialStep(0);
+          }
+        });
+      });
+    }
   }
 
   @override
@@ -168,6 +185,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                                   Row(
                                     children: [
                                       _SegmentButton(
+                                        key: _tabIncomeKey,
                                         label: context.tr('รายรับ', 'Income'),
                                         selected:
                                             _section == PlanningSection.income,
@@ -175,6 +193,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                                             _select(PlanningSection.income),
                                       ),
                                       _SegmentButton(
+                                        key: _tabDreamKey,
                                         label: context.tr('เงินออม', 'Savings'),
                                         selected:
                                             _section == PlanningSection.dream,
@@ -182,6 +201,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                                             _select(PlanningSection.dream),
                                       ),
                                       _SegmentButton(
+                                        key: _tabExpenseKey,
                                         label: context.tr(
                                           'รายจ่าย',
                                           'Expenses',
@@ -201,6 +221,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                       ),
                       const SizedBox(width: 8),
                       SizedBox(
+                        key: _editButtonKey,
                         width: 38,
                         height: 38,
                         child: Material(
@@ -270,6 +291,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
             ),
           ),
         ),
+        _buildTutorialOverlay(),
       ],
       ),
     );
@@ -297,6 +319,267 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
         return;
     }
   }
+
+  void _changeTutorialStep(int newStep) {
+    setState(() {
+      _tutorialStep = newStep;
+      if (_tutorialStep == 1) {
+        _select(PlanningSection.income);
+      } else if (_tutorialStep == 2) {
+        _select(PlanningSection.dream);
+      } else if (_tutorialStep == 3) {
+        _select(PlanningSection.expense);
+      }
+    });
+  }
+
+  Rect? _getWidgetRect(GlobalKey key) {
+    try {
+      final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
+      if (renderBox != null) {
+        final offset = renderBox.localToGlobal(Offset.zero);
+        return Rect.fromLTWH(
+          offset.dx,
+          offset.dy,
+          renderBox.size.width,
+          renderBox.size.height,
+        );
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Widget _buildTutorialOverlay() {
+    if (_tutorialStep < 0) return const SizedBox.shrink();
+
+    Rect? targetRect;
+    ShapeBorder shape = const CircleBorder();
+
+    switch (_tutorialStep) {
+      case 1:
+        targetRect = _getWidgetRect(_tabIncomeKey);
+        shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(16));
+        break;
+      case 2:
+        targetRect = _getWidgetRect(_tabDreamKey);
+        shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(16));
+        break;
+      case 3:
+        targetRect = _getWidgetRect(_tabExpenseKey);
+        shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(16));
+        break;
+      case 4:
+        targetRect = _getWidgetRect(_editButtonKey);
+        shape = const CircleBorder();
+        break;
+    }
+
+    final titles = [
+      context.tr('หน้าวางแผนการเงิน', 'Plans Screen'),
+      context.tr('แท็บรายรับประจำ', 'Recurring Income'),
+      context.tr('แท็บเป้าหมายเงินออม', 'Savings Goals (Dreams)'),
+      context.tr('แท็บรายจ่ายประจำ', 'Recurring Expenses'),
+      context.tr('สร้างและแก้ไขรายการ', 'Add & Edit Plans'),
+    ];
+
+    final descriptions = [
+      context.tr('ยินดีต้อนรับสู่หน้าแผนการเงิน! หน้านี้คือกระเป๋าหลักในการหักออม วางแผนค่าใช้จ่าย และเก็บเงินทำตามความฝันของคุณ', 'Welcome to the Plans screen! This is your control center to automate savings, schedule fixed bills, and track financial goals.'),
+      context.tr('ใช้สำหรับบันทึกช่องทางรายรับคงที่ต่อเดือนของคุณ (เช่น เงินเดือน, ค่าเช่าบ้าน) เพื่อเป็นยอดอ้างอิงในการคำนวณหักออมรายเดือน', 'Use this to record your fixed monthly income channels (e.g., salary, rent) to use as a baseline for monthly savings calculations.'),
+      context.tr('ใช้สำหรับตั้งเป้าหมายความฝันของคุณ (เช่น ซื้อบ้านใหม่, เที่ยวต่างประเทศ) โดยคุณสามารถออมเงินตามเป้าหมายผ่านการพิมพ์แชทคำว่า "ออม" ได้เลยครับ', 'Use this to set goals for your dreams (e.g., buying a home, traveling). You can save towards goals easily by chatting "save" or "ออม".'),
+      context.tr('ใช้สำหรับบันทึกรายการบิลจ่ายคงที่ประจำเดือน (เช่น ค่าหอพัก, ค่าน้ำไฟ, ค่าเน็ต) เพื่อให้ระบบจดจำยอดและส่งการเตือนก่อนถึงกำหนดจ่ายจริง', 'Use this to record fixed monthly bills (e.g., rent, utility bills, subscription fees) so the system remembers and reminds you before they are due.'),
+      context.tr('แตะที่ปุ่มดินสอด้านบนนี้เพื่อสร้างเป้าหมายรายรับ รายจ่าย หรือความฝันออมเงินใหม่ ๆ เพิ่มเติมได้ด้วยตนเองทันที', 'Tap this pencil button to manually create, edit, or remove your income streams, expense bills, or savings dreams instantly.'),
+    ];
+
+    final totalSteps = titles.length;
+
+    Widget cardChild = Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: context.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_tutorialStep + 1} / $totalSteps',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _tutorialStep = -1;
+                  });
+                },
+                child: Text(
+                  context.tr('ข้ามการแนะนำ', 'Skip'),
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            titles[_tutorialStep],
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: context.primaryTextColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            descriptions[_tutorialStep],
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.5,
+              color: context.secondaryTextColor,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (_tutorialStep > 0) ...[
+                OutlinedButton(
+                  onPressed: () => _changeTutorialStep(_tutorialStep - 1),
+                  child: Text(context.tr('ย้อนกลับ', 'Back')),
+                ),
+                const SizedBox(width: 10),
+              ],
+              FilledButton(
+                onPressed: () {
+                  if (_tutorialStep < totalSteps - 1) {
+                    _changeTutorialStep(_tutorialStep + 1);
+                  } else {
+                    setState(() {
+                      _tutorialStep = -1;
+                    });
+                    Navigator.pop(context);
+                  }
+                },
+                child: Text(
+                  _tutorialStep == totalSteps - 1
+                      ? context.tr('เสร็จสิ้นทัวร์', 'Finish')
+                      : context.tr('ถัดไป', 'Next'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          IgnorePointer(
+            ignoring: false,
+            child: GestureDetector(
+              onTap: () {
+                if (_tutorialStep < totalSteps - 1) {
+                  _changeTutorialStep(_tutorialStep + 1);
+                } else {
+                  setState(() {
+                    _tutorialStep = -1;
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              child: CustomPaint(
+                size: Size.infinite,
+                painter: TutorialBackdropPainter(
+                  targetRect: targetRect,
+                  shape: shape,
+                ),
+              ),
+            ),
+          ),
+          if (_tutorialStep == 0)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: cardChild,
+              ),
+            )
+          else
+            Positioned(
+              bottom: 120,
+              left: 24,
+              right: 24,
+              child: cardChild,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class TutorialBackdropPainter extends CustomPainter {
+  final Rect? targetRect;
+  final ShapeBorder shape;
+
+  TutorialBackdropPainter({this.targetRect, this.shape = const CircleBorder()});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.75);
+    
+    if (targetRect == null) {
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+      return;
+    }
+
+    canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+    
+    final maskPaint = Paint()
+      ..color = Colors.white
+      ..blendMode = BlendMode.clear;
+      
+    if (shape is CircleBorder) {
+      final center = targetRect!.center;
+      final radius = math.max(targetRect!.width, targetRect!.height) / 2.0;
+      canvas.drawCircle(center, radius + 8, maskPaint);
+    } else {
+      final rrect = RRect.fromRectAndRadius(
+        targetRect!.inflate(8),
+        const Radius.circular(16),
+      );
+      canvas.drawRRect(rrect, maskPaint);
+    }
+    
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant TutorialBackdropPainter oldDelegate) {
+    return oldDelegate.targetRect != targetRect || oldDelegate.shape != shape;
+  }
 }
 
 class _SegmentButton extends StatelessWidget {
@@ -305,6 +588,7 @@ class _SegmentButton extends StatelessWidget {
   final VoidCallback onTap;
 
   const _SegmentButton({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,
