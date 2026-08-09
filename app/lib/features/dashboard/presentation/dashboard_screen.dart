@@ -365,6 +365,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                         ),
+                      ),
                         const SizedBox(width: 6),
                         PopupMenuButton<String>(
                           tooltip: context.tr('เมนูหน้าหลัก', 'Home menu'),
