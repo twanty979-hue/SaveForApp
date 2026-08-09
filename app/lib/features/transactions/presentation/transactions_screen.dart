@@ -43,8 +43,14 @@ class QuickSuggestion {
 class TransactionsScreen extends StatefulWidget {
   final double topPadding;
   final GlobalKey? inputKey;
+  final ValueNotifier<DateTime?>? dateFilter;
 
-  const TransactionsScreen({super.key, this.topPadding = 16, this.inputKey});
+  const TransactionsScreen({
+    super.key,
+    this.topPadding = 16,
+    this.inputKey,
+    this.dateFilter,
+  });
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -56,6 +62,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
+  late ValueNotifier<DateTime?> _effectiveDateFilter;
   final ApiClient _apiClient = ApiClient();
   final AudioPlayer _aiReplyPlayer = AudioPlayer();
   bool _isLoading = false;
@@ -77,6 +84,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _effectiveDateFilter = widget.dateFilter ?? ValueNotifier<DateTime?>(null);
+    _effectiveDateFilter.addListener(_handleDateFilterChanged);
     _focusNode.addListener(_handleInputFocusChange);
     _inputController.addListener(_handleInputChanged);
     _initData();
@@ -86,6 +95,19 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     _addIntroMessage();
     await _loadQuickSuggestions();
     await _loadPastTransactions();
+  }
+
+  void _handleDateFilterChanged() {
+    if (mounted) {
+      _loadPastTransactions();
+    }
+  }
+
+  String _monthName(int month) {
+    return const [
+      'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+      'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+    ][month - 1];
   }
 
   void _addIntroMessage() {
@@ -103,6 +125,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _effectiveDateFilter.removeListener(_handleDateFilterChanged);
+    if (widget.dateFilter == null) {
+      _effectiveDateFilter.dispose();
+    }
     _focusNode.removeListener(_handleInputFocusChange);
     _inputController.removeListener(_handleInputChanged);
     _inputController.dispose();
@@ -457,6 +483,17 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               final dateStr = tx['transaction_date']?.toString() ?? '';
               final timestamp = DateTime.tryParse(dateStr) ?? DateTime.now();
               final type = tx['type']?.toString() ?? 'expense';
+
+              // Apply date filter if active
+              if (_effectiveDateFilter.value != null) {
+                final filter = _effectiveDateFilter.value!;
+                final txLocalDate = timestamp.toLocal();
+                if (txLocalDate.year != filter.year ||
+                    txLocalDate.month != filter.month ||
+                    txLocalDate.day != filter.day) {
+                  continue; // Skip items that don't match the active date filter
+                }
+              }
 
               String displayName = name;
               String category = 'รายจ่าย';
@@ -869,7 +906,22 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             'type': type,
             'amount': amount,
             'note': finalNote,
-            'transaction_date': DateTime.now().toUtc().toIso8601String(),
+            'transaction_date': () {
+              if (_effectiveDateFilter.value != null) {
+                final now = DateTime.now();
+                final filter = _effectiveDateFilter.value!;
+                final merged = DateTime(
+                  filter.year,
+                  filter.month,
+                  filter.day,
+                  now.hour,
+                  now.minute,
+                  now.second,
+                );
+                return merged.toUtc().toIso8601String();
+              }
+              return DateTime.now().toUtc().toIso8601String();
+            }(),
           };
           if (fixedExpenseId != null) {
             body['fixed_expense_id'] = fixedExpenseId;
@@ -1309,6 +1361,55 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           ),
           Column(
             children: [
+              ValueListenableBuilder<DateTime?>(
+                valueListenable: _effectiveDateFilter,
+                builder: (context, dateFilterVal, _) {
+                  if (dateFilterVal == null) return const SizedBox.shrink();
+                  final formattedDate = '${dateFilterVal.day} ${_monthName(dateFilterVal.month)} ${dateFilterVal.year + 543}';
+                  return Container(
+                    margin: EdgeInsets.fromLTRB(16, widget.topPadding + 8, 16, 0),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_outlined,
+                          size: 14,
+                          color: AppTheme.primaryColor,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            context.tr(
+                              'จดบันทึกของวันที่: $formattedDate',
+                              'Recording for: $formattedDate',
+                            ),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            _effectiveDateFilter.value = null;
+                          },
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 16,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
               Expanded(
                 child: NotificationListener<UserScrollNotification>(
                   onNotification: _handleUserScroll,
@@ -1316,7 +1417,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     controller: _scrollController,
                     padding: EdgeInsets.fromLTRB(
                       16,
-                      widget.topPadding,
+                      _effectiveDateFilter.value != null ? 8 : widget.topPadding,
                       16,
                       _quickSuggestions.isNotEmpty ? 58 : 16,
                     ),

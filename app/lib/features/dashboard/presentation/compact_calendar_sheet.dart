@@ -7,7 +7,9 @@ import '../../../core/theme/app_theme.dart';
 import '../../auth/domain/auth_session.dart';
 
 class CompactCalendarSheet extends StatefulWidget {
-  const CompactCalendarSheet({super.key});
+  final void Function(DateTime)? onDateSelected;
+
+  const CompactCalendarSheet({super.key, this.onDateSelected});
 
   @override
   State<CompactCalendarSheet> createState() => _CompactCalendarSheetState();
@@ -375,6 +377,9 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
       _month = date.month;
       _day = date.day;
     });
+    if (widget.onDateSelected != null) {
+      widget.onDateSelected!(date);
+    }
   }
 
   String _monthName(int month) => const [

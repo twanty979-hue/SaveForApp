@@ -39,6 +39,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _todaySpent = 0.0;
   double _monthSpent = 0.0;
   String? _avatarUrl = AuthSession.avatarUrl;
+  final ValueNotifier<DateTime?> _chatDateFilter = ValueNotifier<DateTime?>(null);
 
   @override
   void initState() {
@@ -122,7 +123,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return const CompactCalendarSheet();
+        return CompactCalendarSheet(
+          onDateSelected: (date) {
+            _chatDateFilter.value = date;
+            Navigator.pop(context); // Close calendar sheet immediately
+          },
+        );
       },
     );
   }
@@ -184,7 +190,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Stack(
                 children: [
                 Positioned.fill(
-                  child: TransactionsScreen(topPadding: 86, inputKey: _inputKey),
+                  child: TransactionsScreen(
+                    topPadding: 86,
+                    inputKey: _inputKey,
+                    dateFilter: _chatDateFilter,
+                  ),
                 ),
                 Positioned(
                   top: 10,
