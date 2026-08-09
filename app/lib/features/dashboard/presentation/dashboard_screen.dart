@@ -49,6 +49,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     NotificationService.instance.registerDevice();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndForceMonthlyExpense();
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) {
+          setState(() {
+            _tutorialStep = 0;
+          });
+        }
+      });
     });
   }
 
@@ -417,7 +424,233 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ),
+        _buildTutorialOverlay(),
       ],
+      ),
+    );
+  }
+
+  Rect? _getWidgetRect(GlobalKey key) {
+    try {
+      final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
+      if (renderBox != null) {
+        final offset = renderBox.localToGlobal(Offset.zero);
+        return Rect.fromLTWH(
+          offset.dx,
+          offset.dy,
+          renderBox.size.width,
+          renderBox.size.height,
+        );
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Widget _buildTutorialOverlay() {
+    if (_tutorialStep < 0) return const SizedBox.shrink();
+
+    Rect? targetRect;
+    ShapeBorder shape = const CircleBorder();
+    
+    switch (_tutorialStep) {
+      case 1:
+        targetRect = _getWidgetRect(_profileKey);
+        shape = const CircleBorder();
+        break;
+      case 2:
+        targetRect = _getWidgetRect(_balanceKey);
+        shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+        break;
+      case 3:
+        targetRect = _getWidgetRect(_calendarKey);
+        shape = const CircleBorder();
+        break;
+      case 4:
+        targetRect = _getWidgetRect(_notificationKey);
+        shape = const CircleBorder();
+        break;
+      case 5:
+        targetRect = _getWidgetRect(_homeMenuKey);
+        shape = const CircleBorder();
+        break;
+      case 6:
+        targetRect = _getWidgetRect(_inputKey);
+        shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(22));
+        break;
+    }
+
+    final titles = [
+      context.tr('ยินดีต้อนรับสู่ SaveFor', 'Welcome to SaveFor'),
+      context.tr('โปรไฟล์และการตั้งค่า', 'Profile & Settings'),
+      context.tr('สรุปยอดเงินวันนี้', 'Today\'s Summary'),
+      context.tr('ปฏิทินบันทึกย้อนหลัง', 'Daily Calendar'),
+      context.tr('ศูนย์แจ้งเตือน', 'Notification Center'),
+      context.tr('เมนูทางเลือกหลัก', 'Main Home Menu'),
+      context.tr('พิมพ์บันทึกธุรกรรมด่วน', 'AI Fast Recording'),
+    ];
+
+    final descriptions = [
+      context.tr('ขอแนะนำฟีเจอร์การใช้งานหลักที่จะช่วยให้คุณออมเงินและบันทึกรายรับรายจ่ายได้อย่างชาญฉลาดและรวดเร็ว', 'Let\'s take a quick tour to learn the main features that help you save and track transactions smartly.'),
+      context.tr('แตะรูปโปรไฟล์ที่นี่เพื่อเข้าสู่การตั้งค่าบัญชี เปลี่ยนรหัสผ่าน จัดการความเป็นส่วนตัว หรือเลือกเปลี่ยนธีมลวดลายสวยงามที่คุณชอบ', 'Tap your profile here to access settings, change password, manage privacy, or customize your app themes.'),
+      context.tr('ส่วนนี้จะแสดงยอดสรุปรายจ่ายของวันนี้ และรายจ่ายทั้งหมดในเดือนนี้ เพื่อช่วยให้คุณควบคุมการเงินได้ทันท่วงที', 'This section displays your total expenses for today and this month to help you stay on track instantly.'),
+      context.tr('แตะไอคอนนี้เพื่อเปิดดูรายการย้อนหลังในแต่ละวัน แก้ไขรายการที่บันทึกไปแล้ว หรือคลิกบันทึกรายการย้อนหลัง', 'Tap this icon to view daily history, edit past transactions, or manually log retroactive entries.'),
+      context.tr('รับข้อมูลอัปเดต ข่าวสาร หรือข้อความสำคัญเกี่ยวกับบัญชีและการออมเงินของคุณได้จากหน้าต่างนี้', 'Get updates, announcements, or warning alerts regarding your budget and savings plan here.'),
+      context.tr('เข้าสู่แดชบอร์ดดูสรุปแผนภูมิการเงิน วิเคราะห์รายจ่าย หรือจัดการรายการวางแผนรายรับ-รายจ่ายประจำเดือน', 'Switch to the dashboard to view charts, analyze expenses, or manage monthly recurring plans.'),
+      context.tr('พิมพ์ข้อความบันทึกง่าย ๆ เช่น "ค่าข้าว 50" หรือ "+เงินเดือน 20000" เพื่อบันทึกทันที หรือคลิกไอคอนบวกเพื่อเลือกรายการแนะนำด่วน', 'Type quick statements like "Food 60" or "+Salary 20000" to log instantly, or tap the plus icon for shortcuts.'),
+    ];
+
+    final totalSteps = titles.length;
+
+    Widget cardChild = Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: context.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_tutorialStep + 1} / $totalSteps',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _tutorialStep = -1;
+                  });
+                },
+                child: Text(
+                  context.tr('ข้ามการแนะนำ', 'Skip'),
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            titles[_tutorialStep],
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: context.primaryTextColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            descriptions[_tutorialStep],
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.5,
+              color: context.secondaryTextColor,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (_tutorialStep > 0) ...[
+                OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _tutorialStep--;
+                    });
+                  },
+                  child: Text(context.tr('ย้อนกลับ', 'Back')),
+                ),
+                const SizedBox(width: 10),
+              ],
+              FilledButton(
+                onPressed: () {
+                  setState(() {
+                    if (_tutorialStep < totalSteps - 1) {
+                      _tutorialStep++;
+                    } else {
+                      _tutorialStep = -1;
+                    }
+                  });
+                },
+                child: Text(
+                  _tutorialStep == totalSteps - 1
+                      ? context.tr('เข้าใจแล้ว', 'Finish')
+                      : context.tr('ถัดไป', 'Next'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          IgnorePointer(
+            ignoring: false,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (_tutorialStep < totalSteps - 1) {
+                    _tutorialStep++;
+                  } else {
+                    _tutorialStep = -1;
+                  }
+                });
+              },
+              child: CustomPaint(
+                size: Size.infinite,
+                painter: TutorialBackdropPainter(
+                  targetRect: targetRect,
+                  shape: shape,
+                ),
+              ),
+            ),
+          ),
+          if (_tutorialStep == 0)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: cardChild,
+              ),
+            )
+          else if (_tutorialStep == 6)
+            Positioned(
+              top: 180,
+              left: 24,
+              right: 24,
+              child: cardChild,
+            )
+          else
+            Positioned(
+              bottom: 120,
+              left: 24,
+              right: 24,
+              child: cardChild,
+            ),
+        ],
       ),
     );
   }
