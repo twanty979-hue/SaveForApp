@@ -9,17 +9,114 @@ class FloatingBackground extends StatefulWidget {
   State<FloatingBackground> createState() => _FloatingBackgroundState();
 }
 
+class _Floater {
+  final IconData icon;
+  final double x; // Horizontal position fraction (0.0 to 1.0)
+  final double relativeY; // Initial vertical position fraction (0.0 to 1.0)
+  final double speed; // Speed multiplier (1.0 means it loops once per cycle)
+  final double size;
+  final double opacity;
+  final double rotationPhase;
+
+  const _Floater({
+    required this.icon,
+    required this.x,
+    required this.relativeY,
+    required this.speed,
+    required this.size,
+    required this.opacity,
+    required this.rotationPhase,
+  });
+}
+
 class _FloatingBackgroundState extends State<FloatingBackground>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
+  // Static list of floating icons with different positions, speeds, and sizes
+  static const List<_Floater> _floaters = [
+    _Floater(
+      icon: Icons.account_balance_wallet_outlined,
+      x: 0.15,
+      relativeY: 0.8,
+      speed: 0.6,
+      size: 70,
+      opacity: 0.025,
+      rotationPhase: 0.2,
+    ),
+    _Floater(
+      icon: Icons.savings_outlined,
+      x: 0.75,
+      relativeY: 0.4,
+      speed: 0.7,
+      size: 80,
+      opacity: 0.03,
+      rotationPhase: 1.5,
+    ),
+    _Floater(
+      icon: Icons.credit_card_outlined,
+      x: 0.35,
+      relativeY: 0.1,
+      speed: 0.55,
+      size: 65,
+      opacity: 0.02,
+      rotationPhase: 0.8,
+    ),
+    _Floater(
+      icon: Icons.diamond_outlined,
+      x: 0.85,
+      relativeY: 0.9,
+      speed: 0.8,
+      size: 55,
+      opacity: 0.035,
+      rotationPhase: 2.3,
+    ),
+    _Floater(
+      icon: Icons.trending_up_outlined,
+      x: 0.55,
+      relativeY: 0.6,
+      speed: 0.65,
+      size: 75,
+      opacity: 0.025,
+      rotationPhase: 3.1,
+    ),
+    _Floater(
+      icon: Icons.payments_outlined,
+      x: 0.08,
+      relativeY: 0.3,
+      speed: 0.5,
+      size: 60,
+      opacity: 0.02,
+      rotationPhase: 1.1,
+    ),
+    _Floater(
+      icon: Icons.storefront_outlined,
+      x: 0.65,
+      relativeY: 0.25,
+      speed: 0.75,
+      size: 70,
+      opacity: 0.028,
+      rotationPhase: 0.5,
+    ),
+    _Floater(
+      icon: Icons.shopping_bag_outlined,
+      x: 0.48,
+      relativeY: 0.95,
+      speed: 0.6,
+      size: 65,
+      opacity: 0.022,
+      rotationPhase: 1.9,
+    ),
+  ];
+
   @override
   void initState() {
     super.initState();
+    // Continuous loop without reversing
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 10),
-    )..repeat(reverse: true);
+      duration: const Duration(seconds: 25),
+    )..repeat();
   }
 
   @override
@@ -30,90 +127,48 @@ class _FloatingBackgroundState extends State<FloatingBackground>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final val = _controller.value;
-        return Stack(
-          children: [
-            // ไอคอนเพชร (ขยับขึ้นลงและเอียงเล็กน้อย)
-            Positioned(
-              top: 100 + (val * 15),
-              right: 40 + (val * 5),
-              child: Transform.rotate(
-                angle: val * 0.2,
-                child: const Opacity(
-                  opacity: 0.03,
-                  child: Icon(
-                    Icons.diamond,
-                    size: 80,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-              ),
-            ),
-            // ไอคอนรถ (ขยับเยื้องซ้ายขวา)
-            Positioned(
-              top: 250 - (val * 10),
-              left: 30 + (val * 15),
-              child: const Opacity(
-                opacity: 0.03,
-                child: Icon(
-                  Icons.directions_car,
-                  size: 80,
-                  color: AppTheme.primaryColor,
-                ),
-              ),
-            ),
-            // ไอคอนกระเป๋าตังค์ (หมุนรอบจุดศูนย์กลางช้าๆ)
-            Positioned.fill(
-              child: Center(
-                child: Transform.rotate(
-                  angle: val * 2 * math.pi * 0.04,
-                  child: const Opacity(
-                    opacity: 0.02,
-                    child: Icon(
-                      Icons.account_balance_wallet,
-                      size: 120,
-                      color: AppTheme.primaryColor,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+
+        return AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final progress = _controller.value;
+
+            return Stack(
+              clipBehavior: Clip.hardEdge,
+              children: _floaters.map((floater) {
+                // Calculate y coordinate floating upwards (loops from 1.0 to 0.0)
+                double currentYRelative = floater.relativeY - (progress * floater.speed);
+                // Wrap around between 0.0 and 1.0
+                currentYRelative = currentYRelative % 1.0;
+
+                final double y = currentYRelative * (height + floater.size) - floater.size;
+                final double x = floater.x * (width - floater.size);
+
+                // Add gentle rotation speed matching the movement
+                final double rotation = progress * 2 * math.pi * 0.15 + floater.rotationPhase;
+
+                return Positioned(
+                  left: x,
+                  top: y,
+                  child: Transform.rotate(
+                    angle: rotation,
+                    child: Opacity(
+                      opacity: floater.opacity,
+                      child: Icon(
+                        floater.icon,
+                        size: floater.size,
+                        color: AppTheme.primaryColor,
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ),
-            // ไอคอนบ้าน (ขยับโยกเยกเบาๆ)
-            Positioned(
-              bottom: 300 + (val * 12),
-              right: 30 - (val * 8),
-              child: Transform.rotate(
-                angle: -val * 0.1,
-                child: const Opacity(
-                  opacity: 0.03,
-                  child: Icon(
-                    Icons.home,
-                    size: 90,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-              ),
-            ),
-            // ไอคอนบัตรเครดิต (ขยับลอยละล่อง)
-            Positioned(
-              bottom: 120 - (val * 12),
-              left: 40 + (val * 10),
-              child: Transform.rotate(
-                angle: val * 0.15,
-                child: const Opacity(
-                  opacity: 0.03,
-                  child: Icon(
-                    Icons.credit_card,
-                    size: 75,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-              ),
-            ),
-          ],
+                );
+              }).toList(),
+            );
+          },
         );
       },
     );
