@@ -280,7 +280,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                               ),
                               const SizedBox(height: 3),
-                              Row(
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 2,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   Text(
                                     '${context.tr('วันนี้', 'Today')} ฿${_todaySpent.toStringAsFixed(0)}',
@@ -290,31 +293,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       color: Color(0xFFEF4444),
                                     ),
                                   ),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                    ),
-                                    child: SizedBox(
-                                      width: 3,
-                                      height: 3,
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          color: Color(0xFFCBD5E1),
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Flexible(
-                                    child: Text(
-                                      '${context.tr('เดือนนี้', 'This month')} ฿${_monthSpent.toStringAsFixed(0)}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF64748B),
-                                      ),
+                                  Text(
+                                    '${context.tr('เดือนนี้', 'This month')} ฿${_monthSpent.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF64748B),
                                     ),
                                   ),
                                 ],
