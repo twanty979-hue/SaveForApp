@@ -15,18 +15,137 @@ class HelpSupportScreen extends StatefulWidget {
 
 class _HelpSupportScreenState extends State<HelpSupportScreen> {
   
-  void _showMockDialog(String title) {
-    showDialog(
+  void _showUserManual() {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: Text(context.tr('ฟีเจอร์นี้อยู่ระหว่างการพัฒนา', 'Feature in development')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(context.tr('ตกลง', 'OK')),
+      isScrollControlled: true,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                context.tr('คู่มือการใช้งาน', 'User Manual'),
+                style: TextStyle(
+                  color: context.primaryTextColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                context.tr(
+                  '1. บันทึกรายการด่วน: พิมพ์ข้อความในหน้าแชท เช่น "อาหาร 60" หรือ "+เงินเดือน 20000" เพื่อบันทึกรายรับ-รายจ่ายทันที\n\n'
+                  '2. กำหนดงบประมาณ: วางแผนรายรับและรายจ่ายที่เกิดขึ้นเป็นประจำทุกเดือนในแท็บ "รายจ่ายประจำ" และ "รายรับประจำ" เพื่อติดตามความเคลื่อนไหว\n\n'
+                  '3. ตั้งเป้าหมายออมเงิน: สร้างเป้าหมายที่ต้องการสะสมในแท็บ "เป้าหมายการออม" เพื่อหยอดกระปุกและดูความก้าวหน้าทีละขั้นตอน',
+                  '1. Fast Recording: Type transaction statements in the chat box, e.g. "Lunch 60" or "+Salary 20000", to save items instantly.\n\n'
+                  '2. Monthly Budgets: Plan your recurring monthly income and expenses in the "Recurring" tabs to track progress.\n\n'
+                  '3. Savings Goals: Create items you want to save for in the "Savings Goals" tab to manage targets step-by-step.',
+                ),
+                style: TextStyle(color: context.secondaryTextColor, fontSize: 13, height: 1.5),
+              ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  void _showFeatureSuggestion() {
+    final controller = TextEditingController();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              14,
+              20,
+              MediaQuery.viewInsetsOf(context).bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  context.tr('เสนอแนะฟีเจอร์', 'Suggest a Feature'),
+                  style: TextStyle(
+                    color: context.primaryTextColor,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: context.tr(
+                      'พิมพ์ฟีเจอร์ที่คุณต้องการแนะนำที่นี่...',
+                      'Type features you would like to suggest here...',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: FilledButton(
+                    onPressed: () {
+                      if (controller.text.trim().isEmpty) return;
+                      Navigator.pop(sheetContext);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            context.tr(
+                              'ขอบคุณสำหรับข้อเสนอแนะ! ทีมงานได้รับข้อมูลแล้ว',
+                              'Thank you for your suggestion! We have received it.',
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    child: Text(context.tr('ส่งข้อเสนอแนะ', 'Submit Suggestion')),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -70,7 +189,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     'เรียนรู้วิธีการใช้งานแอปพลิเคชัน',
                     'Learn how to use the app',
                   ),
-                  onTap: () => _showMockDialog(context.tr('คู่มือการใช้งาน', 'User Manual')),
+                  onTap: _showUserManual,
                 ),
                 const SizedBox(height: 16),
                 _SectionLabel(context.tr('ติดต่อและรายงาน', 'Contact & Feedback')),
@@ -91,7 +210,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     'แจ้งปัญหาการใช้งานหรือแอปพลิเคชันขัดข้อง',
                     'Report a bug or crash',
                   ),
-                  onTap: () => _showMockDialog(context.tr('รายงานปัญหา', 'Report a Bug')),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ContactAdminScreen())),
                 ),
                 _SettingsTile(
                   icon: Icons.lightbulb_rounded,
@@ -100,7 +219,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     'บอกเราว่าคุณอยากได้ฟีเจอร์อะไรเพิ่ม',
                     'Tell us what features you want',
                   ),
-                  onTap: () => _showMockDialog(context.tr('เสนอแนะฟีเจอร์', 'Suggest a Feature')),
+                  onTap: _showFeatureSuggestion,
                 ),
               ],
             ),
