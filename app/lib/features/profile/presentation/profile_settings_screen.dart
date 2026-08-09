@@ -342,36 +342,43 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 10),
               for (final style in ThemeStyle.values)
-                ListTile(
-                  title: Text(_themeStyleName(style)),
-                  leading: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: _getThemeStylePreviewColor(style),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppSettings.themeStyle.value == style
-                            ? AppTheme.primaryColor
-                            : const Color(0xFFCBD5E1),
-                        width: 1.5,
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    leading: _buildThemeAvatar(style),
+                    title: Text(
+                      _themeStyleName(style),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: context.primaryTextColor,
                       ),
                     ),
+                    subtitle: Text(
+                      _themeStyleSubtitle(style),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: context.secondaryTextColor,
+                      ),
+                    ),
+                    trailing: AppSettings.themeStyle.value == style
+                        ? Icon(
+                            Icons.check_circle,
+                            color: Theme.of(context).primaryColor,
+                            size: 24,
+                          )
+                        : Icon(
+                            Icons.circle_outlined,
+                            color: context.borderColor,
+                            size: 24,
+                          ),
+                    onTap: () async {
+                      await AppSettings.setThemeStyle(style);
+                      if (mounted) setState(() {});
+                      if (sheetContext.mounted) Navigator.pop(sheetContext);
+                    },
                   ),
-                  trailing: AppSettings.themeStyle.value == style
-                      ? const Icon(
-                          Icons.check_circle,
-                          color: AppTheme.primaryColor,
-                        )
-                      : const Icon(
-                          Icons.circle_outlined,
-                          color: Color(0xFFCBD5E1),
-                        ),
-                  onTap: () async {
-                    await AppSettings.setThemeStyle(style);
-                    if (mounted) setState(() {});
-                    if (sheetContext.mounted) Navigator.pop(sheetContext);
-                  },
                 ),
             ],
           ),
@@ -395,20 +402,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     }
   }
 
-  Color _getThemeStylePreviewColor(ThemeStyle style) {
-    switch (style) {
-      case ThemeStyle.emerald:
-        return const Color(0xFF00A88F);
-      case ThemeStyle.cartoon:
-        return const Color(0xFFFF9233);
-      case ThemeStyle.sakura:
-        return const Color(0xFFFF8FA3);
-      case ThemeStyle.cyberpunk:
-        return const Color(0xFFFF007F);
-      case ThemeStyle.luxury:
-        return const Color(0xFFD4AF37);
-    }
-  }
+
 
   Future<void> _showLanguageSettings() async {
     await showModalBottomSheet<void>(
@@ -807,6 +801,140 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     );
   }
 
+  Widget _buildThemeAvatar(ThemeStyle style) {
+    switch (style) {
+      case ThemeStyle.emerald:
+        return Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              colors: [Color(0xFF00A88F), Color(0xFF10B981)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: Colors.teal.shade200, width: 1.5),
+          ),
+          child: const Center(
+            child: Icon(Icons.account_balance_wallet_outlined, color: Colors.white, size: 20),
+          ),
+        );
+      case ThemeStyle.cartoon:
+        return Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFFFFE3CC),
+            border: Border.all(color: const Color(0xFF2B1A0E), width: 2.0),
+          ),
+          child: ClipOval(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _CheckeredAvatarPainter(),
+                  ),
+                ),
+                const Center(
+                  child: Text('🐾', style: TextStyle(fontSize: 16)),
+                ),
+              ],
+            ),
+          ),
+        );
+      case ThemeStyle.sakura:
+        return Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFFD1DC), Color(0xFFFFB5C2)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: const Color(0xFFFFE3E7), width: 1.5),
+          ),
+          child: const Center(
+            child: Text('🌸', style: TextStyle(fontSize: 16)),
+          ),
+        );
+      case ThemeStyle.cyberpunk:
+        return Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF140D24),
+            border: Border.all(color: const Color(0xFF00FFF0), width: 2.0),
+          ),
+          child: ClipOval(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _CyberAvatarPainter(),
+                  ),
+                ),
+                const Center(
+                  child: Text('⚡', style: TextStyle(fontSize: 14)),
+                ),
+              ],
+            ),
+          ),
+        );
+      case ThemeStyle.luxury:
+        return Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: const Color(0xFFD4AF37), width: 1.8),
+          ),
+          child: const Center(
+            child: Text('👑', style: TextStyle(fontSize: 14)),
+          ),
+        );
+    }
+  }
+
+  String _themeStyleSubtitle(ThemeStyle style) {
+    switch (style) {
+      case ThemeStyle.emerald:
+        return context.tr(
+          'สไตล์ดั้งเดิม เรียบหรู สะอาดตา',
+          'Classic slate & clean teal financial theme',
+        );
+      case ThemeStyle.cartoon:
+        return context.tr(
+          'การ์ตูนแมวส้มพาสเทล ขอบคอมมิคหนา',
+          'Cozy orange cat & neobrutalism cartoon',
+        );
+      case ThemeStyle.sakura:
+        return context.tr(
+          'ซากุระพาสเทล ละมุนละไมขอบโค้งมน',
+          'Soft cherry blossom pastel & round cards',
+        );
+      case ThemeStyle.cyberpunk:
+        return context.tr(
+          'นีออนสะท้อนแสง มืดนีออนสไตล์ไซไฟ',
+          'Neon glow & synthwave futuristic console',
+        );
+      case ThemeStyle.luxury:
+        return context.tr(
+          'ดำหรูหรา ตัดทองคำแท้พรีเมียม',
+          'Obsidian dark & premium brushed gold luxury',
+        );
+    }
+  }
+
   Widget _buildInitialAvatar() {
     return Center(
       child: Text(
@@ -965,6 +1093,41 @@ class _SettingsTile extends StatelessWidget {
       ),
     );
   }
+}
+
+
+
+class _CheckeredAvatarPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFFF9233).withValues(alpha: 0.4)
+      ..style = PaintingStyle.fill;
+    const double step = 8.0;
+    for (double x = 0; x < size.width; x += step * 2) {
+      for (double y = 0; y < size.height; y += step * 2) {
+        canvas.drawRect(Rect.fromLTWH(x, y, step, step), paint);
+        canvas.drawRect(Rect.fromLTWH(x + step, y + step, step, step), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CyberAvatarPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFFF007F).withValues(alpha: 0.4)
+      ..strokeWidth = 2.0;
+    canvas.drawLine(const Offset(0, 30), const Offset(30, 0), paint);
+    canvas.drawLine(const Offset(10, 44), const Offset(44, 10), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _SheetHandle extends StatelessWidget {
