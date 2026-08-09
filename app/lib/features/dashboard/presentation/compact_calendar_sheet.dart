@@ -639,23 +639,6 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                 : const Color(0xFF64748B),
           ),
         ),
-        const SizedBox(width: 8),
-        InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => _showTransactionFormModal(),
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: const BoxDecoration(
-              color: AppTheme.primaryColor,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.add,
-              size: 16,
-              color: Colors.white,
-            ),
-          ),
-        ),
       ],
     );
   }
