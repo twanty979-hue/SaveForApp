@@ -319,6 +319,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   Future<void> _showThemeStyleSettings() async {
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: context.surfaceColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
@@ -326,11 +327,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, setSheetState) => Padding(
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _SheetHandle(),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _SheetHandle(),
               const SizedBox(height: 18),
               Text(
                 context.tr('เลือกสไตล์ธีม', 'Select Theme Style'),
@@ -382,6 +384,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 ),
             ],
           ),
+         ),
         ),
       ),
     );
