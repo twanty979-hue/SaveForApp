@@ -992,6 +992,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     'budget': budget,
                     'totalAccumulated': totalAccumulated,
                     'msgType': msgType,
+                    'icon': _getIconForTransaction(name, category, msgType, matchedSuggestion),
                   },
                 ),
               );
@@ -1036,6 +1037,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             'budget': 0.0,
             'totalAccumulated': amount,
             'msgType': msgType,
+            'icon': _getIconForTransaction(name, category, msgType, null),
           },
         ),
       );
@@ -1139,7 +1141,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   style,
                   category,
                   msgType,
-                  headerIcon,
+                  card['icon'] ?? headerIcon,
                   categoryColor,
                   headerBgColor,
                   hasBudget,
@@ -1561,7 +1563,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     ThemeStyle style,
     String category,
     String msgType,
-    IconData headerIcon,
+    dynamic itemIcon,
     Color categoryColor,
     Color headerBgColor,
     bool hasBudget,
@@ -1612,21 +1614,34 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ),
               ),
               Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF9233),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2B1A0E), width: 1.8),
-                  ),
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      color: Color(0xFF2B1A0E),
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF9233),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFF2B1A0E), width: 1.8),
+                      ),
+                      child: itemIcon is Widget
+                          ? SizedBox(width: 24, height: 24, child: itemIcon)
+                          : Icon(
+                              itemIcon as IconData,
+                              size: 24,
+                              color: const Color(0xFF2B1A0E),
+                            ),
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Color(0xFF2B1A0E),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               badge,
@@ -1655,11 +1670,13 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     color: Colors.white.withValues(alpha: 0.8),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    headerIcon,
-                    size: 34,
-                    color: const Color(0xFFFF6B8B),
-                  ),
+                  child: itemIcon is Widget
+                      ? itemIcon
+                      : Icon(
+                          itemIcon as IconData,
+                          size: 34,
+                          color: const Color(0xFFFF6B8B),
+                        ),
                 ),
               ),
               badge,
@@ -1683,21 +1700,35 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ),
               ),
               Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1F0D3D),
-                    border: Border.all(color: const Color(0xFF00FFF0), width: 1.5),
-                  ),
-                  child: Text(
-                    '[ $title ]',
-                    style: const TextStyle(
-                      color: Color(0xFF00FFF0),
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.5,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1F0D3D),
+                        border: Border.all(color: const Color(0xFF00FFF0), width: 1.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: itemIcon is Widget
+                          ? SizedBox(width: 24, height: 24, child: itemIcon)
+                          : Icon(
+                              itemIcon as IconData,
+                              size: 24,
+                              color: const Color(0xFF00FFF0),
+                            ),
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '[ $title ]',
+                      style: const TextStyle(
+                        color: Color(0xFF00FFF0),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               badge,
@@ -1720,14 +1751,27 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           child: Stack(
             children: [
               Center(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xFFD4AF37),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2.0,
-                  ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    itemIcon is Widget
+                        ? SizedBox(width: 28, height: 28, child: itemIcon)
+                        : Icon(
+                            itemIcon as IconData,
+                            size: 28,
+                            color: const Color(0xFFD4AF37),
+                          ),
+                    const SizedBox(height: 6),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Color(0xFFD4AF37),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               Positioned(
@@ -1758,16 +1802,58 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           child: Stack(
             children: [
               Center(
-                child: Icon(
-                  headerIcon,
-                  size: 40,
-                  color: categoryColor.withValues(alpha: 0.8),
-                ),
+                child: itemIcon is Widget
+                    ? itemIcon
+                    : Icon(
+                        itemIcon as IconData,
+                        size: 40,
+                        color: categoryColor.withValues(alpha: 0.8),
+                      ),
               ),
               badge,
             ],
           ),
         );
+    }
+  }
+
+  dynamic _getIconForTransaction(
+    String name,
+    String category,
+    String msgType,
+    Map<String, dynamic>? matchedSuggestion,
+  ) {
+    if (matchedSuggestion != null) {
+      if (msgType == 'dream') {
+        final iconKey = matchedSuggestion['icon']?.toString();
+        return _getIconForDreamKey(iconKey);
+      } else if (msgType == 'income') {
+        final cat = matchedSuggestion['category']?.toString() ?? '';
+        return _getIconForIncomeCategory(cat);
+      } else {
+        final cat = matchedSuggestion['category']?.toString() ?? '';
+        return _getIconForExpenseCategory(cat);
+      }
+    }
+
+    final nameLower = name.toLowerCase();
+    if (msgType == 'dream' || category == 'เงินออม') {
+      return Icons.savings_outlined;
+    } else if (msgType == 'income' || category == 'รายรับ') {
+      if (nameLower.contains('เดือน')) return Icons.work_outline;
+      if (nameLower.contains('ลงทุน') || nameLower.contains('หุ้น')) return Icons.trending_up_outlined;
+      if (nameLower.contains('ขาย')) return Icons.shopping_cart_outlined;
+      return Icons.account_balance_wallet_outlined;
+    } else {
+      if (nameLower.contains('ไฟ')) return Icons.flash_on_outlined;
+      if (nameLower.contains('น้ำ')) return Icons.water_drop_outlined;
+      if (nameLower.contains('ห้อง') || nameLower.contains('บ้าน') || nameLower.contains('เช่า')) return Icons.home_outlined;
+      if (nameLower.contains('เน็ต') || nameLower.contains('wifi')) return Icons.wifi;
+      if (nameLower.contains('โทร') || nameLower.contains('มือถือ')) return Icons.phone_android_outlined;
+      if (nameLower.contains('กิน') || nameLower.contains('ข้าว') || nameLower.contains('อาหาร') || nameLower.contains('คาเฟ่')) return Icons.local_cafe_outlined;
+      if (nameLower.contains('รถ') || nameLower.contains('เดินทาง')) return Icons.directions_car_outlined;
+      if (nameLower.contains('ยา') || nameLower.contains('หมอ') || nameLower.contains('โรงพยาบาล') || nameLower.contains('รักษา')) return Icons.favorite_border_outlined;
+      return Icons.receipt_long_outlined;
     }
   }
 }
