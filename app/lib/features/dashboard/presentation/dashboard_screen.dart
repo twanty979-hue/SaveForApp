@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:convert';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/localization/app_localizations.dart';
 import '../../../core/notifications/notification_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
@@ -15,6 +15,8 @@ import 'notification_inbox_sheet.dart';
 import 'compact_calendar_sheet.dart';
 import 'finance_dashboard_screen.dart';
 import 'package:app/icon_selector_demo.dart';
+import 'package:app/core/settings/app_settings.dart';
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -24,6 +26,13 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final ApiClient _apiClient = ApiClient();
+  final GlobalKey _profileKey = GlobalKey();
+  final GlobalKey _balanceKey = GlobalKey();
+  final GlobalKey _calendarKey = GlobalKey();
+  final GlobalKey _notificationKey = GlobalKey();
+  final GlobalKey _homeMenuKey = GlobalKey();
+  final GlobalKey _inputKey = GlobalKey();
+  int _tutorialStep = -1;
   final String _activeUserId =
       AuthSession.userId ?? '5b2d488d-75a0-4ea4-8f14-43047d256c8d';
 
@@ -38,6 +47,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _fetchHeaderTotals();
     _fetchHeaderAvatar();
     NotificationService.instance.registerDevice();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndForceMonthlyExpense();
+    });
   }
 
   Future<void> _fetchHeaderAvatar() async {
@@ -164,8 +176,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               maxWidth: 800,
               child: Stack(
                 children: [
-                const Positioned.fill(
-                  child: TransactionsScreen(topPadding: 86),
+                Positioned.fill(
+                  child: TransactionsScreen(topPadding: 86, inputKey: _inputKey),
                 ),
                 Positioned(
                   top: 10,
@@ -196,6 +208,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             customBorder: const CircleBorder(),
                             onTap: _openProfileSettings,
                             child: Container(
+                              key: _profileKey,
                               width: 42,
                               height: 42,
                               decoration: const BoxDecoration(
@@ -234,6 +247,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(width: 11),
                         Expanded(
                           child: Column(
+                            key: _balanceKey,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -297,10 +311,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           child: InkWell(
                             borderRadius: BorderRadius.circular(13),
                             onTap: _showCalendarBottomSheet,
-                            child: const _HeaderIcon(
-                              icon: Icons.calendar_today_outlined,
-                              color: Color(0xFF64748B),
-                              backgroundColor: Color(0xFFF1F5F9),
+                            child: SizedBox(
+                              key: _calendarKey,
+                              child: const _HeaderIcon(
+                                icon: Icons.calendar_today_outlined,
+                                color: Color(0xFF64748B),
+                                backgroundColor: Color(0xFFF1F5F9),
+                              ),
                             ),
                           ),
                         ),
@@ -316,9 +333,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: InkWell(
                               borderRadius: BorderRadius.circular(13),
                               onTap: _showNotificationBottomSheet,
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
+                              child: SizedBox(
+                                key: _notificationKey,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
                                   const _HeaderIcon(
                                     icon: Icons.notifications_none_rounded,
                                     color: Color(0xFF64748B),
@@ -380,10 +399,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                             ),
                           ],
-                          child: const _HeaderAssetIcon(
-                            assetPath: 'assets/images/home_menu_icon.png',
-                            color: AppTheme.primaryColor,
-                            backgroundColor: Color(0xFFE6F4F1),
+                          child: SizedBox(
+                            key: _homeMenuKey,
+                            child: const _HeaderAssetIcon(
+                              assetPath: 'assets/images/home_menu_icon.png',
+                              color: AppTheme.primaryColor,
+                              backgroundColor: Color(0xFFE6F4F1),
+                            ),
                           ),
                         ),
                       ],
@@ -396,6 +418,349 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ],
       ),
+    );
+  }
+
+  Future<void> _checkAndForceMonthlyExpense() async {
+    if (!mounted) return;
+    try {
+      final response = await _apiClient.get(
+        '/recurring/expenses?user_id=eq.$_activeUserId',
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> expenses = jsonDecode(response.body);
+        Map<String, dynamic>? monthlyExpense;
+        for (var item in expenses) {
+          if (item['name']?.toString().trim() == 'ค่าใช้จ่ายรายเดือน') {
+            monthlyExpense = item;
+            break;
+          }
+        }
+
+        final double amount = monthlyExpense != null
+            ? (monthlyExpense['amount'] as num?)?.toDouble() ?? 0.0
+            : 0.0;
+
+        if (monthlyExpense == null || amount <= 0.0) {
+          if (mounted) {
+            _showForceMonthlyExpenseBottomSheet(monthlyExpense);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking monthly expense: $e');
+    }
+  }
+
+  void _showForceMonthlyExpenseBottomSheet(Map<String, dynamic>? existingExpense) {
+    final TextEditingController amountController = TextEditingController();
+    String? errorMsg;
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final style = AppSettings.themeStyle.value;
+            Color primaryColor = AppTheme.primaryColor;
+            BorderRadius cardRadius = BorderRadius.circular(24);
+
+            switch (style) {
+              case ThemeStyle.cartoon:
+                primaryColor = const Color(0xFFFF9233);
+                cardRadius = BorderRadius.circular(20);
+                break;
+              case ThemeStyle.sakura:
+                primaryColor = const Color(0xFFFF8FA3);
+                cardRadius = BorderRadius.circular(24);
+                break;
+              case ThemeStyle.cyberpunk:
+                primaryColor = const Color(0xFFFF007F);
+                cardRadius = BorderRadius.circular(12);
+                break;
+              case ThemeStyle.luxury:
+                primaryColor = const Color(0xFFD4AF37);
+                cardRadius = BorderRadius.circular(16);
+                break;
+              default:
+                primaryColor = const Color(0xFF00A88F);
+                cardRadius = BorderRadius.circular(24);
+            }
+
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+            final textCol = isDark ? Colors.white : const Color(0xFF0F172A);
+            final subTextCol = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+
+            return PopScope(
+              canPop: false,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.vertical(top: cardRadius.topRight),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 20,
+                        offset: const Offset(0, -5),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: primaryColor.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.settings_suggest_rounded,
+                            color: primaryColor,
+                            size: 32,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        'ตั้งค่าประมาณการรายจ่ายประจำเดือน',
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.bold,
+                          color: textCol,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'ยินดีต้อนรับสู่ SaveFor! กรุณาระบุยอดประมาณการค่าใช้จ่ายรายเดือนของคุณก่อนเริ่มต้น เพื่อใช้เป็นข้อมูลเปรียบเทียบในระบบควบคุมงบประมาณและการออม',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: subTextCol,
+                          height: 1.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      if (errorMsg != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFFCA5A5)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  errorMsg!,
+                                  style: const TextStyle(
+                                    color: Color(0xFFEF4444),
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      Text(
+                        'จำนวนเงินประมาณการ (บาท/เดือน)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: textCol,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: amountController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: textCol,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'กรอกจำนวนเงิน เช่น 15000',
+                          hintStyle: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.normal,
+                            color: subTextCol.withOpacity(0.7),
+                          ),
+                          prefixText: '฿ ',
+                          prefixStyle: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: primaryColor,
+                          ),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                              color: primaryColor,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          gradient: LinearGradient(
+                            colors: [
+                              primaryColor,
+                              primaryColor.withOpacity(0.85),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: primaryColor.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          onPressed: isSaving
+                              ? null
+                              : () async {
+                                  final inputStr = amountController.text.trim().replaceAll(',', '');
+                                  final double? val = double.tryParse(inputStr);
+
+                                  if (inputStr.isEmpty) {
+                                    setSheetState(() {
+                                      errorMsg = 'กรุณากรอกประมาณการค่าใช้จ่ายรายเดือน';
+                                    });
+                                    return;
+                                  }
+                                  if (val == null || val <= 0) {
+                                    setSheetState(() {
+                                      errorMsg = 'กรุณากรอกจำนวนเงินมากกว่า 0 บาท';
+                                    });
+                                    return;
+                                  }
+
+                                  setSheetState(() {
+                                    isSaving = true;
+                                    errorMsg = null;
+                                  });
+
+                                  try {
+                                    final body = {
+                                      'user_id': _activeUserId,
+                                      'name': 'ค่าใช้จ่ายรายเดือน',
+                                      'amount': val,
+                                      'category': 'อื่นๆ',
+                                      'due_day': 1,
+                                    };
+
+                                    final response = existingExpense != null
+                                        ? await _apiClient.patch(
+                                            '/recurring/expenses?id=eq.${existingExpense['id']}',
+                                            body: body,
+                                          )
+                                        : await _apiClient.post(
+                                            '/recurring/expenses',
+                                            body: body,
+                                          );
+
+                                    if (response.statusCode == 200 ||
+                                        response.statusCode == 201 ||
+                                        response.statusCode == 204) {
+                                      ApiClient.clearCache();
+                                      if (sheetContext.mounted) {
+                                        Navigator.pop(sheetContext);
+                                      }
+                                      _fetchHeaderTotals();
+                                    } else {
+                                      setSheetState(() {
+                                        isSaving = false;
+                                        errorMsg = 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง';
+                                      });
+                                    }
+                                  } catch (e) {
+                                    setSheetState(() {
+                                      isSaving = false;
+                                      errorMsg = 'เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่าย';
+                                    });
+                                  }
+                                },
+                          child: isSaving
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : const Text(
+                                  'บันทึกและเริ่มใช้งาน',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -1038,5 +1403,50 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
         );
       },
     );
+  }
+}
+
+
+class TutorialBackdropPainter extends CustomPainter {
+  final Rect? targetRect;
+  final ShapeBorder shape;
+
+  TutorialBackdropPainter({this.targetRect, this.shape = const CircleBorder()});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.75);
+    
+    if (targetRect == null) {
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+      return;
+    }
+
+    canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+    
+    final maskPaint = Paint()
+      ..color = Colors.white
+      ..blendMode = BlendMode.clear;
+      
+    if (shape is CircleBorder) {
+      final center = targetRect!.center;
+      final radius = math.max(targetRect!.width, targetRect!.height) / 2.0;
+      canvas.drawCircle(center, radius + 8, maskPaint);
+    } else {
+      final rrect = RRect.fromRectAndRadius(
+        targetRect!.inflate(8),
+        const Radius.circular(16),
+      );
+      canvas.drawRRect(rrect, maskPaint);
+    }
+    
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant TutorialBackdropPainter oldDelegate) {
+    return oldDelegate.targetRect != targetRect || oldDelegate.shape != shape;
   }
 }

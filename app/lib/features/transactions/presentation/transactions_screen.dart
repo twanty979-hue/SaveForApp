@@ -42,8 +42,9 @@ class QuickSuggestion {
 
 class TransactionsScreen extends StatefulWidget {
   final double topPadding;
+  final GlobalKey? inputKey;
 
-  const TransactionsScreen({super.key, this.topPadding = 16});
+  const TransactionsScreen({super.key, this.topPadding = 16, this.inputKey});
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -1338,6 +1339,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   bottom: bottomInset > 0 ? bottomInset + 6 : 10,
                 ),
                 child: Container(
+                  key: widget.inputKey,
                   height: 54,
                   decoration: BoxDecoration(
                     color: context.surfaceColor,
