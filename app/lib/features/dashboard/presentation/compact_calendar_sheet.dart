@@ -333,7 +333,7 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                                         'type': type,
                                         'category': category,
                                       };
-                                      await _apiClient.patch('/transactions?id=eq.${editingTransaction['id']}', body);
+                                      await _apiClient.patch('/transactions?id=eq.${editingTransaction['id']}', body: body);
                                     } else {
                                       final selectedDate = DateTime(_year, _month, _day, 12, 0, 0);
                                       final body = {
@@ -344,7 +344,7 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                                         'category': category,
                                         'transaction_date': selectedDate.toUtc().toIso8601String(),
                                       };
-                                      await _apiClient.post('/transactions', body);
+                                      await _apiClient.post('/transactions', body: body);
                                     }
                                     await _loadTransactions();
                                   }
