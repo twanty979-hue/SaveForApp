@@ -64,10 +64,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
   List<Map<String, dynamic>> _rawSuggestions = [];
   List<QuickSuggestion> _quickSuggestions = [];
-  String _inputType = 'expense';
-
-  static const String _introText =
-      'ระบบบันทึกรายการอัตโนมัติเปิดใช้งานแล้ว ระบุรายการและจำนวนเงินที่ต้องการบันทึก เช่น "ค่าห้อง 3500" หรือเลือกรายการด่วนด้านล่าง';
+    String _inputType = 'expense';
 
   String get _activeUserId {
     if (AuthSession.userId == null) {
@@ -92,9 +89,13 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   }
 
   void _addIntroMessage() {
+    final intro = context.tr(
+      'พิมพ์เพื่อบันทึกได้เลยครับ เช่น "ข้าว 50"',
+      'Type to record, e.g., "Food 50"',
+    );
     setState(() {
       _messages.add(
-        Message(text: _introText, isUser: false, timestamp: DateTime.now()),
+        Message(text: intro, isUser: false, timestamp: DateTime.now()),
       );
     });
   }
@@ -439,7 +440,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           final introMsg = _messages.isNotEmpty
               ? _messages.first
               : Message(
-                  text: _introText,
+                  text: context.tr(
+                    'พิมพ์เพื่อบันทึกได้เลยครับ เช่น "ข้าว 50"',
+                    'Type to record, e.g., "Food 50"',
+                  ),
                   isUser: false,
                   timestamp: DateTime.now(),
                 );
