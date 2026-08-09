@@ -372,13 +372,20 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
   }
 
   void _selectDate(DateTime date) {
-    setState(() {
-      _year = date.year;
-      _month = date.month;
-      _day = date.day;
-    });
-    if (widget.onDateSelected != null) {
-      widget.onDateSelected!(date);
+    final isAlreadySelected = date.year == _year &&
+        date.month == _month &&
+        date.day == _day;
+
+    if (isAlreadySelected) {
+      if (widget.onDateSelected != null) {
+        widget.onDateSelected!(date);
+      }
+    } else {
+      setState(() {
+        _year = date.year;
+        _month = date.month;
+        _day = date.day;
+      });
     }
   }
 
