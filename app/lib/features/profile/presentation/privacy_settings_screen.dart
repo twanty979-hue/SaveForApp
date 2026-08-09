@@ -6,6 +6,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/settings/app_settings.dart';
+import '../../auth/domain/auth_session.dart';
+import '../../auth/presentation/auth_screen.dart';
 
 class PrivacySettingsScreen extends StatefulWidget {
   const PrivacySettingsScreen({super.key});
@@ -252,12 +254,23 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   }
 
   
-  void _showMockDialog(String title) {
+  void _showPrivacyPolicy() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: Text(context.tr('ฟีเจอร์นี้อยู่ระหว่างการพัฒนา', 'Feature in development')),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          context.tr('นโยบายความเป็นส่วนตัว', 'Privacy Policy'),
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            context.tr(
+              'เราให้ความสำคัญกับความเป็นส่วนตัวของคุณ ข้อมูลการเงินและธุรกรรมทั้งหมดจะถูกบันทึกและจัดเก็บไว้บนอุปกรณ์ของคุณ รวมถึงซิงค์ผ่านฐานข้อมูลคลาวด์ที่ปลอดภัยเมื่อมีการเข้าสู่ระบบ เราจะไม่แบ่งปันหรือเผยแพร่ข้อมูลของคุณให้แก่บุคคลภายนอกโดยเด็ดขาด',
+              'We value your privacy. All financial data and transactions are stored locally on your device and synchronized via a secure cloud database when signed in. We never share or sell your personal data to any third party.',
+            ),
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -267,6 +280,102 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       ),
     );
   }
+
+  void _showTermsOfService() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          context.tr('ข้อตกลงการใช้งาน', 'Terms of Service'),
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            context.tr(
+              'แอปพลิเคชัน SaveFor เป็นเครื่องมือเพื่อช่วยในการจัดการและวางแผนการเงินส่วนบุคคล การตัดสินใจทางการเงินใด ๆ ที่เกิดขึ้นเป็นความรับผิดชอบของผู้ใช้ทั้งสิ้น เราพยายามดูแลระบบและให้บริการอย่างต่อเนื่องและปลอดภัยที่สุดเท่าที่จะทำได้',
+              'SaveFor is a tool designed to assist with personal financial planning and management. Any financial decisions made remain the sole responsibility of the user. We strive to maintain continuous service and keep your data safe.',
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(context.tr('ตกลง', 'OK')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          context.tr('ลบบัญชีผู้ใช้?', 'Delete Account?'),
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          context.tr(
+            'ข้อมูลทั้งหมด รวมถึงธุรกรรม เป้าหมายความฝัน และการตั้งค่าต่าง ๆ จะถูกลบอย่างถาวรและไม่สามารถเรียกคืนได้ คุณต้องการดำเนินการต่อหรือไม่?',
+            'All your data, including transactions, dreams, and settings, will be permanently deleted and cannot be recovered. Do you wish to proceed?',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(context.tr('ยกเลิก', 'Cancel')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(context.tr('ลบบัญชี', 'Delete Account')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // Show loading
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final userId = AuthSession.userId;
+      if (userId != null) {
+        // Cascade delete user data
+        await _apiClient.delete('/transactions?user_id=eq.$userId');
+        await _apiClient.delete('/dreams?user_id=eq.$userId');
+        await _apiClient.delete('/recurring/expenses?user_id=eq.$userId');
+        await _apiClient.delete('/recurring/sources?user_id=eq.$userId');
+        await _apiClient.delete('/users?id=eq.$userId');
+      }
+    } catch (_) {}
+
+    // Dismiss loading and logout
+    if (mounted) {
+      Navigator.pop(context); // Dismiss loading spinner
+      await AuthSession.logout();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+        (_) => false,
+      );
+    }
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -299,24 +408,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                     'Set a new password for account security',
                   ),
                   onTap: _showChangePasswordModal,
-                ),
-                _SettingsTile(
-                  icon: Icons.security_rounded,
-                  title: context.tr('การยืนยันตัวตน 2 ขั้นตอน (2FA)', 'Two-Factor Auth (2FA)'),
-                  subtitle: context.tr(
-                    'เพิ่มความปลอดภัยด้วยรหัสผ่านชั้นที่สอง',
-                    'Enhance security with 2nd step verification',
-                  ),
-                  onTap: () => _showMockDialog(context.tr('การยืนยันตัวตน 2 ขั้นตอน', 'Two-Factor Auth')),
-                ),
-                _SettingsTile(
-                  icon: Icons.person_off_rounded,
-                  title: context.tr('การมองเห็นโปรไฟล์', 'Profile Visibility'),
-                  subtitle: context.tr(
-                    'ตั้งค่าความเป็นส่วนตัวของบัญชี',
-                    'Set your account privacy',
-                  ),
-                  onTap: () => _showMockDialog(context.tr('การมองเห็นโปรไฟล์', 'Profile Visibility')),
                 ),
                 _SettingsTile(
                   icon: Icons.fingerprint_rounded,
@@ -358,15 +449,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                     if (mounted) setState(() {});
                   },
                 ),
-                _SettingsTile(
-                  icon: Icons.devices_rounded,
-                  title: context.tr('อุปกรณ์ที่เข้าสู่ระบบ', 'Active Sessions'),
-                  subtitle: context.tr(
-                    'จัดการอุปกรณ์ที่ล็อกอินค้างไว้',
-                    'Manage active devices',
-                  ),
-                  onTap: () => _showMockDialog(context.tr('อุปกรณ์ที่เข้าสู่ระบบ', 'Active Sessions')),
-                ),
                 const SizedBox(height: 16),
                 _SectionLabel(context.tr('ข้อมูลและข้อตกลง', 'Data & Agreements')),
                 const SizedBox(height: 8),
@@ -377,7 +459,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                     'อ่านรายละเอียดการจัดการข้อมูลส่วนบุคคล',
                     'Read details about personal data management',
                   ),
-                  onTap: () => _showMockDialog(context.tr('นโยบายความเป็นส่วนตัว', 'Privacy Policy')),
+                  onTap: _showPrivacyPolicy,
                 ),
                 _SettingsTile(
                   icon: Icons.description_rounded,
@@ -386,25 +468,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                     'ข้อกำหนดและเงื่อนไขการใช้แอป',
                     'Terms and conditions of app usage',
                   ),
-                  onTap: () => _showMockDialog(context.tr('ข้อตกลงการใช้งาน', 'Terms of Service')),
-                ),
-                _SettingsTile(
-                  icon: Icons.download_rounded,
-                  title: context.tr('ดาวน์โหลดข้อมูลส่วนตัว', 'Download My Data'),
-                  subtitle: context.tr(
-                    'ขอรับสำเนาข้อมูลของคุณทั้งหมด',
-                    'Request a copy of all your data',
-                  ),
-                  onTap: () => _showMockDialog(context.tr('ดาวน์โหลดข้อมูลส่วนตัว', 'Download My Data')),
-                ),
-                _SettingsTile(
-                  icon: Icons.location_on_rounded,
-                  title: context.tr('การเข้าถึงตำแหน่งที่ตั้ง', 'Location Data'),
-                  subtitle: context.tr(
-                    'จัดการสิทธิ์การใช้ข้อมูลตำแหน่งที่ตั้ง',
-                    'Manage location data permissions',
-                  ),
-                  onTap: () => _showMockDialog(context.tr('การเข้าถึงตำแหน่งที่ตั้ง', 'Location Data')),
+                  onTap: _showTermsOfService,
                 ),
                 _SettingsTile(
                   icon: Icons.analytics_rounded,
@@ -437,7 +501,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                     'Permanently delete all data',
                   ),
                   danger: true,
-                  onTap: () => _showMockDialog(context.tr('ลบบัญชี', 'Delete Account')),
+                  onTap: _confirmDeleteAccount,
                 ),
               ],
             ),
