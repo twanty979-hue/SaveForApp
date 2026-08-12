@@ -697,10 +697,10 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   height: 64,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.18),
+                    color: Colors.white,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.60),
+                      color: Colors.white,
                       width: 2,
                     ),
                   ),

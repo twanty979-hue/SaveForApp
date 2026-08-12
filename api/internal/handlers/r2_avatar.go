@@ -62,6 +62,27 @@ func handleGetProfileAvatar(c *gin.Context) {
 		return
 	}
 	if status == http.StatusNotFound {
+		// Fallback: ดึงรูปโปรไฟล์จากตาราง public.profiles ในฐานข้อมูล (เช่น รูป Google avatar)
+		supabaseURL := os.Getenv("SUPABASE_URL")
+		supabaseKey := os.Getenv("SUPABASE_SERVICE_KEY")
+		if supabaseURL != "" && supabaseKey != "" {
+			reqProfile, err := http.NewRequest("GET", supabaseURL+"/rest/v1/profiles?id=eq."+userID+"&select=avatar_url", nil)
+			if err == nil {
+				reqProfile.Header.Set("apikey", supabaseKey)
+				reqProfile.Header.Set("Authorization", "Bearer "+supabaseKey)
+				respProfile, errProfile := (&http.Client{}).Do(reqProfile)
+				if errProfile == nil && respProfile.StatusCode == 200 {
+					defer respProfile.Body.Close()
+					var profiles []struct {
+						AvatarURL *string `json:"avatar_url"`
+					}
+					if errDec := json.NewDecoder(respProfile.Body).Decode(&profiles); errDec == nil && len(profiles) > 0 && profiles[0].AvatarURL != nil && *profiles[0].AvatarURL != "" {
+						c.JSON(http.StatusOK, gin.H{"avatar_url": *profiles[0].AvatarURL})
+						return
+					}
+				}
+			}
+		}
 		c.JSON(http.StatusOK, gin.H{"avatar_url": nil})
 		return
 	}

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/notifications/notification_service.dart';
@@ -50,13 +51,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     NotificationService.instance.registerDevice();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndForceMonthlyExpense();
-      Future.delayed(const Duration(milliseconds: 1200), () {
-        if (mounted) {
-          setState(() {
-            _tutorialStep = 0;
-          });
-        }
-      });
     });
   }
 
@@ -229,14 +223,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               width: 42,
                               height: 42,
                               decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFF16BFA5),
-                                    AppTheme.primaryColor,
-                                  ],
-                                ),
+                                color: Colors.white,
                                 shape: BoxShape.circle,
                               ),
                               clipBehavior: Clip.antiAlias,
@@ -249,13 +236,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       ),
                                       errorBuilder: (_, _, _) => const Icon(
                                         Icons.person_outline_rounded,
-                                        color: Colors.white,
+                                        color: AppTheme.primaryColor,
                                         size: 21,
                                       ),
                                     )
                                   : const Icon(
                                       Icons.person_outline_rounded,
-                                      color: Colors.white,
+                                      color: AppTheme.primaryColor,
                                       size: 21,
                                     ),
                             ),
@@ -725,6 +712,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _startTutorial() {
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted && _tutorialStep < 0) {
+        setState(() {
+          _tutorialStep = 0;
+        });
+      }
+    });
+  }
+
   Future<void> _checkAndForceMonthlyExpense() async {
     if (!mounted) return;
     try {
@@ -749,10 +746,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (mounted) {
             _showForceMonthlyExpenseBottomSheet(monthlyExpense);
           }
+        } else {
+          _startTutorial();
         }
+      } else {
+        _startTutorial();
       }
     } catch (e) {
       debugPrint('Error checking monthly expense: $e');
+      _startTutorial();
     }
   }
 
@@ -901,6 +903,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       TextField(
                         controller: amountController,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -1027,6 +1032,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         Navigator.pop(sheetContext);
                                       }
                                       _fetchHeaderTotals();
+                                      _startTutorial();
                                     } else {
                                       setSheetState(() {
                                         isSaving = false;

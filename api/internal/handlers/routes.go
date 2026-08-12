@@ -42,10 +42,67 @@ func SetupRouter() *gin.Engine {
 		v1.POST("/auth/login", func(c *gin.Context) {
 			handleSupabaseProxy(c, "POST", "/auth/v1/token?grant_type=password")
 		})
+		v1.POST("/auth/google/android", func(c *gin.Context) {
+			handleSupabaseProxy(c, "POST", "/auth/v1/token?grant_type=id_token")
+		})
 		v1.POST("/auth/refresh", func(c *gin.Context) {
 			handleSupabaseProxy(c, "POST", "/auth/v1/token?grant_type=refresh_token")
 		})
 		v1.POST("/auth/change-password", handleChangePassword)
+
+		// New routes for Google OAuth and passwordless OTP
+		v1.GET("/auth/google/url", func(c *gin.Context) {
+			supabaseURL := os.Getenv("SUPABASE_URL")
+			if supabaseURL == "" {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Supabase URL is not configured"})
+				return
+			}
+			redirectTo := c.Query("redirect_to")
+			if redirectTo == "" {
+				redirectTo = "http://localhost:8080"
+			}
+			authURL := supabaseURL + "/auth/v1/authorize?provider=google&redirect_to=" + redirectTo
+			c.JSON(http.StatusOK, gin.H{"url": authURL})
+		})
+
+		v1.POST("/auth/otp", func(c *gin.Context) {
+			handleSupabaseProxy(c, "POST", "/auth/v1/otp")
+		})
+
+		v1.GET("/auth/user", func(c *gin.Context) {
+			supabaseURL := os.Getenv("SUPABASE_URL")
+			supabaseKey := os.Getenv("SUPABASE_SERVICE_KEY")
+			if supabaseURL == "" || supabaseKey == "" {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Supabase credentials are not configured"})
+				return
+			}
+			authorization := c.GetHeader("Authorization")
+			if authorization == "" {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "No token provided"})
+				return
+			}
+			req, err := http.NewRequest("GET", supabaseURL+"/auth/v1/user", nil)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create request: " + err.Error()})
+				return
+			}
+			req.Header.Set("apikey", supabaseKey)
+			req.Header.Set("Authorization", authorization)
+
+			resp, err := (&http.Client{}).Do(req)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to connect to Supabase: " + err.Error()})
+				return
+			}
+			defer resp.Body.Close()
+
+			respBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response: " + err.Error()})
+				return
+			}
+			c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), respBytes)
+		})
 
 		// Proxy ข้อมูลโปรไฟล์ผู้ใช้
 		v1.GET("/profile", func(c *gin.Context) {

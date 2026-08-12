@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
@@ -11,6 +12,11 @@ class ApiClient {
 
   // ตรวจสอบและดึงค่า API_BASE_URL จาก .env หรือใช้ IP คอมพิวเตอร์จริงของผู้ใช้เป็นค่าสำรองตรง
   String get _baseUrl {
+    // หากรันอยู่บน Web และเล่นผ่าน localhost ให้ใช้หลังบ้านเป็น localhost:8080 ทันที ป้องกันปัญหา IP เครื่องคอมพิวเตอร์เปลี่ยนในวง Wi-Fi
+    if (kIsWeb && Uri.base.host == 'localhost') {
+      return 'http://localhost:8080/api/v1';
+    }
+
     if (dotenv.isInitialized &&
         dotenv.env['API_BASE_URL'] != null &&
         dotenv.env['API_BASE_URL']!.isNotEmpty) {
