@@ -443,7 +443,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _finishMainTutorial() {
+  void _finishMainTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('tutorial_$_activeUserId', true);
+    _completeTutorialDB();
     setState(() {
       _tutorialStep = -1;
     });
@@ -591,7 +594,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               TextButton(
-                onPressed: () {
+                onPressed: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('tutorial_$_activeUserId', true);
+                  _completeTutorialDB();
                   setState(() {
                     _tutorialStep = -1;
                   });
@@ -728,18 +734,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Future<void> _completeTutorialDB() async {
+    try {
+      await _apiClient.patch(
+        '/profile?id=eq.$_activeUserId',
+        body: jsonEncode({'has_completed_tutorial': true}),
+      );
+    } catch (_) {}
+  }
+
   void _startTutorial() async {
     final prefs = await SharedPreferences.getInstance();
-    final hasShownTutorial = prefs.getBool('tutorial_$_activeUserId') ?? false;
+    final hasShownLocally = prefs.getBool('tutorial_$_activeUserId') ?? false;
     
-    if (hasShownTutorial) return;
+    if (hasShownLocally) return;
 
-    Future.delayed(const Duration(milliseconds: 600), () async {
+    try {
+      final response = await _apiClient.get('/profile?id=eq.$_activeUserId&select=has_completed_tutorial');
+      if (response.statusCode == 200) {
+        final List<dynamic> profiles = jsonDecode(response.body);
+        if (profiles.isNotEmpty) {
+          final profile = profiles.first as Map<String, dynamic>;
+          final hasCompleted = profile['has_completed_tutorial'] as bool? ?? false;
+          if (hasCompleted) {
+            await prefs.setBool('tutorial_$_activeUserId', true);
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+
+    Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted && _tutorialStep < 0) {
         setState(() {
           _tutorialStep = 0;
         });
-        await prefs.setBool('tutorial_$_activeUserId', true);
       }
     });
   }
