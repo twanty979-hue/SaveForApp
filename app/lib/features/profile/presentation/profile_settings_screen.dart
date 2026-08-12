@@ -11,6 +11,7 @@ import '../../../core/settings/app_settings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
+import '../../../core/widgets/safe_network_image.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../auth/presentation/auth_screen.dart';
 import 'privacy_settings_screen.dart';
@@ -715,12 +716,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           ),
                         )
                       : _avatarUrl?.isNotEmpty == true
-                      ? Image.network(
-                          _avatarUrl!,
+                      ? SafeNetworkImage(
+                          url: _avatarUrl!,
                           width: 64,
                           height: 64,
                           fit: BoxFit.cover,
-                          headers: _apiClient.imageHeaders(_avatarUrl!),
                           errorBuilder: (_, _, _) => _buildInitialAvatar(),
                         )
                       : _buildInitialAvatar(),

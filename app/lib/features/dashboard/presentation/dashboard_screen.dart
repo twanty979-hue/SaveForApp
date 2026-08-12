@@ -8,6 +8,7 @@ import '../../../core/notifications/notification_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
+import '../../../core/widgets/safe_network_image.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../profile/presentation/profile_settings_screen.dart';
 import '../../planning/presentation/planning_hub_screen.dart';
@@ -228,12 +229,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                               clipBehavior: Clip.antiAlias,
                               child: _avatarUrl?.isNotEmpty == true
-                                  ? Image.network(
-                                      _avatarUrl!,
+                                  ? SafeNetworkImage(
+                                      url: _avatarUrl!,
                                       fit: BoxFit.cover,
-                                      headers: _apiClient.imageHeaders(
-                                        _avatarUrl!,
-                                      ),
                                       errorBuilder: (_, _, _) => const Icon(
                                         Icons.person_outline_rounded,
                                         color: AppTheme.primaryColor,
