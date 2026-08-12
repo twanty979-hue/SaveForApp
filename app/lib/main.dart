@@ -8,6 +8,7 @@ import 'core/notifications/notification_service.dart';
 import 'core/network/api_client.dart';
 import 'features/auth/domain/auth_session.dart';
 import 'features/auth/presentation/auth_screen.dart';
+import 'features/auth/presentation/app_lock_wrapper.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
 
 // ตรวจสอบและล็อกอินผู้ใช้ตั้งแต่เปิดแอปทันทีเพื่อป้องกันบราวเซอร์สับสนพอร์ตเราท์เตอร์ (#access_token)
@@ -105,9 +106,10 @@ class MyApp extends StatelessWidget {
         valueListenable: AppSettings.themeStyle,
         builder: (context, themeStyle, _) => ValueListenableBuilder<ThemeMode>(
           valueListenable: AppSettings.themeMode,
-          builder: (context, themeMode, _) => MaterialApp(
-            title: 'SaveFor',
-            locale: locale,
+          builder: (context, themeMode, _) => AppLockWrapper(
+            child: MaterialApp(
+              title: 'SaveFor',
+              locale: locale,
             supportedLocales: const [Locale('th'), Locale('en')],
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
@@ -130,6 +132,7 @@ class MyApp extends StatelessWidget {
               );
             },
             debugShowCheckedModeBanner: false,
+          ),
           ),
         ),
       ),

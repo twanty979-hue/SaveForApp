@@ -53,6 +53,8 @@
 	<string>ใช้กล้องเพื่อถ่ายรูปโปรไฟล์ของคุณ</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>เลือกรูปจากคลังภาพเพื่อใช้เป็นรูปโปรไฟล์</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>ใช้ FaceID หรือ TouchID เพื่อปลดล็อกแอปพลิเคชัน</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

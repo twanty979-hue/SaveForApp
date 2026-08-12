@@ -46,6 +46,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    AppSettings.hideBalances.addListener(_onHideBalancesChanged);
     unawaited(_apiClient.preloadCoreData(_activeUserId));
     _fetchHeaderTotals();
     _fetchHeaderAvatar();
@@ -53,6 +54,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndForceMonthlyExpense();
     });
+  }
+
+  void _onHideBalancesChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    AppSettings.hideBalances.removeListener(_onHideBalancesChanged);
+    _chatDateFilter.dispose();
+    super.dispose();
+  }
+
+  String _obfuscate(double amount) {
+    return AppSettings.hideBalances.value ? '***' : amount.toStringAsFixed(0);
   }
 
   Future<void> _fetchHeaderAvatar() async {
@@ -269,7 +285,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               Row(
                                 children: [
                                   Text(
-                                    '${context.tr('วันนี้', 'Today')} ฿${_todaySpent.toStringAsFixed(0)}',
+                                    '${context.tr('วันนี้', 'Today')} ฿${_obfuscate(_todaySpent)}',
                                     style: const TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.w600,
@@ -293,7 +309,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                   Flexible(
                                     child: Text(
-                                      '${context.tr('เดือนนี้', 'This month')} ฿${_monthSpent.toStringAsFixed(0)}',
+                                      '${context.tr('เดือนนี้', 'This month')} ฿${_obfuscate(_monthSpent)}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
@@ -1193,6 +1209,10 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
   List<dynamic> _transactions = [];
   final double _grandTotal = 0.0;
 
+  String _obfuscate(double amount) {
+    return AppSettings.hideBalances.value ? '***' : amount.toStringAsFixed(0);
+  }
+
   late int _currentYear;
   late int _currentMonth;
   late int _selectedDay;
@@ -1570,7 +1590,7 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                                   if (spent > 0) ...[
                                     const SizedBox(height: 2),
                                     Text(
-                                      '฿${spent.toStringAsFixed(0)}',
+                                      '฿${_obfuscate(spent)}',
                                       style: const TextStyle(
                                         color: Color(0xFFEF4444),
                                         fontSize: 8,
@@ -1607,7 +1627,7 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                       ),
                     ),
                     Text(
-                      'รวม ฿${monthlyTotal.toStringAsFixed(0)}',
+                      'รวม ฿${_obfuscate(monthlyTotal)}',
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -1651,7 +1671,7 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                                   style: TextStyle(color: Colors.grey[500]),
                                 ),
                                 trailing: Text(
-                                  '-฿${amount.toStringAsFixed(0)}',
+                                  '-฿${_obfuscate(amount)}',
                                   style: const TextStyle(
                                     color: Color(0xFFEF4444),
                                     fontWeight: FontWeight.bold,
@@ -1677,7 +1697,7 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                         children: [
                           const TextSpan(text: 'รายจ่ายรวมทุกวัน: '),
                           TextSpan(
-                            text: '฿${_grandTotal.toStringAsFixed(0)}',
+                            text: '฿${_obfuscate(_grandTotal)}',
                             style: const TextStyle(
                               color: Color(0xFFEF4444),
                               fontWeight: FontWeight.bold,
