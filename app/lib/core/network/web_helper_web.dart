@@ -7,17 +7,22 @@ void redirectWindow(String url) {
 }
 
 Widget? buildWebImage(String url, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
-  final viewType = 'web-image-${url.hashCode}';
+  // Use a new version string in viewType to force Flutter Web to register this new factory,
+  // bypassing any cached factory from previous hot-restarts.
+  final viewType = 'web-img-v3-${url.hashCode}';
   try {
     ui_web.platformViewRegistry.registerViewFactory(
       viewType,
-      (int viewId) => html.DivElement()
+      (int viewId) => html.ImageElement()
+        ..src = url
+        ..referrerPolicy = 'no-referrer'
+        ..style.display = 'block'
         ..style.width = '100%'
         ..style.height = '100%'
-        ..style.backgroundImage = 'url("$url")'
-        ..style.backgroundSize = fit == BoxFit.cover ? 'cover' : 'contain'
-        ..style.backgroundPosition = 'center'
-        ..style.backgroundRepeat = 'no-repeat',
+        ..style.border = 'none'
+        ..style.margin = '0'
+        ..style.padding = '0'
+        ..style.objectFit = fit == BoxFit.cover ? 'cover' : 'contain',
     );
   } catch (e) {
     // Ignore already registered view type error
