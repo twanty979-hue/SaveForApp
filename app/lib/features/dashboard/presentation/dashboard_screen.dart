@@ -745,9 +745,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _startTutorial() async {
     final prefs = await SharedPreferences.getInstance();
-    final hasShownLocally = prefs.getBool('tutorial_$_activeUserId') ?? false;
+    final localKey = 'tutorial_$_activeUserId';
     
-    if (hasShownLocally) return;
+    bool shouldShow = false;
 
     try {
       final response = await _apiClient.get('/profile?id=eq.$_activeUserId&select=has_completed_tutorial');
@@ -756,13 +756,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (profiles.isNotEmpty) {
           final profile = profiles.first as Map<String, dynamic>;
           final hasCompleted = profile['has_completed_tutorial'] as bool? ?? false;
-          if (hasCompleted) {
-            await prefs.setBool('tutorial_$_activeUserId', true);
-            return;
-          }
+          
+          shouldShow = !hasCompleted;
+          // Sync local preference with DB
+          await prefs.setBool(localKey, hasCompleted);
         }
+      } else {
+        // Fallback to local if DB fails
+        shouldShow = !(prefs.getBool(localKey) ?? false);
       }
-    } catch (_) {}
+    } catch (_) {
+      // Fallback to local on network error
+      shouldShow = !(prefs.getBool(localKey) ?? false);
+    }
+
+    if (!shouldShow) return;
 
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted && _tutorialStep < 0) {
