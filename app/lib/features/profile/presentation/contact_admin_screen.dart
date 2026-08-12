@@ -62,14 +62,14 @@ class ContactAdminScreen extends StatelessWidget {
                 context,
                 Icons.chat_bubble_rounded,
                 'LINE Official',
-                '@saveforapp',
+                'bs_boll',
                 const Color(0xFF00B900),
               ),
               _buildContactCard(
                 context,
                 Icons.facebook_rounded,
-                'Facebook Page',
-                'SaveFor - แอปออมเงิน',
+                'Facebook',
+                'https://www.facebook.com/worathon.namthong.2025/',
                 const Color(0xFF1877F2),
               ),
               _buildContactCard(
