@@ -13,8 +13,10 @@ Widget? buildWebImage(String url, {double? width, double? height, BoxFit fit = B
       viewType,
       (int viewId) => html.ImageElement()
         ..src = url
+        ..referrerPolicy = 'no-referrer'
         ..style.width = '100%'
         ..style.height = '100%'
+        ..style.pointerEvents = 'none'
         ..style.objectFit = fit == BoxFit.cover ? 'cover' : 'contain',
     );
   } catch (e) {
