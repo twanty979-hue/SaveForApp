@@ -24,7 +24,15 @@ class SafeNetworkImage extends StatelessWidget {
     if (kIsWeb) {
       final webWidget = web_helper.buildWebImage(url, width: width, height: height, fit: fit);
       if (webWidget != null) {
-        return webWidget;
+        return Stack(
+          fit: StackFit.passthrough,
+          children: [
+            webWidget,
+            Positioned.fill(
+              child: Container(color: Colors.transparent),
+            ),
+          ],
+        );
       }
     }
     

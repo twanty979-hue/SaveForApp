@@ -11,13 +11,13 @@ Widget? buildWebImage(String url, {double? width, double? height, BoxFit fit = B
   try {
     ui_web.platformViewRegistry.registerViewFactory(
       viewType,
-      (int viewId) => html.ImageElement()
-        ..src = url
-        ..referrerPolicy = 'no-referrer'
+      (int viewId) => html.DivElement()
         ..style.width = '100%'
         ..style.height = '100%'
-        ..style.pointerEvents = 'none'
-        ..style.objectFit = fit == BoxFit.cover ? 'cover' : 'contain',
+        ..style.backgroundImage = 'url("$url")'
+        ..style.backgroundSize = fit == BoxFit.cover ? 'cover' : 'contain'
+        ..style.backgroundPosition = 'center'
+        ..style.backgroundRepeat = 'no-repeat',
     );
   } catch (e) {
     // Ignore already registered view type error
