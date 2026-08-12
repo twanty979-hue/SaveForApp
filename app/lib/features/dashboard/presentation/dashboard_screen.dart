@@ -730,7 +730,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _startTutorial() async {
     final prefs = await SharedPreferences.getInstance();
-    final hasShownTutorial = prefs.getBool('has_shown_dashboard_tutorial') ?? false;
+    final hasShownTutorial = prefs.getBool('tutorial_$_activeUserId') ?? false;
     
     if (hasShownTutorial) return;
 
@@ -739,7 +739,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         setState(() {
           _tutorialStep = 0;
         });
-        await prefs.setBool('has_shown_dashboard_tutorial', true);
+        await prefs.setBool('tutorial_$_activeUserId', true);
       }
     });
   }
