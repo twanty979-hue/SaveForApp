@@ -738,7 +738,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       await _apiClient.patch(
         '/profile?id=eq.$_activeUserId',
-        body: jsonEncode({'has_completed_tutorial': true}),
+        body: {'has_completed_tutorial': true},
       );
     } catch (_) {}
   }
