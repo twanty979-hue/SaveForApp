@@ -18,6 +18,7 @@ import 'compact_calendar_sheet.dart';
 import 'finance_dashboard_screen.dart';
 import 'package:app/icon_selector_demo.dart';
 import 'package:app/core/settings/app_settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -727,12 +728,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _startTutorial() {
-    Future.delayed(const Duration(milliseconds: 600), () {
+  void _startTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasShownTutorial = prefs.getBool('has_shown_dashboard_tutorial') ?? false;
+    
+    if (hasShownTutorial) return;
+
+    Future.delayed(const Duration(milliseconds: 600), () async {
       if (mounted && _tutorialStep < 0) {
         setState(() {
           _tutorialStep = 0;
         });
+        await prefs.setBool('has_shown_dashboard_tutorial', true);
       }
     });
   }
