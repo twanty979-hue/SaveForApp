@@ -6,23 +6,29 @@ void redirectWindow(String url) {
   html.window.location.assign(url);
 }
 
-Widget? buildWebImage(String url, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
-  // Use a new version string in viewType to force Flutter Web to register this new factory,
-  // bypassing any cached factory from previous hot-restarts.
-  final viewType = 'web-img-v3-${url.hashCode}';
+Widget? buildWebImage(String url, {double? width, double? height, BoxFit fit = BoxFit.cover, bool isCircle = false}) {
+  final viewType = 'web-img-v4-${url.hashCode}-$isCircle';
   try {
     ui_web.platformViewRegistry.registerViewFactory(
       viewType,
-      (int viewId) => html.ImageElement()
-        ..src = url
-        ..referrerPolicy = 'no-referrer'
-        ..style.display = 'block'
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.border = 'none'
-        ..style.margin = '0'
-        ..style.padding = '0'
-        ..style.objectFit = fit == BoxFit.cover ? 'cover' : 'contain',
+      (int viewId) {
+        final img = html.ImageElement()
+          ..src = url
+          ..referrerPolicy = 'no-referrer'
+          ..style.position = 'absolute'
+          ..style.top = '0'
+          ..style.left = '0'
+          ..style.width = '100%'
+          ..style.height = '100%'
+          ..style.border = 'none'
+          ..style.margin = '0'
+          ..style.padding = '0'
+          ..style.objectFit = fit == BoxFit.cover ? 'cover' : 'contain';
+        if (isCircle) {
+          img.style.borderRadius = '50%';
+        }
+        return img;
+      },
     );
   } catch (e) {
     // Ignore already registered view type error

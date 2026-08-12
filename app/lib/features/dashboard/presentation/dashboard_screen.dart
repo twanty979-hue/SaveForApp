@@ -232,6 +232,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ? SafeNetworkImage(
                                       url: _avatarUrl!,
                                       fit: BoxFit.cover,
+                                      isCircle: true,
                                       errorBuilder: (_, _, _) => const Icon(
                                         Icons.person_outline_rounded,
                                         color: AppTheme.primaryColor,

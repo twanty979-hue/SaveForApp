@@ -721,6 +721,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           width: 64,
                           height: 64,
                           fit: BoxFit.cover,
+                          isCircle: true,
                           errorBuilder: (_, _, _) => _buildInitialAvatar(),
                         )
                       : _buildInitialAvatar(),

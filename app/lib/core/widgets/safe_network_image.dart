@@ -8,6 +8,7 @@ class SafeNetworkImage extends StatelessWidget {
   final double? width;
   final double? height;
   final BoxFit fit;
+  final bool isCircle;
   final Widget Function(BuildContext, Object, StackTrace?)? errorBuilder;
 
   const SafeNetworkImage({
@@ -16,13 +17,14 @@ class SafeNetworkImage extends StatelessWidget {
     this.width,
     this.height,
     this.fit = BoxFit.cover,
+    this.isCircle = false,
     this.errorBuilder,
   });
 
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
-      final webWidget = web_helper.buildWebImage(url, width: width, height: height, fit: fit);
+      final webWidget = web_helper.buildWebImage(url, width: width, height: height, fit: fit, isCircle: isCircle);
       if (webWidget != null) {
         return Stack(
           fit: StackFit.passthrough,
