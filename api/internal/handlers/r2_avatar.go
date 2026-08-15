@@ -200,42 +200,8 @@ func handleDeleteProfileAvatar(c *gin.Context) {
 }
 
 func authenticatedUserID(c *gin.Context) (string, bool) {
-	authorization := strings.TrimSpace(c.GetHeader("Authorization"))
-	if !strings.HasPrefix(authorization, "Bearer ") {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Please sign in again"})
-		return "", false
-	}
-
-	supabaseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("SUPABASE_URL")), "/")
-	supabaseKey := strings.TrimSpace(os.Getenv("SUPABASE_SERVICE_KEY"))
-	if supabaseURL == "" || supabaseKey == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Supabase credentials are not configured"})
-		return "", false
-	}
-
-	req, err := http.NewRequest(http.MethodGet, supabaseURL+"/auth/v1/user", nil)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to validate user session"})
-		return "", false
-	}
-	req.Header.Set("apikey", supabaseKey)
-	req.Header.Set("Authorization", authorization)
-	resp, err := (&http.Client{Timeout: 12 * time.Second}).Do(req)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to validate user session"})
-		return "", false
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Your session has expired. Please sign in again"})
-		return "", false
-	}
-
-	var user struct {
-		ID string `json:"id"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil || user.ID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unable to identify signed-in user"})
+	user, ok := authenticatedUserDetails(c)
+	if !ok {
 		return "", false
 	}
 	return user.ID, true

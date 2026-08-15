@@ -2,20 +2,28 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
+	allowedOrigin := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGIN"))
+	if allowedOrigin == "" {
+		allowedOrigin = "*"
+	}
 
 	// CORS Middleware เพื่ออนุญาตการเชื่อมต่อจากโทรศัพท์มือถือจริงในวงแลนเดียวกัน
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", strconv.FormatBool(allowedOrigin != "*"))
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, apikey")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 
@@ -27,6 +35,22 @@ func SetupRouter() *gin.Engine {
 	})
 
 	// ตรวจสอบสถานะการเชื่อมต่อ API
+	// All non-auth API routes require a valid Supabase user session. The data
+	// proxy uses the server service key, so this is the authorization boundary
+	// for every request that reaches user data.
+	r.Use(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if path == "/ping" || strings.HasPrefix(path, "/api/v1/auth/") {
+			c.Next()
+			return
+		}
+		if _, ok := authenticatedUserDetails(c); !ok {
+			c.Abort()
+			return
+		}
+		c.Next()
+	})
+
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "pong from savefor api!",
@@ -122,6 +146,11 @@ func SetupRouter() *gin.Engine {
 		v1.GET("/notifications", handleListNotifications)
 		v1.GET("/notifications/unread-count", handleUnreadNotificationCount)
 		v1.PATCH("/notifications/:id/read", handleReadNotification)
+		v1.GET("/support/channels", handleListSupportChannels)
+		v1.GET("/support/tickets", handleListSupportTickets)
+		v1.POST("/support/tickets", handleCreateSupportTicket)
+		v1.GET("/feature-requests", handleListFeatureRequests)
+		v1.POST("/feature-requests", handleCreateFeatureRequest)
 
 		// Proxy การจัดเก็บข้อมูลธุรกรรมไปยังฐานข้อมูล Supabase PostgreSQL
 		v1.GET("/transactions", func(c *gin.Context) {
@@ -187,15 +216,60 @@ func handleSupabaseProxy(c *gin.Context, method string, path string) {
 		return
 	}
 
+	isDataProxy := strings.HasPrefix(path, "/rest/v1/")
+	userID := ""
+	if isDataProxy {
+		userID = c.GetString(authenticatedUserIDContextKey)
+		if userID == "" {
+			if user, ok := authenticatedUserDetails(c); ok {
+				userID = user.ID
+			}
+		}
+		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Please sign in again"})
+			return
+		}
+	}
+
+	bodyBytes := []byte(nil)
+	if c.Request.Body != nil {
+		bodyBytes, _ = io.ReadAll(c.Request.Body)
+	}
+	if isDataProxy {
+		var scopeErr error
+		bodyBytes, scopeErr = enforceUserScope(c, method, path, bodyBytes, userID)
+		if scopeErr != nil {
+			status := http.StatusForbidden
+			if strings.Contains(scopeErr.Error(), "invalid JSON") {
+				status = http.StatusBadRequest
+			}
+			c.JSON(status, gin.H{"error": scopeErr.Error()})
+			return
+		}
+	}
+
+	query := c.Request.URL.Query()
+	if isDataProxy {
+		if path == "/rest/v1/profiles" {
+			query.Set("id", "eq."+userID)
+		} else {
+			query.Set("user_id", "eq."+userID)
+		}
+	}
 	targetURL := supabaseURL + path
-	if c.Request.URL.RawQuery != "" {
-		targetURL += "?" + c.Request.URL.RawQuery
+	if !isDataProxy && c.Request.URL.RawQuery != "" {
+		if strings.Contains(targetURL, "?") {
+			targetURL += "&" + c.Request.URL.RawQuery
+		} else {
+			targetURL += "?" + c.Request.URL.RawQuery
+		}
+	} else if encodedQuery := query.Encode(); encodedQuery != "" {
+		targetURL += "?" + encodedQuery
 	}
 
 	var bodyReader io.Reader
-	if c.Request.Body != nil {
-		bodyBytes, _ := io.ReadAll(c.Request.Body)
-		bodyReader = bytes.NewBuffer(bodyBytes)
+	if len(bodyBytes) > 0 {
+		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
 	req, err := http.NewRequest(method, targetURL, bodyReader)
@@ -229,4 +303,35 @@ func handleSupabaseProxy(c *gin.Context, method string, path string) {
 	}
 
 	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), respBytes)
+}
+
+// enforceUserScope prevents a client from changing the owner field or using
+// a different owner filter while the API is proxying with its service key.
+func enforceUserScope(c *gin.Context, method, path string, body []byte, userID string) ([]byte, error) {
+	ownerField := "user_id"
+	if path == "/rest/v1/profiles" {
+		ownerField = "id"
+	}
+
+	expectedFilter := "eq." + userID
+	if current := c.Request.URL.Query().Get(ownerField); current != "" && current != expectedFilter {
+		return nil, fmt.Errorf("the request is not allowed for this user")
+	}
+
+	if method != http.MethodPost && method != http.MethodPatch && method != http.MethodPut {
+		return body, nil
+	}
+	if len(body) == 0 {
+		return body, nil
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("invalid JSON request")
+	}
+	if current, exists := payload[ownerField]; exists && fmt.Sprint(current) != userID {
+		return nil, fmt.Errorf("the request is not allowed for this user")
+	}
+	payload[ownerField] = userID
+	return json.Marshal(payload)
 }

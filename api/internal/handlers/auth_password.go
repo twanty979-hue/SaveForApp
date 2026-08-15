@@ -17,6 +17,11 @@ type authenticatedUser struct {
 	Email string `json:"email"`
 }
 
+const (
+	authenticatedUserContextKey   = "savefor.authenticated_user"
+	authenticatedUserIDContextKey = "savefor.authenticated_user_id"
+)
+
 func handleChangePassword(c *gin.Context) {
 	var input struct {
 		CurrentPassword string `json:"current_password"`
@@ -75,6 +80,12 @@ func handleChangePassword(c *gin.Context) {
 }
 
 func authenticatedUserDetails(c *gin.Context) (authenticatedUser, bool) {
+	if value, exists := c.Get(authenticatedUserContextKey); exists {
+		if user, ok := value.(authenticatedUser); ok && user.ID != "" {
+			return user, true
+		}
+	}
+
 	authorization := strings.TrimSpace(c.GetHeader("Authorization"))
 	if !strings.HasPrefix(authorization, "Bearer ") {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Please sign in again"})
@@ -109,6 +120,8 @@ func authenticatedUserDetails(c *gin.Context) (authenticatedUser, bool) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unable to identify signed-in user"})
 		return authenticatedUser{}, false
 	}
+	c.Set(authenticatedUserContextKey, user)
+	c.Set(authenticatedUserIDContextKey, user.ID)
 	return user, true
 }
 
