@@ -2,125 +2,167 @@ import 'package:app/core/localization/app_material.dart';
 import 'package:app/core/settings/app_settings.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class AppTheme {
-  static const Color primaryColor = Color(0xFF00A88F);
-  static const Color secondaryColor = Color(0xFFE6F4F1);
-  static const Color highlightColor = Color(0xFFF59E0B);
-  static const Color backgroundLight = Color(0xFFFAFAFA);
-  static const Color backgroundDark = Color(0xFF0F172A);
-  static const Color cardLight = Colors.white;
-  static const Color cardDark = Color(0xFF1E293B);
+class ThemePalette {
+  final Color primary;
+  final Color strong;
+  final Color secondary;
+  final Color secondaryDark;
+  final Color backgroundLight;
+  final Color backgroundDark;
+  final Color cardLight;
+  final Color cardDark;
 
-  static ThemeData get lightTheme => getTheme(AppSettings.themeStyle.value, ThemeMode.light);
-  static ThemeData get darkTheme => getTheme(AppSettings.themeStyle.value, ThemeMode.dark);
+  const ThemePalette({
+    required this.primary,
+    required this.strong,
+    required this.secondary,
+    required this.secondaryDark,
+    required this.backgroundLight,
+    required this.backgroundDark,
+    required this.cardLight,
+    required this.cardDark,
+  });
+}
+
+class AppTheme {
+  static const Color highlightColor = Color(0xFFF59E0B);
+
+  static ThemePalette paletteFor(ThemeStyle style) {
+    switch (style) {
+      case ThemeStyle.emerald:
+        return const ThemePalette(
+          primary: Color(0xFF0F766E),
+          strong: Color(0xFF115E59),
+          secondary: Color(0xFFCCFBF1),
+          secondaryDark: Color(0xFF173B3A),
+          backgroundLight: Color(0xFFF6FAF9),
+          backgroundDark: Color(0xFF0B1717),
+          cardLight: Colors.white,
+          cardDark: Color(0xFF132222),
+        );
+      case ThemeStyle.cartoon:
+        return const ThemePalette(
+          primary: Color(0xFFD9652B),
+          strong: Color(0xFFA8431B),
+          secondary: Color(0xFFFFE8DB),
+          secondaryDark: Color(0xFF482719),
+          backgroundLight: Color(0xFFFFF9F5),
+          backgroundDark: Color(0xFF25130B),
+          cardLight: Colors.white,
+          cardDark: Color(0xFF3A2117),
+        );
+      case ThemeStyle.sakura:
+        return const ThemePalette(
+          primary: Color(0xFFD85D84),
+          strong: Color(0xFFA83B61),
+          secondary: Color(0xFFFFE5EE),
+          secondaryDark: Color(0xFF49232F),
+          backgroundLight: Color(0xFFFFF8FA),
+          backgroundDark: Color(0xFF241018),
+          cardLight: Colors.white,
+          cardDark: Color(0xFF381D27),
+        );
+      case ThemeStyle.cyberpunk:
+        return const ThemePalette(
+          primary: Color(0xFF8B5CF6),
+          strong: Color(0xFF6D28D9),
+          secondary: Color(0xFFEDE9FE),
+          secondaryDark: Color(0xFF2A1B4D),
+          backgroundLight: Color(0xFFFAF9FF),
+          backgroundDark: Color(0xFF0D0818),
+          cardLight: Colors.white,
+          cardDark: Color(0xFF171024),
+        );
+      case ThemeStyle.luxury:
+        return const ThemePalette(
+          primary: Color(0xFFB88A22),
+          strong: Color(0xFF8A6419),
+          secondary: Color(0xFFF6E7B5),
+          secondaryDark: Color(0xFF443719),
+          backgroundLight: Color(0xFFFCFBF7),
+          backgroundDark: Color(0xFF101018),
+          cardLight: Colors.white,
+          cardDark: Color(0xFF181821),
+        );
+    }
+  }
+
+  static ThemePalette get currentPalette =>
+      paletteFor(AppSettings.themeStyle.value);
+  static Color get primaryColor => currentPalette.primary;
+  static Color get secondaryColor => currentPalette.secondary;
+  static Color get backgroundLight => currentPalette.backgroundLight;
+  static Color get backgroundDark => currentPalette.backgroundDark;
+  static Color get cardLight => currentPalette.cardLight;
+  static Color get cardDark => currentPalette.cardDark;
+
+  static ThemeData get lightTheme =>
+      getTheme(AppSettings.themeStyle.value, ThemeMode.light);
+  static ThemeData get darkTheme =>
+      getTheme(AppSettings.themeStyle.value, ThemeMode.dark);
 
   static ThemeData getTheme(ThemeStyle style, ThemeMode mode) {
     final isDark = mode == ThemeMode.dark;
     final brightness = isDark ? Brightness.dark : Brightness.light;
+    final palette = paletteFor(style);
+    final primary = palette.primary;
+    final secondary = isDark ? palette.secondaryDark : palette.secondary;
+    final background = isDark
+        ? palette.backgroundDark
+        : palette.backgroundLight;
+    final card = isDark ? palette.cardDark : palette.cardLight;
+    final fontFamily = _fontFamily(style);
+    final borderRadius = _borderRadius(style);
+    final borderColor = isDark
+        ? Color.alphaBlend(primary.withValues(alpha: 0.18), card)
+        : Color.alphaBlend(
+            primary.withValues(alpha: 0.12),
+            const Color(0xFFE2E8F0),
+          );
+    final onSurface = isDark ? Colors.white : const Color(0xFF172033);
+    final mutedText = isDark
+        ? const Color(0xFF9AA8B8)
+        : const Color(0xFF667085);
 
-    Color primary;
-    Color secondary;
-    Color highlight = const Color(0xFFF59E0B);
-    Color background;
-    Color card;
-    String? fontFamily;
-    BorderRadius borderRadius = BorderRadius.circular(16);
-    BorderSide borderSide;
-    BorderSide activeBorderSide;
-
-    switch (style) {
-      case ThemeStyle.emerald:
-        primary = const Color(0xFF00A88F);
-        secondary = const Color(0xFFE6F4F1);
-        background = isDark ? const Color(0xFF0F172A) : const Color(0xFFFAFAFA);
-        card = isDark ? const Color(0xFF1E293B) : Colors.white;
-        fontFamily = GoogleFonts.kanit().fontFamily;
-        borderSide = BorderSide(
-          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-          width: 1,
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: primary,
+          brightness: brightness,
+        ).copyWith(
+          primary: primary,
+          onPrimary: Colors.white,
+          primaryContainer: isDark ? palette.secondaryDark : palette.secondary,
+          onPrimaryContainer: isDark ? Colors.white : palette.strong,
+          secondary: secondary,
+          onSecondary: isDark ? Colors.white : palette.strong,
+          surface: card,
+          surfaceContainerLowest: background,
+          surfaceContainerLow: card,
+          surfaceContainer: card,
+          surfaceContainerHighest: isDark
+              ? Color.alphaBlend(primary.withValues(alpha: 0.12), card)
+              : Color.alphaBlend(primary.withValues(alpha: 0.06), card),
+          onSurface: onSurface,
+          onSurfaceVariant: mutedText,
+          outline: borderColor,
+          outlineVariant: borderColor.withValues(alpha: 0.72),
         );
-        activeBorderSide = const BorderSide(color: Color(0xFF00A88F), width: 1.5);
-        break;
 
-      case ThemeStyle.cartoon:
-        // Orange Cat / Playful Comic Theme
-        primary = const Color(0xFFFF9233); // Orange cat orange!
-        secondary = const Color(0xFFFFF3E6); // Cream orange
-        background = isDark ? const Color(0xFF2B1A0E) : const Color(0xFFFFFDF5);
-        card = isDark ? const Color(0xFF3D2718) : Colors.white;
-        fontFamily = GoogleFonts.itim().fontFamily; // Playful handwritten font
-        borderRadius = BorderRadius.circular(20);
-        // Playful thick borders for Neobrutalism comic look
-        borderSide = BorderSide(
-          color: isDark ? const Color(0xFFFFFDF5) : const Color(0xFF2B1A0E),
-          width: 2.0,
-        );
-        activeBorderSide = BorderSide(color: primary, width: 2.5);
-        break;
-
-      case ThemeStyle.sakura:
-        // Japanese Sakura Pastel Pink
-        primary = const Color(0xFFFF8FA3); // Sakura Pink
-        secondary = const Color(0xFFFFF0F2);
-        background = isDark ? const Color(0xFF261217) : const Color(0xFFFFF6F8);
-        card = isDark ? const Color(0xFF381D23) : Colors.white;
-        fontFamily = GoogleFonts.mitr().fontFamily; // Rounded & clean Mitr
-        borderRadius = BorderRadius.circular(24); // Ultra rounded bubble corners
-        borderSide = BorderSide(
-          color: isDark ? const Color(0xFF4C2731) : const Color(0xFFFFE3E7),
-          width: 1.2,
-        );
-        activeBorderSide = BorderSide(color: primary, width: 1.8);
-        break;
-
-      case ThemeStyle.cyberpunk:
-        // Synthwave Cyberpunk Neon
-        primary = const Color(0xFFFF007F); // Neon Magenta Fuchsia
-        secondary = const Color(0xFF1F0D3D);
-        background = isDark ? const Color(0xFF090514) : const Color(0xFFF5F3FF);
-        card = isDark ? const Color(0xFF170E2B) : Colors.white;
-        fontFamily = GoogleFonts.orbitron().fontFamily; // Futuristic numbers/text
-        borderRadius = BorderRadius.circular(12);
-        borderSide = BorderSide(
-          color: isDark ? const Color(0xFF00FFF0) : const Color(0xFFFF007F), // Neon cyan in dark mode, magenta in light
-          width: 1.5,
-        );
-        activeBorderSide = const BorderSide(color: Color(0xFF00FFF0), width: 2);
-        break;
-
-      case ThemeStyle.luxury:
-        // Premium Obsidian & Gold
-        primary = const Color(0xFFD4AF37); // Gold
-        secondary = const Color(0xFF231C0C);
-        background = isDark ? const Color(0xFF080B11) : const Color(0xFFFAF9F6);
-        card = isDark ? const Color(0xFF121824) : Colors.white;
-        fontFamily = GoogleFonts.notoSansThai().fontFamily; // Classic elegant Noto Sans
-        borderRadius = BorderRadius.circular(16);
-        borderSide = BorderSide(
-          color: isDark ? const Color(0xFF4A3E20) : const Color(0xFFE5D5A1),
-          width: 1.2,
-        );
-        activeBorderSide = BorderSide(color: primary, width: 1.8);
-        break;
-    }
-
-    final scheme = ColorScheme.fromSeed(
-      seedColor: primary,
-      brightness: brightness,
-      surface: card,
-      onSurface: isDark ? Colors.white : const Color(0xFF1E293B),
-      onSurfaceVariant: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-    );
+    final borderSide = BorderSide(color: borderColor, width: 1);
+    final activeBorderSide = BorderSide(color: primary, width: 1.7);
 
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
       fontFamily: fontFamily,
       colorScheme: scheme,
+      primaryColor: primary,
       scaffoldBackgroundColor: background,
+      canvasColor: background,
       cardTheme: CardThemeData(
         color: card,
         elevation: 0,
+        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           side: borderSide,
           borderRadius: borderRadius,
@@ -128,14 +170,51 @@ class AppTheme {
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: background,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
+        centerTitle: false,
         titleTextStyle: TextStyle(
-          color: isDark ? Colors.white : const Color(0xFF1E293B),
+          color: onSurface,
           fontSize: 20,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w800,
           fontFamily: fontFamily,
         ),
+        iconTheme: IconThemeData(color: onSurface),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(0, 46),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: borderRadius),
+          elevation: 0,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primary,
+          side: activeBorderSide,
+          minimumSize: const Size(0, 46),
+          shape: RoundedRectangleBorder(borderRadius: borderRadius),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: primary,
+          shape: RoundedRectangleBorder(borderRadius: borderRadius),
+        ),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(color: primary),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: primary,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+      dividerTheme: DividerThemeData(
+        color: borderColor,
+        thickness: 1,
+        space: 1,
       ),
       pageTransitionsTheme: _pageTransitions,
       bottomSheetTheme: BottomSheetThemeData(
@@ -148,6 +227,7 @@ class AppTheme {
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: card,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: borderRadius,
           side: borderSide,
@@ -155,7 +235,13 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? card.withValues(alpha: 0.8) : const Color(0xFFF8FAFC),
+        fillColor: isDark
+            ? Color.alphaBlend(primary.withValues(alpha: 0.06), card)
+            : Color.alphaBlend(primary.withValues(alpha: 0.025), background),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: borderRadius,
           borderSide: borderSide,
@@ -168,6 +254,11 @@ class AppTheme {
           borderRadius: borderRadius,
           borderSide: activeBorderSide,
         ),
+        labelStyle: TextStyle(color: mutedText),
+        floatingLabelStyle: TextStyle(
+          color: primary,
+          fontWeight: FontWeight.w700,
+        ),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: card,
@@ -178,6 +269,35 @@ class AppTheme {
         ),
       ),
     );
+  }
+
+  static String? _fontFamily(ThemeStyle style) {
+    switch (style) {
+      case ThemeStyle.emerald:
+        return GoogleFonts.kanit().fontFamily;
+      case ThemeStyle.cartoon:
+        return GoogleFonts.itim().fontFamily;
+      case ThemeStyle.sakura:
+        return GoogleFonts.mitr().fontFamily;
+      case ThemeStyle.cyberpunk:
+        return GoogleFonts.spaceGrotesk().fontFamily;
+      case ThemeStyle.luxury:
+        return GoogleFonts.notoSansThai().fontFamily;
+    }
+  }
+
+  static BorderRadius _borderRadius(ThemeStyle style) {
+    switch (style) {
+      case ThemeStyle.cartoon:
+        return BorderRadius.circular(20);
+      case ThemeStyle.sakura:
+        return BorderRadius.circular(22);
+      case ThemeStyle.cyberpunk:
+        return BorderRadius.circular(14);
+      case ThemeStyle.emerald:
+      case ThemeStyle.luxury:
+        return BorderRadius.circular(16);
+    }
   }
 
   static const PageTransitionsTheme _pageTransitions = PageTransitionsTheme(
@@ -198,4 +318,6 @@ extension AppThemeContext on BuildContext {
   Color get primaryTextColor => Theme.of(this).colorScheme.onSurface;
   Color get secondaryTextColor => Theme.of(this).colorScheme.onSurfaceVariant;
   Color get borderColor => Theme.of(this).colorScheme.outlineVariant;
+  Color get accentColor => Theme.of(this).colorScheme.primary;
+  Color get accentContainerColor => Theme.of(this).colorScheme.primaryContainer;
 }

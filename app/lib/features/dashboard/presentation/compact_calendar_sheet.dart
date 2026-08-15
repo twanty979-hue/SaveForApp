@@ -127,16 +127,48 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
     });
   }
 
-  Future<void> _showTransactionFormModal({Map<String, dynamic>? editingTransaction}) async {
+  Future<void> _showTransactionFormModal({
+    Map<String, dynamic>? editingTransaction,
+  }) async {
     final isEdit = editingTransaction != null;
-    final noteController = TextEditingController(text: isEdit ? editingTransaction['note']?.toString() : '');
-    final amountController = TextEditingController(text: isEdit ? (editingTransaction['amount'] as num?)?.toDouble().toStringAsFixed(0) : '');
-    
-    String type = isEdit ? (editingTransaction['type']?.toString() ?? 'expense') : 'expense';
-    String category = isEdit ? (editingTransaction['category']?.toString() ?? 'ค่าอาหาร') : 'ค่าอาหาร';
+    final noteController = TextEditingController(
+      text: isEdit ? editingTransaction['note']?.toString() : '',
+    );
+    final amountController = TextEditingController(
+      text: isEdit
+          ? (editingTransaction['amount'] as num?)?.toDouble().toStringAsFixed(
+              0,
+            )
+          : '',
+    );
 
-    final expenseCategories = ['ค่าอาหาร', 'ค่าเช่า', 'ค่าเดินทาง', 'ค่าไฟ', 'ค่าน้ำ', 'ค่าอินเทอร์เน็ต', 'ค่ามือถือ', 'ท่องเที่ยว', 'อื่นๆ'];
-    final incomeCategories = ['เงินเดือน', 'Freelance', 'ธุรกิจ', 'ลงทุน', 'ขายของ', 'โบนัส', 'อื่นๆ'];
+    String type = isEdit
+        ? (editingTransaction['type']?.toString() ?? 'expense')
+        : 'expense';
+    String category = isEdit
+        ? (editingTransaction['category']?.toString() ?? 'ค่าอาหาร')
+        : 'ค่าอาหาร';
+
+    final expenseCategories = [
+      'ค่าอาหาร',
+      'ค่าเช่า',
+      'ค่าเดินทาง',
+      'ค่าไฟ',
+      'ค่าน้ำ',
+      'ค่าอินเทอร์เน็ต',
+      'ค่ามือถือ',
+      'ท่องเที่ยว',
+      'อื่นๆ',
+    ];
+    final incomeCategories = [
+      'เงินเดือน',
+      'Freelance',
+      'ธุรกิจ',
+      'ลงทุน',
+      'ขายของ',
+      'โบนัส',
+      'อื่นๆ',
+    ];
 
     var saving = false;
 
@@ -149,7 +181,9 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
       ),
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, setSheetState) {
-          final categories = type == 'income' ? incomeCategories : expenseCategories;
+          final categories = type == 'income'
+              ? incomeCategories
+              : expenseCategories;
           if (!categories.contains(category)) {
             category = categories.first;
           }
@@ -182,9 +216,12 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          isEdit 
+                          isEdit
                               ? context.tr('แก้ไขรายการ', 'Edit Transaction')
-                              : context.tr('จดรายการย้อนหลัง', 'Record Transaction'),
+                              : context.tr(
+                                  'จดรายการย้อนหลัง',
+                                  'Record Transaction',
+                                ),
                           style: TextStyle(
                             color: context.primaryTextColor,
                             fontSize: 18,
@@ -197,15 +234,29 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                               final confirmed = await showDialog<bool>(
                                 context: context,
                                 builder: (ctx) => AlertDialog(
-                                  title: Text(context.tr('ลบรายการนี้?', 'Delete this?')),
-                                  content: Text(context.tr('คุณต้องการลบรายการนี้ใช่หรือไม่?', 'Are you sure you want to delete this?')),
+                                  title: Text(
+                                    context.tr('ลบรายการนี้?', 'Delete this?'),
+                                  ),
+                                  content: Text(
+                                    context.tr(
+                                      'คุณต้องการลบรายการนี้ใช่หรือไม่?',
+                                      'Are you sure you want to delete this?',
+                                    ),
+                                  ),
                                   actions: [
                                     TextButton(
-                                      onPressed: () => Navigator.pop(ctx, false),
-                                      child: Text(context.tr('ยกเลิก', 'Cancel')),
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: Text(
+                                        context.tr('ยกเลิก', 'Cancel'),
+                                      ),
                                     ),
                                     FilledButton(
-                                      style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: const Color(
+                                          0xFFEF4444,
+                                        ),
+                                      ),
                                       onPressed: () => Navigator.pop(ctx, true),
                                       child: Text(context.tr('ลบ', 'Delete')),
                                     ),
@@ -215,7 +266,9 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                               if (confirmed == true) {
                                 setSheetState(() => saving = true);
                                 try {
-                                  await _apiClient.delete('/transactions?id=eq.${editingTransaction['id']}');
+                                  await _apiClient.delete(
+                                    '/transactions?id=eq.${editingTransaction['id']}',
+                                  );
                                   await _loadTransactions();
                                 } catch (_) {}
                                 if (sheetContext.mounted) {
@@ -223,7 +276,10 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                                 }
                               }
                             },
-                            icon: const Icon(Icons.delete_forever_rounded, color: Color(0xFFEF4444)),
+                            icon: const Icon(
+                              Icons.delete_forever_rounded,
+                              color: Color(0xFFEF4444),
+                            ),
                           ),
                       ],
                     ),
@@ -232,7 +288,9 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                       children: [
                         Expanded(
                           child: ChoiceChip(
-                            label: Center(child: Text(context.tr('รายจ่าย', 'Expense'))),
+                            label: Center(
+                              child: Text(context.tr('รายจ่าย', 'Expense')),
+                            ),
                             selected: type == 'expense',
                             onSelected: (val) {
                               if (val) {
@@ -247,7 +305,9 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: ChoiceChip(
-                            label: Center(child: Text(context.tr('รายรับ', 'Income'))),
+                            label: Center(
+                              child: Text(context.tr('รายรับ', 'Income')),
+                            ),
                             selected: type == 'income',
                             onSelected: (val) {
                               if (val) {
@@ -266,7 +326,10 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                       controller: noteController,
                       decoration: InputDecoration(
                         labelText: context.tr('ชื่อรายการ', 'Item Name'),
-                        hintText: context.tr('เช่น ค่าอาหารกลางวัน, เงินเดือน', 'e.g., Lunch, Salary'),
+                        hintText: context.tr(
+                          'เช่น ค่าอาหารกลางวัน, เงินเดือน',
+                          'e.g., Lunch, Salary',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -291,7 +354,10 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                     DropdownButtonFormField<String>(
                       value: category,
                       decoration: const InputDecoration(
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                       ),
                       items: categories.map((cat) {
                         return DropdownMenuItem<String>(
@@ -316,9 +382,18 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                                 final note = noteController.text.trim();
                                 final amountStr = amountController.text.trim();
                                 final amount = double.tryParse(amountStr);
-                                if (note.isEmpty || amount == null || amount <= 0) {
+                                if (note.isEmpty ||
+                                    amount == null ||
+                                    amount <= 0) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(context.tr('กรุณากรอกข้อมูลให้ถูกต้อง', 'Please fill in correct info'))),
+                                    SnackBar(
+                                      content: Text(
+                                        context.tr(
+                                          'กรุณากรอกข้อมูลให้ถูกต้อง',
+                                          'Please fill in correct info',
+                                        ),
+                                      ),
+                                    ),
                                   );
                                   return;
                                 }
@@ -335,18 +410,33 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                                         'type': type,
                                         'category': category,
                                       };
-                                      await _apiClient.patch('/transactions?id=eq.${editingTransaction['id']}', body: body);
+                                      await _apiClient.patch(
+                                        '/transactions?id=eq.${editingTransaction['id']}',
+                                        body: body,
+                                      );
                                     } else {
-                                      final selectedDate = DateTime(_year, _month, _day, 12, 0, 0);
+                                      final selectedDate = DateTime(
+                                        _year,
+                                        _month,
+                                        _day,
+                                        12,
+                                        0,
+                                        0,
+                                      );
                                       final body = {
                                         'user_id': userId,
                                         'note': note,
                                         'amount': amount,
                                         'type': type,
                                         'category': category,
-                                        'transaction_date': selectedDate.toUtc().toIso8601String(),
+                                        'transaction_date': selectedDate
+                                            .toUtc()
+                                            .toIso8601String(),
                                       };
-                                      await _apiClient.post('/transactions', body: body);
+                                      await _apiClient.post(
+                                        '/transactions',
+                                        body: body,
+                                      );
                                     }
                                     await _loadTransactions();
                                   }
@@ -357,7 +447,13 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                                 }
                               },
                         child: saving
-                            ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            ? const SizedBox.square(
+                                dimension: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
                             : Text(context.tr('บันทึก', 'Save')),
                       ),
                     ),
@@ -372,9 +468,8 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
   }
 
   void _selectDate(DateTime date) {
-    final isAlreadySelected = date.year == _year &&
-        date.month == _month &&
-        date.day == _day;
+    final isAlreadySelected =
+        date.year == _year && date.month == _month && date.day == _day;
 
     if (isAlreadySelected) {
       if (widget.onDateSelected != null) {
@@ -474,11 +569,11 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
         Container(
           width: 32,
           height: 32,
-          decoration: const BoxDecoration(
-            color: Color(0xFFE6F4F1),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer,
             shape: BoxShape.circle,
           ),
-          child: const Icon(
+          child: Icon(
             Icons.calendar_month_rounded,
             color: AppTheme.primaryColor,
             size: 17,
@@ -564,16 +659,16 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                   ? AppTheme.primaryColor
                   : cell.inCurrentMonth
                   ? (Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF1E293B)
-                      : Colors.white)
+                        ? const Color(0xFF1E293B)
+                        : Colors.white)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: selected
                     ? AppTheme.primaryColor
                     : (Theme.of(context).brightness == Brightness.dark
-                        ? const Color(0xFF334155)
-                        : const Color(0xFFE9EDF2)),
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFE9EDF2)),
               ),
             ),
             child: Column(
@@ -588,11 +683,11 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                         ? Colors.white
                         : cell.inCurrentMonth
                         ? (Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white
-                            : const Color(0xFF334155))
+                              ? Colors.white
+                              : const Color(0xFF334155))
                         : (Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFF475569)
-                            : const Color(0xFFB8C1CC)),
+                              ? const Color(0xFF475569)
+                              : const Color(0xFFB8C1CC)),
                   ),
                 ),
                 if (hasTransactions) ...[
@@ -679,9 +774,7 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
         return InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: () => _showTransactionFormModal(editingTransaction: tx),
-          child: _TransactionRow(
-            transaction: tx,
-          ),
+          child: _TransactionRow(transaction: tx),
         );
       },
     );

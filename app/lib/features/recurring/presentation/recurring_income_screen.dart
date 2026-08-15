@@ -593,7 +593,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
+                            borderSide: BorderSide(
                               color: AppTheme.primaryColor,
                             ),
                           ),
@@ -648,7 +648,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
+                                      borderSide: BorderSide(
                                         color: AppTheme.primaryColor,
                                       ),
                                     ),
@@ -702,7 +702,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
+                                      borderSide: BorderSide(
                                         color: AppTheme.primaryColor,
                                       ),
                                     ),
@@ -938,7 +938,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppTheme.primaryColor),
+                        borderSide: BorderSide(color: AppTheme.primaryColor),
                       ),
                     ),
                   ),
@@ -1276,7 +1276,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                 // รายการการ์ดประวัติรายรับประจำ
                 Expanded(
                   child: _isLoading
-                      ? const Center(
+                      ? Center(
                           child: CircularProgressIndicator(
                             color: AppTheme.primaryColor,
                           ),

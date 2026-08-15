@@ -113,18 +113,20 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 10),
               ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.photo_library_outlined,
                   color: AppTheme.primaryColor,
                 ),
-                title: Text(context.tr('เลือกรูปจากเครื่อง', 'Choose from gallery')),
+                title: Text(
+                  context.tr('เลือกรูปจากเครื่อง', 'Choose from gallery'),
+                ),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _pickAvatar(ImageSource.gallery);
                 },
               ),
               ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.photo_camera_outlined,
                   color: AppTheme.primaryColor,
                 ),
@@ -254,7 +256,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     return 'ไม่สามารถอัปโหลดรูปโปรไฟล์ได้';
   }
 
-
   void _showMessage(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -297,10 +298,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 title: Text(_themeName(mode)),
                 leading: Icon(_themeIcon(mode)),
                 trailing: AppSettings.themeMode.value == mode
-                    ? const Icon(
-                        Icons.check_circle,
-                        color: AppTheme.primaryColor,
-                      )
+                    ? Icon(Icons.check_circle, color: AppTheme.primaryColor)
                     : const Icon(
                         Icons.circle_outlined,
                         color: Color(0xFFCBD5E1),
@@ -334,58 +332,61 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const _SheetHandle(),
-              const SizedBox(height: 18),
-              Text(
-                context.tr('เลือกสไตล์ธีม', 'Select Theme Style'),
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: context.primaryTextColor,
-                ),
-              ),
-              const SizedBox(height: 10),
-              for (final style in ThemeStyle.values)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    leading: _buildThemeAvatar(style),
-                    title: Text(
-                      _themeStyleName(style),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: context.primaryTextColor,
-                      ),
-                    ),
-                    subtitle: Text(
-                      _themeStyleSubtitle(style),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: context.secondaryTextColor,
-                      ),
-                    ),
-                    trailing: AppSettings.themeStyle.value == style
-                        ? Icon(
-                            Icons.check_circle,
-                            color: Theme.of(context).primaryColor,
-                            size: 24,
-                          )
-                        : Icon(
-                            Icons.circle_outlined,
-                            color: context.borderColor,
-                            size: 24,
-                          ),
-                    onTap: () async {
-                      await AppSettings.setThemeStyle(style);
-                      if (mounted) setState(() {});
-                      if (sheetContext.mounted) Navigator.pop(sheetContext);
-                    },
+                const SizedBox(height: 18),
+                Text(
+                  context.tr('เลือกสไตล์ธีม', 'Select Theme Style'),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: context.primaryTextColor,
                   ),
                 ),
-            ],
+                const SizedBox(height: 10),
+                for (final style in ThemeStyle.values)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      leading: _buildThemeAvatar(style),
+                      title: Text(
+                        _themeStyleName(style),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: context.primaryTextColor,
+                        ),
+                      ),
+                      subtitle: Text(
+                        _themeStyleSubtitle(style),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: context.secondaryTextColor,
+                        ),
+                      ),
+                      trailing: AppSettings.themeStyle.value == style
+                          ? Icon(
+                              Icons.check_circle,
+                              color: Theme.of(context).primaryColor,
+                              size: 24,
+                            )
+                          : Icon(
+                              Icons.circle_outlined,
+                              color: context.borderColor,
+                              size: 24,
+                            ),
+                      onTap: () async {
+                        await AppSettings.setThemeStyle(style);
+                        if (mounted) setState(() {});
+                        if (sheetContext.mounted) Navigator.pop(sheetContext);
+                      },
+                    ),
+                  ),
+              ],
+            ),
           ),
-         ),
         ),
       ),
     );
@@ -405,8 +406,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         return context.tr('ลักชัวรีสีทอง 👑', 'Luxury Gold 👑');
     }
   }
-
-
 
   Future<void> _showLanguageSettings() async {
     await showModalBottomSheet<void>(
@@ -436,7 +435,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               leading: const Text('🇹🇭', style: TextStyle(fontSize: 24)),
               title: const Text('ภาษาไทย'),
               trailing: AppSettings.locale.value.languageCode == 'th'
-                  ? const Icon(Icons.check_circle, color: AppTheme.primaryColor)
+                  ? Icon(Icons.check_circle, color: AppTheme.primaryColor)
                   : const Icon(Icons.circle_outlined),
               onTap: () async {
                 await AppSettings.setLocale(const Locale('th'));
@@ -448,7 +447,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               leading: const Text('🇬🇧', style: TextStyle(fontSize: 24)),
               title: const Text('English'),
               trailing: AppSettings.locale.value.languageCode == 'en'
-                  ? const Icon(Icons.check_circle, color: AppTheme.primaryColor)
+                  ? Icon(Icons.check_circle, color: AppTheme.primaryColor)
                   : const Icon(Icons.circle_outlined),
               onTap: () async {
                 await AppSettings.setLocale(const Locale('en'));
@@ -461,13 +460,13 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       ),
     );
   }
+
   void _showPrivacySettings() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const PrivacySettingsScreen()),
     );
   }
-
 
   Future<void> _confirmLogout() async {
     final confirmed = await showDialog<bool>(
@@ -548,76 +547,88 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             child: ResponsiveLayout(
               maxWidth: 600,
               child: _isLoading
-                  ? const Center(
+                  ? Center(
                       child: CircularProgressIndicator(
                         color: AppTheme.primaryColor,
                       ),
                     )
                   : ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-                    children: [
-                      _buildProfileHeader(),
-                      const SizedBox(height: 22),
-                      _SectionLabel(context.tr('การตั้งค่า', 'Settings')),
-                      const SizedBox(height: 8),
-                      _SettingsTile(
-                        icon: Icons.manage_accounts_outlined,
-                        title: context.tr('ตั้งค่าบัญชี', 'Account settings'),
-                        subtitle: context.tr(
-                          'ชื่อที่แสดงและข้อมูลเข้าสู่ระบบ',
-                          'Display name and sign-in information',
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                      children: [
+                        _buildProfileHeader(),
+                        const SizedBox(height: 22),
+                        _SectionLabel(context.tr('การตั้งค่า', 'Settings')),
+                        const SizedBox(height: 8),
+                        _SettingsTile(
+                          icon: Icons.manage_accounts_outlined,
+                          title: context.tr('ตั้งค่าบัญชี', 'Account settings'),
+                          subtitle: context.tr(
+                            'ชื่อที่แสดงและข้อมูลเข้าสู่ระบบ',
+                            'Display name and sign-in information',
+                          ),
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const AccountSettingsScreen(),
+                              ),
+                            );
+                            _loadProfile();
+                          },
                         ),
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const AccountSettingsScreen(),
-                            ),
-                          );
-                          _loadProfile();
-                        },
-                      ),
-                      _SettingsTile(
-                        icon: Icons.shield_outlined,
-                        title: context.tr('ความเป็นส่วนตัว', 'Privacy'),
-                        subtitle: context.tr(
-                          'ข้อมูลและความปลอดภัยของบัญชี',
-                          'Account data and security',
+                        _SettingsTile(
+                          icon: Icons.shield_outlined,
+                          title: context.tr('ความเป็นส่วนตัว', 'Privacy'),
+                          subtitle: context.tr(
+                            'ข้อมูลและความปลอดภัยของบัญชี',
+                            'Account data and security',
+                          ),
+                          onTap: _showPrivacySettings,
                         ),
-                        onTap: _showPrivacySettings,
-                      ),
-                      _SettingsTile(
-                        icon: Icons.language_rounded,
-                        title: context.tr('ภาษา', 'Language'),
-                        trailingText:
-                            AppSettings.locale.value.languageCode == 'en'
-                            ? 'English'
-                            : 'ไทย',
-                        onTap: _showLanguageSettings,
-                      ),
-                      _SettingsTile(
-                        icon: Icons.palette_outlined,
-                        title: context.tr('ธีม', 'Theme'),
-                        trailingText: _themeName(AppSettings.themeMode.value),
-                        onTap: _showThemeSettings,
-                      ),
-                      _SettingsTile(
-                        icon: Icons.brush_outlined,
-                        title: context.tr('สไตล์ธีม', 'Theme style'),
-                        trailingText: _themeStyleName(AppSettings.themeStyle.value),
-                        onTap: _showThemeStyleSettings,
-                      ),
-                      _SettingsTile(
-                        icon: Icons.notifications_none_rounded,
-                        title: context.tr('การแจ้งเตือน', 'Notifications'),
-                        subtitle: context.tr(
-                          'เตือนรายการและเป้าหมายที่กำหนดไว้',
-                          'Reminders for scheduled items and goals',
+                        _SettingsTile(
+                          icon: Icons.language_rounded,
+                          title: context.tr('ภาษา', 'Language'),
+                          trailingText:
+                              AppSettings.locale.value.languageCode == 'en'
+                              ? 'English'
+                              : 'ไทย',
+                          onTap: _showLanguageSettings,
                         ),
-                        trailing: Switch.adaptive(
-                          value: _notificationsEnabled,
-                          activeTrackColor: AppTheme.primaryColor,
-                          onChanged: (value) async {
+                        _SettingsTile(
+                          icon: Icons.palette_outlined,
+                          title: context.tr('ธีม', 'Theme'),
+                          trailingText: _themeName(AppSettings.themeMode.value),
+                          onTap: _showThemeSettings,
+                        ),
+                        _SettingsTile(
+                          icon: Icons.brush_outlined,
+                          title: context.tr('สไตล์ธีม', 'Theme style'),
+                          trailingText: _themeStyleName(
+                            AppSettings.themeStyle.value,
+                          ),
+                          onTap: _showThemeStyleSettings,
+                        ),
+                        _SettingsTile(
+                          icon: Icons.notifications_none_rounded,
+                          title: context.tr('การแจ้งเตือน', 'Notifications'),
+                          subtitle: context.tr(
+                            'เตือนรายการและเป้าหมายที่กำหนดไว้',
+                            'Reminders for scheduled items and goals',
+                          ),
+                          trailing: Switch.adaptive(
+                            value: _notificationsEnabled,
+                            activeTrackColor: AppTheme.primaryColor,
+                            onChanged: (value) async {
+                              setState(() => _notificationsEnabled = value);
+                              await AppSettings.setNotificationsEnabled(value);
+                              await NotificationService.instance.setEnabled(
+                                value,
+                              );
+                            },
+                          ),
+                          onTap: () async {
+                            final value = !_notificationsEnabled;
                             setState(() => _notificationsEnabled = value);
                             await AppSettings.setNotificationsEnabled(value);
                             await NotificationService.instance.setEnabled(
@@ -625,41 +636,34 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                             );
                           },
                         ),
-                        onTap: () async {
-                          final value = !_notificationsEnabled;
-                          setState(() => _notificationsEnabled = value);
-                          await AppSettings.setNotificationsEnabled(value);
-                          await NotificationService.instance.setEnabled(value);
-                        },
-                      ),
-                      _SettingsTile(
-                        icon: Icons.help_outline_rounded,
-                        title: context.tr(
-                          'ความช่วยเหลือและการสนับสนุน',
-                          'Help & support',
+                        _SettingsTile(
+                          icon: Icons.help_outline_rounded,
+                          title: context.tr(
+                            'ความช่วยเหลือและการสนับสนุน',
+                            'Help & support',
+                          ),
+                          subtitle: context.tr(
+                            'คำถามที่พบบ่อยและการติดต่อ',
+                            'Frequently asked questions and contact',
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const HelpSupportScreen(),
+                              ),
+                            );
+                          },
                         ),
-                        subtitle: context.tr(
-                          'คำถามที่พบบ่อยและการติดต่อ',
-                          'Frequently asked questions and contact',
+                        const SizedBox(height: 14),
+                        _SettingsTile(
+                          icon: Icons.logout_rounded,
+                          title: context.tr('ออกจากระบบ', 'Sign out'),
+                          danger: true,
+                          onTap: _confirmLogout,
                         ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const HelpSupportScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      _SettingsTile(
-                        icon: Icons.logout_rounded,
-                        title: context.tr('ออกจากระบบ', 'Sign out'),
-                        danger: true,
-                        onTap: _confirmLogout,
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
             ),
           ),
         ],
@@ -669,13 +673,14 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
   Widget _buildProfileHeader() {
     final isPro = _tier.toLowerCase() == 'pro';
+    final palette = AppTheme.currentPalette;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF16BFA5), Color(0xFF008B75)],
+          colors: [palette.primary, palette.strong],
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
@@ -700,10 +705,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white,
-                      width: 2,
-                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: _isUploadingAvatar
@@ -735,9 +736,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF008B75)),
+                      border: Border.all(color: palette.strong),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.camera_alt_rounded,
                       size: 13,
                       color: AppTheme.primaryColor,
@@ -806,6 +807,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   }
 
   Widget _buildThemeAvatar(ThemeStyle style) {
+    final palette = AppTheme.paletteFor(style);
     switch (style) {
       case ThemeStyle.emerald:
         return Container(
@@ -813,15 +815,22 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              colors: [Color(0xFF00A88F), Color(0xFF10B981)],
+            gradient: LinearGradient(
+              colors: [palette.primary, palette.strong],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            border: Border.all(color: Colors.teal.shade200, width: 1.5),
+            border: Border.all(
+              color: palette.primary.withValues(alpha: 0.35),
+              width: 1.5,
+            ),
           ),
           child: const Center(
-            child: Icon(Icons.account_balance_wallet_outlined, color: Colors.white, size: 20),
+            child: Icon(
+              Icons.account_balance_wallet_outlined,
+              color: Colors.white,
+              size: 20,
+            ),
           ),
         );
       case ThemeStyle.cartoon:
@@ -830,20 +839,16 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFFFFE3CC),
-            border: Border.all(color: const Color(0xFF2B1A0E), width: 2.0),
+            color: palette.secondary,
+            border: Border.all(color: palette.strong, width: 1.5),
           ),
           child: ClipOval(
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: CustomPaint(
-                    painter: _CheckeredAvatarPainter(),
-                  ),
+                  child: CustomPaint(painter: _CheckeredAvatarPainter()),
                 ),
-                const Center(
-                  child: Text('🐾', style: TextStyle(fontSize: 16)),
-                ),
+                const Center(child: Text('🐾', style: TextStyle(fontSize: 16))),
               ],
             ),
           ),
@@ -854,12 +859,18 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFFD1DC), Color(0xFFFFB5C2)],
+            gradient: LinearGradient(
+              colors: [
+                palette.secondary,
+                palette.primary.withValues(alpha: 0.7),
+              ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            border: Border.all(color: const Color(0xFFFFE3E7), width: 1.5),
+            border: Border.all(
+              color: palette.primary.withValues(alpha: 0.3),
+              width: 1.5,
+            ),
           ),
           child: const Center(
             child: Text('🌸', style: TextStyle(fontSize: 16)),
@@ -871,20 +882,16 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFF140D24),
-            border: Border.all(color: const Color(0xFF00FFF0), width: 2.0),
+            color: palette.secondaryDark,
+            border: Border.all(color: palette.primary, width: 1.5),
           ),
           child: ClipOval(
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: CustomPaint(
-                    painter: _CyberAvatarPainter(),
-                  ),
+                  child: CustomPaint(painter: _CyberAvatarPainter()),
                 ),
-                const Center(
-                  child: Text('⚡', style: TextStyle(fontSize: 14)),
-                ),
+                const Center(child: Text('⚡', style: TextStyle(fontSize: 14))),
               ],
             ),
           ),
@@ -895,12 +902,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+            gradient: LinearGradient(
+              colors: [palette.strong, palette.backgroundDark],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            border: Border.all(color: const Color(0xFFD4AF37), width: 1.8),
+            border: Border.all(color: palette.primary, width: 1.5),
           ),
           child: const Center(
             child: Text('👑', style: TextStyle(fontSize: 14)),
@@ -1006,15 +1013,15 @@ class _SettingsTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: danger
                   ? (Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF271A1C)
-                      : const Color(0xFFFFF7F7))
+                        ? const Color(0xFF271A1C)
+                        : const Color(0xFFFFF7F7))
                   : context.surfaceColor,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: danger
                     ? (Theme.of(context).brightness == Brightness.dark
-                        ? const Color(0xFF7F1D1D)
-                        : const Color(0xFFFECACA))
+                          ? const Color(0xFF7F1D1D)
+                          : const Color(0xFFFECACA))
                     : context.borderColor,
               ),
               boxShadow: [
@@ -1098,8 +1105,6 @@ class _SettingsTile extends StatelessWidget {
     );
   }
 }
-
-
 
 class _CheckeredAvatarPainter extends CustomPainter {
   @override

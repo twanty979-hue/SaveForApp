@@ -44,12 +44,14 @@ class TransactionsScreen extends StatefulWidget {
   final double topPadding;
   final GlobalKey? inputKey;
   final ValueNotifier<DateTime?>? dateFilter;
+  final Future<void> Function()? onTransactionSaved;
 
   const TransactionsScreen({
     super.key,
     this.topPadding = 16,
     this.inputKey,
     this.dateFilter,
+    this.onTransactionSaved,
   });
 
   @override
@@ -71,7 +73,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
   List<Map<String, dynamic>> _rawSuggestions = [];
   List<QuickSuggestion> _quickSuggestions = [];
-    String _inputType = 'expense';
+  String _inputType = 'expense';
 
   String get _activeUserId {
     if (AuthSession.userId == null) {
@@ -107,8 +109,18 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
   String _monthName(int month) {
     return const [
-      'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-      'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+      'ม.ค.',
+      'ก.พ.',
+      'มี.ค.',
+      'เม.ย.',
+      'พ.ค.',
+      'มิ.ย.',
+      'ก.ค.',
+      'ส.ค.',
+      'ก.ย.',
+      'ต.ค.',
+      'พ.ย.',
+      'ธ.ค.',
     ][month - 1];
   }
 
@@ -437,7 +449,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           if (date != null &&
               date.year == now.year &&
               date.month == now.month) {
-            final txAmount = num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+            final txAmount =
+                num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
             final txFixedExpenseId = tx['fixed_expense_id']?.toString();
             final txIncomeSourceId = tx['income_source_id']?.toString();
 
@@ -481,7 +494,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           for (var tx in data) {
             try {
               final name = tx['note']?.toString() ?? '';
-              final amount = num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+              final amount =
+                  num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ??
+                  0.0;
               final dateStr = tx['transaction_date']?.toString() ?? '';
               final timestamp = DateTime.tryParse(dateStr) ?? DateTime.now();
               final type = tx['type']?.toString() ?? 'expense';
@@ -536,7 +551,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   if (msgType == 'expense' && suggId == txFixedExpenseId) {
                     matchedSugg = sugg;
                     break;
-                  } else if (msgType == 'income' && suggId == txIncomeSourceId) {
+                  } else if (msgType == 'income' &&
+                      suggId == txIncomeSourceId) {
                     matchedSugg = sugg;
                     break;
                   }
@@ -546,7 +562,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               if (matchedSugg == null) {
                 for (var sugg in _rawSuggestions) {
                   final suggName =
-                      (sugg['bot_type'] == 'dream' ? sugg['title'] : sugg['name'])
+                      (sugg['bot_type'] == 'dream'
+                              ? sugg['title']
+                              : sugg['name'])
                           ?.toString()
                           .toLowerCase();
                   if (suggName == cleanName && sugg['bot_type'] == msgType) {
@@ -559,7 +577,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               // Fallback
               if (matchedSugg == null && msgType == 'expense') {
                 for (var sugg in _rawSuggestions) {
-                  final suggName = sugg['name']?.toString().trim().toLowerCase();
+                  final suggName = sugg['name']
+                      ?.toString()
+                      .trim()
+                      .toLowerCase();
                   if (suggName == 'ค่าใช้จ่ายรายเดือน' &&
                       sugg['bot_type'] == 'expense') {
                     matchedSugg = sugg;
@@ -571,10 +592,17 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               if (matchedSugg != null) {
                 hasBudget = true;
                 if (msgType == 'expense' || msgType == 'income') {
-                  budget = num.tryParse(matchedSugg['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+                  budget =
+                      num.tryParse(
+                        matchedSugg['amount']?.toString() ?? '',
+                      )?.toDouble() ??
+                      0.0;
                 } else if (msgType == 'dream') {
                   budget =
-                      num.tryParse(matchedSugg['target_amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+                      num.tryParse(
+                        matchedSugg['target_amount']?.toString() ?? '',
+                      )?.toDouble() ??
+                      0.0;
                 }
               }
 
@@ -806,6 +834,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
         return;
       }
 
+      var savedAnyTransaction = false;
       for (var item in parsedItems) {
         final name = item['name'] as String;
         final note = item['note'] as String;
@@ -935,6 +964,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           final response = await _apiClient.post('/transactions', body: body);
 
           if (response.statusCode == 200 || response.statusCode == 201) {
+            savedAnyTransaction = true;
             // Update dream amount
             if (note.startsWith('[ออม] หยอดกระปุก: ')) {
               final dreamTitle = note
@@ -1055,7 +1085,12 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     'budget': budget,
                     'totalAccumulated': totalAccumulated,
                     'msgType': msgType,
-                    'icon': _getIconForTransaction(name, category, msgType, matchedSuggestion),
+                    'icon': _getIconForTransaction(
+                      name,
+                      category,
+                      msgType,
+                      matchedSuggestion,
+                    ),
                   },
                 ),
               );
@@ -1067,6 +1102,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
         } catch (e) {
           _addLocalFallbackMessage(name, amount, category, msgType);
         }
+      }
+      if (savedAnyTransaction) {
+        await widget.onTransactionSaved?.call();
       }
       _scrollToBottom();
       _playAiReplySound();
@@ -1143,7 +1181,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
       final style = AppSettings.themeStyle.value;
       BorderRadius cardRadius = BorderRadius.circular(16);
       Border cardBorder = Border.all(color: context.borderColor);
-      
+
       switch (style) {
         case ThemeStyle.emerald:
           cardRadius = BorderRadius.circular(16);
@@ -1152,28 +1190,36 @@ class _TransactionsScreenState extends State<TransactionsScreen>
         case ThemeStyle.cartoon:
           cardRadius = BorderRadius.circular(20);
           cardBorder = Border.all(
-            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFFFFDF5) : const Color(0xFF2B1A0E),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFFFFFDF5)
+                : const Color(0xFF2B1A0E),
             width: 2.0,
           );
           break;
         case ThemeStyle.sakura:
           cardRadius = BorderRadius.circular(24);
           cardBorder = Border.all(
-            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF4C2731) : const Color(0xFFFFE3E7),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF4C2731)
+                : const Color(0xFFFFE3E7),
             width: 1.2,
           );
           break;
         case ThemeStyle.cyberpunk:
           cardRadius = BorderRadius.circular(12);
           cardBorder = Border.all(
-            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF00FFF0) : const Color(0xFFFF007F),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF00FFF0)
+                : const Color(0xFFFF007F),
             width: 1.5,
           );
           break;
         case ThemeStyle.luxury:
           cardRadius = BorderRadius.circular(16);
           cardBorder = Border.all(
-            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF4A3E20) : const Color(0xFFE5D5A1),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF4A3E20)
+                : const Color(0xFFE5D5A1),
             width: 1.2,
           );
           break;
@@ -1303,8 +1349,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             color: isUser
                 ? Theme.of(context).primaryColor
                 : (Theme.of(context).brightness == Brightness.dark
-                    ? const Color(0xFF1E293B)
-                    : const Color(0xFFF1F5F9)),
+                      ? const Color(0xFF1E293B)
+                      : const Color(0xFFF1F5F9)),
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(16),
               topRight: const Radius.circular(16),
@@ -1333,8 +1379,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     color: isUser
                         ? Colors.white
                         : (Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFFE2E8F0)
-                            : const Color(0xFF1E293B)),
+                              ? const Color(0xFFE2E8F0)
+                              : const Color(0xFF1E293B)),
                     fontSize: isUser ? 14 : 13,
                   ),
                 ),
@@ -1367,18 +1413,29 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 valueListenable: _effectiveDateFilter,
                 builder: (context, dateFilterVal, _) {
                   if (dateFilterVal == null) return const SizedBox.shrink();
-                  final formattedDate = '${dateFilterVal.day} ${_monthName(dateFilterVal.month)} ${dateFilterVal.year + 543}';
+                  final formattedDate =
+                      '${dateFilterVal.day} ${_monthName(dateFilterVal.month)} ${dateFilterVal.year + 543}';
                   return Container(
-                    margin: EdgeInsets.fromLTRB(16, widget.topPadding + 8, 16, 0),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    margin: EdgeInsets.fromLTRB(
+                      16,
+                      widget.topPadding + 8,
+                      16,
+                      0,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.primaryColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+                      border: Border.all(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                      ),
                     ),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.calendar_today_outlined,
                           size: 14,
                           color: AppTheme.primaryColor,
@@ -1390,7 +1447,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                               'จดบันทึกของวันที่: $formattedDate',
                               'Recording for: $formattedDate',
                             ),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: AppTheme.primaryColor,
@@ -1401,7 +1458,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                           onTap: () {
                             _effectiveDateFilter.value = null;
                           },
-                          child: const Icon(
+                          child: Icon(
                             Icons.close_rounded,
                             size: 16,
                             color: AppTheme.primaryColor,
@@ -1419,7 +1476,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     controller: _scrollController,
                     padding: EdgeInsets.fromLTRB(
                       16,
-                      _effectiveDateFilter.value != null ? 8 : widget.topPadding,
+                      _effectiveDateFilter.value != null
+                          ? 8
+                          : widget.topPadding,
                       16,
                       _quickSuggestions.isNotEmpty ? 58 : 16,
                     ),
@@ -1496,7 +1555,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                           textInputAction: TextInputAction.send,
                           style: TextStyle(
                             fontSize: 14,
-                            color: Theme.of(context).brightness == Brightness.dark
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
                                 ? Colors.white
                                 : const Color(0xFF1E293B),
                             fontWeight: FontWeight.w500,
@@ -1533,9 +1593,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                           boxShadow: _canSend
                               ? [
                                   BoxShadow(
-                                    color: Theme.of(context).primaryColor.withValues(
-                                      alpha: 0.24,
-                                    ),
+                                    color: Theme.of(
+                                      context,
+                                    ).primaryColor.withValues(alpha: 0.24),
                                     blurRadius: 10,
                                     offset: const Offset(0, 4),
                                   ),
@@ -1627,7 +1687,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   children: [
                     suggestion.icon is Widget
                         ? suggestion.icon
-                        : Icon(suggestion.icon as IconData, size: 13, color: color),
+                        : Icon(
+                            suggestion.icon as IconData,
+                            size: 13,
+                            color: color,
+                          ),
                     Text(
                       suggestion.name,
                       maxLines: 1,
@@ -1683,9 +1747,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   ) {
     final isExpense = msgType == 'expense' || category == 'รายจ่าย';
     final isDream = msgType == 'dream' || category == 'เงินออม';
-    final title = isExpense 
-        ? context.tr('บันทึกรายจ่าย', 'EXPENSE RECORD') 
-        : (isDream ? context.tr('หยอดเป้าหมาย', 'SAVINGS GOAL') : context.tr('รายการใหม่', 'NEW ENTRY'));
+    final title = isExpense
+        ? context.tr('บันทึกรายจ่าย', 'EXPENSE RECORD')
+        : (isDream
+              ? context.tr('หยอดเป้าหมาย', 'SAVINGS GOAL')
+              : context.tr('รายการใหม่', 'NEW ENTRY'));
 
     final badge = !hasBudget
         ? Positioned(
@@ -1723,7 +1789,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             children: [
               Positioned.fill(
                 child: CustomPaint(
-                  painter: _CardCheckeredPainter(color: const Color(0xFFFFC08D).withValues(alpha: 0.3)),
+                  painter: _CardCheckeredPainter(
+                    color: const Color(0xFFFFC08D).withValues(alpha: 0.3),
+                  ),
                 ),
               ),
               Center(
@@ -1735,7 +1803,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                       decoration: BoxDecoration(
                         color: const Color(0xFFFF9233),
                         shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFF2B1A0E), width: 1.8),
+                        border: Border.all(
+                          color: const Color(0xFF2B1A0E),
+                          width: 1.8,
+                        ),
                       ),
                       child: itemIcon is Widget
                           ? SizedBox(width: 24, height: 24, child: itemIcon)
@@ -1809,7 +1880,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             children: [
               Positioned.fill(
                 child: CustomPaint(
-                  painter: _CardCyberGridPainter(color: const Color(0xFFFF007F).withValues(alpha: 0.15)),
+                  painter: _CardCyberGridPainter(
+                    color: const Color(0xFFFF007F).withValues(alpha: 0.15),
+                  ),
                 ),
               ),
               Center(
@@ -1820,7 +1893,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1F0D3D),
-                        border: Border.all(color: const Color(0xFF00FFF0), width: 1.5),
+                        border: Border.all(
+                          color: const Color(0xFF00FFF0),
+                          width: 1.5,
+                        ),
                         shape: BoxShape.circle,
                       ),
                       child: itemIcon is Widget
@@ -1908,9 +1984,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           width: double.infinity,
           decoration: BoxDecoration(
             color: headerBgColor,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(20),
-            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Stack(
             children: [
@@ -1954,18 +2028,33 @@ class _TransactionsScreenState extends State<TransactionsScreen>
       return Icons.savings_outlined;
     } else if (msgType == 'income' || category == 'รายรับ') {
       if (nameLower.contains('เดือน')) return Icons.work_outline;
-      if (nameLower.contains('ลงทุน') || nameLower.contains('หุ้น')) return Icons.trending_up_outlined;
+      if (nameLower.contains('ลงทุน') || nameLower.contains('หุ้น'))
+        return Icons.trending_up_outlined;
       if (nameLower.contains('ขาย')) return Icons.shopping_cart_outlined;
       return Icons.account_balance_wallet_outlined;
     } else {
       if (nameLower.contains('ไฟ')) return Icons.flash_on_outlined;
       if (nameLower.contains('น้ำ')) return Icons.water_drop_outlined;
-      if (nameLower.contains('ห้อง') || nameLower.contains('บ้าน') || nameLower.contains('เช่า')) return Icons.home_outlined;
-      if (nameLower.contains('เน็ต') || nameLower.contains('wifi')) return Icons.wifi;
-      if (nameLower.contains('โทร') || nameLower.contains('มือถือ')) return Icons.phone_android_outlined;
-      if (nameLower.contains('กิน') || nameLower.contains('ข้าว') || nameLower.contains('อาหาร') || nameLower.contains('คาเฟ่')) return Icons.local_cafe_outlined;
-      if (nameLower.contains('รถ') || nameLower.contains('เดินทาง')) return Icons.directions_car_outlined;
-      if (nameLower.contains('ยา') || nameLower.contains('หมอ') || nameLower.contains('โรงพยาบาล') || nameLower.contains('รักษา')) return Icons.favorite_border_outlined;
+      if (nameLower.contains('ห้อง') ||
+          nameLower.contains('บ้าน') ||
+          nameLower.contains('เช่า'))
+        return Icons.home_outlined;
+      if (nameLower.contains('เน็ต') || nameLower.contains('wifi'))
+        return Icons.wifi;
+      if (nameLower.contains('โทร') || nameLower.contains('มือถือ'))
+        return Icons.phone_android_outlined;
+      if (nameLower.contains('กิน') ||
+          nameLower.contains('ข้าว') ||
+          nameLower.contains('อาหาร') ||
+          nameLower.contains('คาเฟ่'))
+        return Icons.local_cafe_outlined;
+      if (nameLower.contains('รถ') || nameLower.contains('เดินทาง'))
+        return Icons.directions_car_outlined;
+      if (nameLower.contains('ยา') ||
+          nameLower.contains('หมอ') ||
+          nameLower.contains('โรงพยาบาล') ||
+          nameLower.contains('รักษา'))
+        return Icons.favorite_border_outlined;
       return Icons.receipt_long_outlined;
     }
   }
@@ -1984,7 +2073,9 @@ class ThemePatternPainter extends CustomPainter {
     switch (style) {
       case ThemeStyle.emerald:
         final paint = Paint()
-          ..color = isDark ? Colors.white.withValues(alpha: 0.015) : Colors.black.withValues(alpha: 0.015)
+          ..color = isDark
+              ? Colors.white.withValues(alpha: 0.015)
+              : Colors.black.withValues(alpha: 0.015)
           ..strokeWidth = 1.0;
         const double step = 32.0;
         for (double x = 0; x < size.width; x += step) {
@@ -1997,7 +2088,9 @@ class ThemePatternPainter extends CustomPainter {
 
       case ThemeStyle.cartoon:
         final paint = Paint()
-          ..color = isDark ? const Color(0xFFFFF3E6).withValues(alpha: 0.03) : const Color(0xFFFF9233).withValues(alpha: 0.04)
+          ..color = isDark
+              ? const Color(0xFFFFF3E6).withValues(alpha: 0.03)
+              : const Color(0xFFFF9233).withValues(alpha: 0.04)
           ..strokeWidth = 2.0;
         const double step = 28.0;
         for (double x = 0; x < size.width; x += step) {
@@ -2010,11 +2103,17 @@ class ThemePatternPainter extends CustomPainter {
 
       case ThemeStyle.sakura:
         final paint = Paint()
-          ..color = isDark ? const Color(0xFFFF8FA3).withValues(alpha: 0.03) : const Color(0xFFFF8FA3).withValues(alpha: 0.05)
+          ..color = isDark
+              ? const Color(0xFFFF8FA3).withValues(alpha: 0.03)
+              : const Color(0xFFFF8FA3).withValues(alpha: 0.05)
           ..strokeWidth = 3.0;
         const double step = 40.0;
         for (double i = -size.height; i < size.width; i += step) {
-          canvas.drawLine(Offset(i, 0), Offset(i + size.height, size.height), paint);
+          canvas.drawLine(
+            Offset(i, 0),
+            Offset(i + size.height, size.height),
+            paint,
+          );
         }
         break;
 
@@ -2022,22 +2121,32 @@ class ThemePatternPainter extends CustomPainter {
         final gridPaint = Paint()
           ..color = const Color(0xFF00FFF0).withValues(alpha: 0.06)
           ..strokeWidth = 1.5;
-        
+
         final horizonY = size.height * 0.15;
-        
+
         const int numLines = 16;
         for (int i = 0; i <= numLines; i++) {
           final xBottom = size.width * (i / numLines);
           final xTop = size.width * 0.5 + (xBottom - size.width * 0.5) * 0.1;
-          canvas.drawLine(Offset(xBottom, size.height), Offset(xTop, horizonY), gridPaint);
+          canvas.drawLine(
+            Offset(xBottom, size.height),
+            Offset(xTop, horizonY),
+            gridPaint,
+          );
         }
 
         double currentY = size.height;
         double spacing = 45.0;
         while (currentY > horizonY) {
           final ratio = (currentY - horizonY) / (size.height - horizonY);
-          gridPaint.color = const Color(0xFFFF007F).withValues(alpha: 0.04 + (0.06 * ratio));
-          canvas.drawLine(Offset(0, currentY), Offset(size.width, currentY), gridPaint);
+          gridPaint.color = const Color(
+            0xFFFF007F,
+          ).withValues(alpha: 0.04 + (0.06 * ratio));
+          canvas.drawLine(
+            Offset(0, currentY),
+            Offset(size.width, currentY),
+            gridPaint,
+          );
           currentY -= spacing;
           spacing *= 0.85;
           if (spacing < 4.0) break;
@@ -2046,14 +2155,24 @@ class ThemePatternPainter extends CustomPainter {
 
       case ThemeStyle.luxury:
         final paint = Paint()
-          ..color = const Color(0xFFD4AF37).withValues(alpha: isDark ? 0.03 : 0.05)
+          ..color = const Color(
+            0xFFD4AF37,
+          ).withValues(alpha: isDark ? 0.03 : 0.05)
           ..strokeWidth = 1.0;
         const double step = 45.0;
         for (double i = -size.height; i < size.width; i += step) {
-          canvas.drawLine(Offset(i, 0), Offset(i + size.height, size.height), paint);
+          canvas.drawLine(
+            Offset(i, 0),
+            Offset(i + size.height, size.height),
+            paint,
+          );
         }
         for (double i = 0; i < size.width + size.height; i += step) {
-          canvas.drawLine(Offset(i, 0), Offset(i - size.height, size.height), paint);
+          canvas.drawLine(
+            Offset(i, 0),
+            Offset(i - size.height, size.height),
+            paint,
+          );
         }
         break;
     }

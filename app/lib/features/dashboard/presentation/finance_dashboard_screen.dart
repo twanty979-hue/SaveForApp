@@ -21,12 +21,7 @@ class FinanceDashboardScreen extends StatefulWidget {
 
 class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   final ApiClient _apiClient = ApiClient();
-  final List<String> _periods = [
-    'เดือนนี้',
-    'เดือนก่อน',
-    '30 วัน',
-    'ทั้งหมด',
-  ];
+  final List<String> _periods = ['เดือนนี้', 'เดือนก่อน', '30 วัน', 'ทั้งหมด'];
 
   List<dynamic> _transactions = [];
   int _selectedPeriod = 0;
@@ -198,103 +193,111 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
               maxWidth: 800,
               child: Column(
                 children: [
-                _DashboardHeader(onRefresh: _load),
-                Expanded(
-                  child: _loading
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                            color: AppTheme.primaryColor,
-                          ),
-                        )
-                      : RefreshIndicator(
-                          color: AppTheme.primaryColor,
-                          onRefresh: _load,
-                          child: ListView(
-                            physics: const AlwaysScrollableScrollPhysics(
-                              parent: BouncingScrollPhysics(),
+                  _DashboardHeader(onRefresh: _load),
+                  Expanded(
+                    child: _loading
+                        ? Center(
+                            child: CircularProgressIndicator(
+                              color: AppTheme.primaryColor,
                             ),
-                            padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
-                            children: [
-                              _PeriodSelector(
-                                labels: _periods,
-                                selectedIndex: _selectedPeriod,
-                                onSelected: (index) =>
-                                    setState(() => _selectedPeriod = index),
+                          )
+                        : RefreshIndicator(
+                            color: AppTheme.primaryColor,
+                            onRefresh: _load,
+                            child: ListView(
+                              physics: const AlwaysScrollableScrollPhysics(
+                                parent: BouncingScrollPhysics(),
                               ),
-                              const SizedBox(height: 12),
-                              DashboardOverviewCard(
-                                income: metrics.income,
-                                expense: metrics.expense,
-                                saving: metrics.saving,
-                                dailyOutflow: _lastSevenDayOutflow,
-                                expanded: true,
-                                showToggle: false,
-                                showDailyBars: false,
-                                title: _overviewTitle,
-                                onToggle: () {},
-                              ),
-                              const SizedBox(height: 12),
-                              MonthlyComparisonCard(points: _monthlyComparison),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _InsightCard(
-                                      icon: Icons.savings_outlined,
-                                      label: context.tr('อัตราการออม', 'Savings Rate'),
-                                      value:
-                                          '${savingRate.toStringAsFixed(0)}%',
-                                      color: const Color(0xFF8B5CF6),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 9),
-                                  Expanded(
-                                    child: _InsightCard(
-                                      icon: Icons.pie_chart_outline_rounded,
-                                      label: context.tr('ใช้ต่อรายรับ', 'Expense/Income'),
-                                      value:
-                                          '${spendingRate.toStringAsFixed(0)}%',
-                                      color: const Color(0xFFEF6677),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 18),
-                              Row(
-                                children: [
-                                  const Expanded(
-                                    child: Text(
-                                      'รายการล่าสุด',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFF1E293B),
+                              padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
+                              children: [
+                                _PeriodSelector(
+                                  labels: _periods,
+                                  selectedIndex: _selectedPeriod,
+                                  onSelected: (index) =>
+                                      setState(() => _selectedPeriod = index),
+                                ),
+                                const SizedBox(height: 12),
+                                DashboardOverviewCard(
+                                  income: metrics.income,
+                                  expense: metrics.expense,
+                                  saving: metrics.saving,
+                                  dailyOutflow: _lastSevenDayOutflow,
+                                  expanded: true,
+                                  showToggle: false,
+                                  showDailyBars: false,
+                                  title: _overviewTitle,
+                                  onToggle: () {},
+                                ),
+                                const SizedBox(height: 12),
+                                MonthlyComparisonCard(
+                                  points: _monthlyComparison,
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _InsightCard(
+                                        icon: Icons.savings_outlined,
+                                        label: context.tr(
+                                          'อัตราการออม',
+                                          'Savings Rate',
+                                        ),
+                                        value:
+                                            '${savingRate.toStringAsFixed(0)}%',
+                                        color: const Color(0xFF8B5CF6),
                                       ),
                                     ),
-                                  ),
-                                  Text(
-                                    '${_filteredTransactions.length} รายการ',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF94A3B8),
+                                    const SizedBox(width: 9),
+                                    Expanded(
+                                      child: _InsightCard(
+                                        icon: Icons.pie_chart_outline_rounded,
+                                        label: context.tr(
+                                          'ใช้ต่อรายรับ',
+                                          'Expense/Income',
+                                        ),
+                                        value:
+                                            '${spendingRate.toStringAsFixed(0)}%',
+                                        color: const Color(0xFFEF6677),
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              _RecentTransactions(
-                                transactions: _filteredTransactions,
-                              ),
-                            ],
+                                  ],
+                                ),
+                                const SizedBox(height: 18),
+                                Row(
+                                  children: [
+                                    const Expanded(
+                                      child: Text(
+                                        'รายการล่าสุด',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      '${_filteredTransactions.length} รายการ',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                _RecentTransactions(
+                                  transactions: _filteredTransactions,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
@@ -359,10 +362,7 @@ class _DashboardHeader extends StatelessWidget {
           IconButton(
             tooltip: 'รีเฟรช',
             onPressed: onRefresh,
-            icon: const Icon(
-              Icons.refresh_rounded,
-              color: AppTheme.primaryColor,
-            ),
+            icon: Icon(Icons.refresh_rounded, color: AppTheme.primaryColor),
           ),
         ],
       ),

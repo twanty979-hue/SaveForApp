@@ -1,13 +1,7 @@
 import 'package:app/core/localization/app_material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum ThemeStyle {
-  emerald,
-  cartoon,
-  sakura,
-  cyberpunk,
-  luxury,
-}
+enum ThemeStyle { emerald, cartoon, sakura, cyberpunk, luxury }
 
 class AppSettings {
   static final ValueNotifier<ThemeMode> themeMode = ValueNotifier(
@@ -20,6 +14,7 @@ class AppSettings {
 
   static bool notificationsEnabled = true;
   static bool appLockEnabled = false;
+  static bool autoSlipScanningEnabled = false;
   static final ValueNotifier<bool> hideBalances = ValueNotifier(false);
   static bool analyticsEnabled = true;
 
@@ -34,6 +29,7 @@ class AppSettings {
     locale.value = Locale(prefs.getString('locale') ?? 'th');
     notificationsEnabled = prefs.getBool('notificationsEnabled') ?? true;
     appLockEnabled = prefs.getBool('appLockEnabled') ?? false;
+    autoSlipScanningEnabled = prefs.getBool('autoSlipScanningEnabled') ?? false;
     hideBalances.value = prefs.getBool('hideBalances') ?? false;
     analyticsEnabled = prefs.getBool('analyticsEnabled') ?? true;
   }
@@ -66,6 +62,12 @@ class AppSettings {
     appLockEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('appLockEnabled', enabled);
+  }
+
+  static Future<void> setAutoSlipScanningEnabled(bool enabled) async {
+    autoSlipScanningEnabled = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('autoSlipScanningEnabled', enabled);
   }
 
   static Future<void> setHideBalances(bool enabled) async {

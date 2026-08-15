@@ -217,7 +217,9 @@ class _NotificationInboxSheetState extends State<NotificationInboxSheet> {
                                   fontWeight: unread
                                       ? FontWeight.w800
                                       : FontWeight.w600,
-                                  color: Theme.of(context).brightness == Brightness.dark
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
                                       ? Colors.white
                                       : const Color(0xFF1E293B),
                                 ),
@@ -238,7 +240,8 @@ class _NotificationInboxSheetState extends State<NotificationInboxSheet> {
                           style: TextStyle(
                             fontSize: 12,
                             height: 1.4,
-                            color: Theme.of(context).brightness == Brightness.dark
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
                                 ? const Color(0xFF94A3B8)
                                 : const Color(0xFF64748B),
                           ),
@@ -248,7 +251,7 @@ class _NotificationInboxSheetState extends State<NotificationInboxSheet> {
                   ),
                   if (unread) ...[
                     const SizedBox(width: 8),
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.only(top: 5),
                       child: CircleAvatar(
                         radius: 4,

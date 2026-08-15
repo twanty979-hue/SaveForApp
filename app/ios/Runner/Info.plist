@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>App</string>
+	<string>SaveFor</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,13 +15,13 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>app</string>
+	<string>SaveFor</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
@@ -36,11 +36,9 @@
 			<array>
 				<dict>
 					<key>UISceneClassName</key>
-					<string>UIWindowScene</string>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
 					<key>UISceneConfigurationName</key>
 					<string>flutter</string>
-					<key>UISceneDelegateClassName</key>
-					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
 					<key>UISceneStoryboardFile</key>
 					<string>Main</string>
 				</dict>
@@ -50,11 +48,11 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>ใช้กล้องเพื่อถ่ายรูปโปรไฟล์ของคุณ</string>
+	<string>SaveFor uses the camera to capture receipt images.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>เลือกรูปจากคลังภาพเพื่อใช้เป็นรูปโปรไฟล์</string>
+	<string>SaveFor uses your photo library to find receipt images in your selected bank albums.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>ใช้ FaceID หรือ TouchID เพื่อปลดล็อกแอปพลิเคชัน</string>
+	<string>SaveFor uses Face ID or Touch ID to protect your app.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

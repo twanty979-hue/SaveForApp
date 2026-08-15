@@ -1,65 +1,55 @@
-import 'package:app/core/localization/app_material.dart';
-import 'faq_screen.dart';
-import 'contact_admin_screen.dart';
+import 'package:flutter/material.dart';
+
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
+import 'contact_admin_screen.dart';
+import 'faq_screen.dart';
+import 'support_request_screen.dart';
 
-class HelpSupportScreen extends StatefulWidget {
+class HelpSupportScreen extends StatelessWidget {
   const HelpSupportScreen({super.key});
 
-  @override
-  State<HelpSupportScreen> createState() => _HelpSupportScreenState();
-}
-
-class _HelpSupportScreenState extends State<HelpSupportScreen> {
-  
-  void _showUserManual() {
+  void _showUserManual(BuildContext parentContext) {
     showModalBottomSheet<void>(
-      context: context,
+      context: parentContext,
       isScrollControlled: true,
-      backgroundColor: context.surfaceColor,
+      backgroundColor: parentContext.surfaceColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       builder: (context) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
+              _SheetHandle(),
               Text(
-                context.tr('คู่มือการใช้งาน', 'User Manual'),
+                parentContext.tr('คู่มือการใช้งาน', 'User Manual'),
                 style: TextStyle(
-                  color: context.primaryTextColor,
+                  color: parentContext.primaryTextColor,
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 12),
               Text(
-                context.tr(
-                  '1. บันทึกรายการด่วน: พิมพ์ข้อความในหน้าแชท เช่น "อาหาร 60" หรือ "+เงินเดือน 20000" เพื่อบันทึกรายรับ-รายจ่ายทันที\n\n'
-                  '2. กำหนดงบประมาณ: วางแผนรายรับและรายจ่ายที่เกิดขึ้นเป็นประจำทุกเดือนในแท็บ "รายจ่ายประจำ" และ "รายรับประจำ" เพื่อติดตามความเคลื่อนไหว\n\n'
-                  '3. ตั้งเป้าหมายออมเงิน: สร้างเป้าหมายที่ต้องการสะสมในแท็บ "เป้าหมายการออม" เพื่อหยอดกระปุกและดูความก้าวหน้าทีละขั้นตอน',
-                  '1. Fast Recording: Type transaction statements in the chat box, e.g. "Lunch 60" or "+Salary 20000", to save items instantly.\n\n'
-                  '2. Monthly Budgets: Plan your recurring monthly income and expenses in the "Recurring" tabs to track progress.\n\n'
-                  '3. Savings Goals: Create items you want to save for in the "Savings Goals" tab to manage targets step-by-step.',
+                parentContext.tr(
+                  '1. บันทึกรายการ: พิมพ์รายการในช่องแชท เช่น "อาหาร 60" หรือ "+เงินเดือน 20000"\n\n'
+                  '2. วางแผนรายรับรายจ่าย: เพิ่มรายการประจำเดือนในแท็บรายการประจำ\n\n'
+                  '3. ตั้งเป้าหมายการออม: สร้างเป้าหมายในแท็บ Dreams และติดตามความคืบหน้า',
+                  '1. Fast Recording: Type transactions in the chat box, such as "Lunch 60" or "+Salary 20000".\n\n'
+                  '2. Recurring Plans: Add monthly income and expenses in the Recurring tabs.\n\n'
+                  '3. Savings Goals: Create a goal in the Dreams tab and track your progress.',
                 ),
-                style: TextStyle(color: context.secondaryTextColor, fontSize: 13, height: 1.5),
+                style: TextStyle(
+                  color: parentContext.secondaryTextColor,
+                  fontSize: 13,
+                  height: 1.5,
+                ),
               ),
             ],
           ),
@@ -68,18 +58,22 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     );
   }
 
-  void _showFeatureSuggestion() {
-    final controller = TextEditingController();
+  void _showFeatureSuggestion(BuildContext parentContext) {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final apiClient = ApiClient();
+    var isSubmitting = false;
+
     showModalBottomSheet<void>(
-      context: context,
+      context: parentContext,
       isScrollControlled: true,
-      backgroundColor: context.surfaceColor,
+      backgroundColor: parentContext.surfaceColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, setSheetState) => SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(
               20,
               14,
@@ -87,36 +81,41 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               MediaQuery.viewInsetsOf(context).bottom + 24,
             ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
+                const _SheetHandle(),
                 Text(
-                  context.tr('เสนอแนะฟีเจอร์', 'Suggest a Feature'),
+                  parentContext.tr('เสนอฟีเจอร์', 'Suggest a Feature'),
                   style: TextStyle(
-                    color: context.primaryTextColor,
+                    color: parentContext.primaryTextColor,
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: controller,
-                  maxLines: 3,
+                  controller: titleController,
+                  maxLength: 160,
                   decoration: InputDecoration(
-                    hintText: context.tr(
-                      'พิมพ์ฟีเจอร์ที่คุณต้องการแนะนำที่นี่...',
-                      'Type features you would like to suggest here...',
+                    labelText: parentContext.tr('ชื่อฟีเจอร์', 'Feature title'),
+                    hintText: parentContext.tr(
+                      'เช่น เพิ่มการสแกนใบเสร็จ',
+                      'e.g. Add receipt scanning',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: descriptionController,
+                  minLines: 3,
+                  maxLines: 6,
+                  maxLength: 10000,
+                  decoration: InputDecoration(
+                    alignLabelWithHint: true,
+                    labelText: parentContext.tr('รายละเอียด', 'Description'),
+                    hintText: parentContext.tr(
+                      'อธิบายว่าฟีเจอร์นี้จะช่วยอะไร',
+                      'Explain how this feature would help.',
                     ),
                   ),
                 ),
@@ -125,21 +124,71 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                   width: double.infinity,
                   height: 46,
                   child: FilledButton(
-                    onPressed: () {
-                      if (controller.text.trim().isEmpty) return;
-                      Navigator.pop(sheetContext);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            context.tr(
-                              'ขอบคุณสำหรับข้อเสนอแนะ! ทีมงานได้รับข้อมูลแล้ว',
-                              'Thank you for your suggestion! We have received it.',
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            final title = titleController.text.trim();
+                            final description = descriptionController.text.trim();
+                            if (title.length < 3 || description.isEmpty) {
+                              ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    parentContext.tr(
+                                      'กรุณากรอกชื่อและรายละเอียดฟีเจอร์',
+                                      'Please enter a feature title and description.',
+                                    ),
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            setSheetState(() => isSubmitting = true);
+                            final response = await apiClient.post(
+                              '/feature-requests',
+                              body: {
+                                'title': title,
+                                'description': description,
+                              },
+                            );
+                            if (!sheetContext.mounted) return;
+
+                            if (response.statusCode >= 200 && response.statusCode < 300) {
+                              Navigator.pop(sheetContext);
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    parentContext.tr(
+                                      'ส่งข้อเสนอเรียบร้อยแล้ว ทีมงานได้รับข้อมูลแล้ว',
+                                      'Thank you. Your feature request has been submitted.',
+                                    ),
+                                  ),
+                                ),
+                              );
+                            } else {
+                              setSheetState(() => isSubmitting = false);
+                              ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    parentContext.tr(
+                                      'ส่งข้อเสนอไม่สำเร็จ กรุณาลองใหม่',
+                                      'Unable to submit the feature request. Please try again.',
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
                             ),
-                          ),
-                        ),
-                      );
-                    },
-                    child: Text(context.tr('ส่งข้อเสนอแนะ', 'Submit Suggestion')),
+                          )
+                        : Text(parentContext.tr('ส่งข้อเสนอ', 'Submit Suggestion')),
                   ),
                 ),
               ],
@@ -147,7 +196,10 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
           ),
         ),
       ),
-    );
+    ).whenComplete(() {
+      titleController.dispose();
+      descriptionController.dispose();
+    });
   }
 
   @override
@@ -169,63 +221,93 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             child: ResponsiveLayout(
               maxWidth: 600,
               child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-              children: [
-                _SectionLabel(context.tr('ศูนย์ช่วยเหลือ', 'Help Center')),
-                const SizedBox(height: 8),
-                _SettingsTile(
-                  icon: Icons.question_answer_rounded,
-                  title: context.tr('คำถามที่พบบ่อย (FAQ)', 'FAQ'),
-                  subtitle: context.tr(
-                    'รวมคำตอบสำหรับปัญหาที่พบเป็นประจำ',
-                    'Common questions and answers',
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                children: [
+                  _SectionLabel(context.tr('ศูนย์ช่วยเหลือ', 'Help Center')),
+                  const SizedBox(height: 8),
+                  _SettingsTile(
+                    icon: Icons.question_answer_rounded,
+                    title: context.tr('คำถามที่พบบ่อย (FAQ)', 'FAQ'),
+                    subtitle: context.tr(
+                      'รวมคำตอบสำหรับปัญหาที่พบบ่อย',
+                      'Common questions and answers',
+                    ),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const FaqScreen()),
+                    ),
                   ),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const FaqScreen())),
-                ),
-                _SettingsTile(
-                  icon: Icons.menu_book_rounded,
-                  title: context.tr('คู่มือการใช้งาน', 'User Manual'),
-                  subtitle: context.tr(
-                    'เรียนรู้วิธีการใช้งานแอปพลิเคชัน',
-                    'Learn how to use the app',
+                  _SettingsTile(
+                    icon: Icons.menu_book_rounded,
+                    title: context.tr('คู่มือการใช้งาน', 'User Manual'),
+                    subtitle: context.tr(
+                      'เรียนรู้วิธีใช้แอปพลิเคชัน',
+                      'Learn how to use the app',
+                    ),
+                    onTap: () => _showUserManual(context),
                   ),
-                  onTap: _showUserManual,
-                ),
-                const SizedBox(height: 16),
-                _SectionLabel(context.tr('ติดต่อและรายงาน', 'Contact & Feedback')),
-                const SizedBox(height: 8),
-                _SettingsTile(
-                  icon: Icons.support_agent_rounded,
-                  title: context.tr('ติดต่อแอดมิน', 'Contact Us'),
-                  subtitle: context.tr(
-                    'แชทผ่าน Line, Facebook, หรือ Email',
-                    'Chat via Line, Facebook, or Email',
+                  const SizedBox(height: 16),
+                  _SectionLabel(context.tr('ติดต่อและรายงาน', 'Contact & Feedback')),
+                  const SizedBox(height: 8),
+                  _SettingsTile(
+                    icon: Icons.support_agent_rounded,
+                    title: context.tr('ติดต่อแอดมิน', 'Contact Us'),
+                    subtitle: context.tr(
+                      'ติดต่อผ่าน LINE, Facebook หรือ Email',
+                      'Chat via LINE, Facebook, or email',
+                    ),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ContactAdminScreen()),
+                    ),
                   ),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ContactAdminScreen())),
-                ),
-                _SettingsTile(
-                  icon: Icons.bug_report_rounded,
-                  title: context.tr('รายงานปัญหา', 'Report a Bug'),
-                  subtitle: context.tr(
-                    'แจ้งปัญหาการใช้งานหรือแอปพลิเคชันขัดข้อง',
-                    'Report a bug or crash',
+                  _SettingsTile(
+                    icon: Icons.bug_report_rounded,
+                    title: context.tr('รายงานปัญหา', 'Report a Bug'),
+                    subtitle: context.tr(
+                      'แจ้งปัญหาการใช้งานหรือแอปขัดข้อง',
+                      'Report a bug or crash',
+                    ),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SupportRequestScreen(ticketType: 'bug'),
+                      ),
+                    ),
                   ),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ContactAdminScreen())),
-                ),
-                _SettingsTile(
-                  icon: Icons.lightbulb_rounded,
-                  title: context.tr('เสนอแนะฟีเจอร์', 'Suggest a Feature'),
-                  subtitle: context.tr(
-                    'บอกเราว่าคุณอยากได้ฟีเจอร์อะไรเพิ่ม',
-                    'Tell us what features you want',
+                  _SettingsTile(
+                    icon: Icons.lightbulb_rounded,
+                    title: context.tr('เสนอฟีเจอร์', 'Suggest a Feature'),
+                    subtitle: context.tr(
+                      'บอกเราว่าอยากให้เพิ่มอะไร',
+                      'Tell us what features you want',
+                    ),
+                    onTap: () => _showFeatureSuggestion(context),
                   ),
-                  onTap: _showFeatureSuggestion,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetHandle extends StatelessWidget {
+  const _SheetHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 40,
+        height: 4,
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(2),
         ),
-      ],
       ),
     );
   }
@@ -255,9 +337,6 @@ class _SettingsTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String? subtitle;
-  final String? trailingText;
-  final Widget? trailing;
-  final bool danger;
   final VoidCallback onTap;
 
   const _SettingsTile({
@@ -265,14 +344,10 @@ class _SettingsTile extends StatelessWidget {
     required this.title,
     required this.onTap,
     this.subtitle,
-    this.trailingText,
-    this.trailing,
-    this.danger = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = danger ? const Color(0xFFEF4444) : AppTheme.primaryColor;
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
       child: Material(
@@ -284,19 +359,9 @@ class _SettingsTile extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 62),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
-              color: danger
-                  ? (Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF271A1C)
-                      : const Color(0xFFFFF7F7))
-                  : context.surfaceColor,
+              color: context.surfaceColor,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: danger
-                    ? (Theme.of(context).brightness == Brightness.dark
-                        ? const Color(0xFF7F1D1D)
-                        : const Color(0xFFFECACA))
-                    : context.borderColor,
-              ),
+              border: Border.all(color: context.borderColor),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.035),
@@ -311,10 +376,10 @@ class _SettingsTile extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.10),
+                    color: AppTheme.primaryColor.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(13),
                   ),
-                  child: Icon(icon, color: color, size: 20),
+                  child: Icon(icon, color: AppTheme.primaryColor, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -325,9 +390,7 @@ class _SettingsTile extends StatelessWidget {
                       Text(
                         title,
                         style: TextStyle(
-                          color: danger
-                              ? const Color(0xFFDC2626)
-                              : context.primaryTextColor,
+                          color: context.primaryTextColor,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
@@ -347,29 +410,11 @@ class _SettingsTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (trailing != null)
-                  trailing!
-                else ...[
-                  if (trailingText != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 5),
-                      child: Text(
-                        trailingText!,
-                        style: TextStyle(
-                          color: context.secondaryTextColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: danger
-                        ? const Color(0xFFFCA5A5)
-                        : context.secondaryTextColor,
-                    size: 21,
-                  ),
-                ],
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: context.secondaryTextColor,
+                  size: 21,
+                ),
               ],
             ),
           ),

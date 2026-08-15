@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/settings/app_settings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
@@ -17,12 +18,13 @@ class AccountSettingsScreen extends StatefulWidget {
 
 class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   final ApiClient _apiClient = ApiClient();
-  
+
   String _displayName = AuthSession.displayName ?? '';
   final String _email = AuthSession.email ?? '';
   bool _profileExists = false;
   String _tier = 'Free';
   bool _isLoading = true;
+  bool _autoSlipScanningEnabled = AppSettings.autoSlipScanningEnabled;
 
   @override
   void initState() {
@@ -129,7 +131,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(
+                    borderSide: BorderSide(
                       color: AppTheme.primaryColor,
                       width: 1.5,
                     ),
@@ -146,12 +148,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                       : () async {
                           final value = controller.text.trim();
                           if (value.isEmpty) return;
-                          
+
                           setSheetState(() => isSaving = true);
-                          
+
                           final userId = AuthSession.userId;
                           if (userId == null) return;
-                          
+
                           try {
                             final response = _profileExists
                                 ? await _apiClient.patch(
@@ -160,13 +162,22 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                   )
                                 : await _apiClient.post(
                                     '/profile',
-                                    body: {'id': userId, 'display_name': value, 'tier': _tier},
+                                    body: {
+                                      'id': userId,
+                                      'display_name': value,
+                                      'tier': _tier,
+                                    },
                                   );
 
-                            if (response.statusCode >= 200 && response.statusCode < 300) {
+                            if (response.statusCode >= 200 &&
+                                response.statusCode < 300) {
                               _profileExists = true;
                               _displayName = value;
-                              await AuthSession.save(userId, value, AuthSession.email);
+                              await AuthSession.save(
+                                userId,
+                                value,
+                                AuthSession.email,
+                              );
                               if (mounted) setState(() {});
                               if (sheetContext.mounted) {
                                 Navigator.pop(sheetContext);
@@ -185,23 +196,34 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                               if (sheetContext.mounted) {
                                 ScaffoldMessenger.of(sheetContext).showSnackBar(
                                   SnackBar(
-                                    content: Text(this.context.tr('ไม่สามารถบันทึกชื่อได้', 'Could not save name')),
+                                    content: Text(
+                                      this.context.tr(
+                                        'ไม่สามารถบันทึกชื่อได้',
+                                        'Could not save name',
+                                      ),
+                                    ),
                                     backgroundColor: Colors.red,
                                   ),
                                 );
                               }
                             }
                           } catch (_) {
-                             if (sheetContext.mounted) {
-                                ScaffoldMessenger.of(sheetContext).showSnackBar(
-                                  SnackBar(
-                                    content: Text(this.context.tr('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้', 'Cannot reach the server')),
-                                    backgroundColor: Colors.red,
+                            if (sheetContext.mounted) {
+                              ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    this.context.tr(
+                                      'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้',
+                                      'Cannot reach the server',
+                                    ),
                                   ),
-                                );
-                              }
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
                           } finally {
-                            if (sheetContext.mounted) setSheetState(() => isSaving = false);
+                            if (sheetContext.mounted)
+                              setSheetState(() => isSaving = false);
                           }
                         },
                   style: FilledButton.styleFrom(
@@ -213,7 +235,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   child: isSaving
                       ? const SizedBox.square(
                           dimension: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : Text(
                           context.tr('บันทึกการเปลี่ยนแปลง', 'Save changes'),
@@ -227,7 +252,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       ),
     );
   }
-  
+
   Future<void> _confirmDeleteAccount() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -242,9 +267,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             'Deleting your account will permanently delete all your data and cannot be recovered. Are you sure?',
           ),
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -270,9 +293,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
     try {
@@ -318,45 +339,101 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             top: false,
             child: ResponsiveLayout(
               maxWidth: 600,
-              child: _isLoading 
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))
-                  : ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-                    children: [
-                      _SectionLabel(context.tr('ข้อมูลส่วนตัว', 'Profile Information')),
-                      const SizedBox(height: 8),
-                      _SettingsTile(
-                        icon: Icons.badge_outlined,
-                        title: context.tr('ชื่อที่แสดง', 'Display name'),
-                        subtitle: _displayName.isEmpty ? context.tr('ผู้ใช้งาน SaveFor', 'SaveFor User') : _displayName,
-                        onTap: _editDisplayName,
+              child: _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.primaryColor,
                       ),
-                      _SettingsTile(
-                        icon: Icons.alternate_email_rounded,
-                        title: context.tr('อีเมล', 'Email'),
-                        subtitle: _email,
-                        trailing: const Icon(Icons.lock_outline_rounded, size: 16, color: Color(0xFF94A3B8)),
-                        onTap: () {
-                           ScaffoldMessenger.of(context).showSnackBar(
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                      children: [
+                        _SectionLabel(
+                          context.tr('ข้อมูลส่วนตัว', 'Profile Information'),
+                        ),
+                        const SizedBox(height: 8),
+                        _SettingsTile(
+                          icon: Icons.badge_outlined,
+                          title: context.tr('ชื่อที่แสดง', 'Display name'),
+                          subtitle: _displayName.isEmpty
+                              ? context.tr('ผู้ใช้งาน SaveFor', 'SaveFor User')
+                              : _displayName,
+                          onTap: _editDisplayName,
+                        ),
+                        _SettingsTile(
+                          icon: Icons.alternate_email_rounded,
+                          title: context.tr('อีเมล', 'Email'),
+                          subtitle: _email,
+                          trailing: const Icon(
+                            Icons.lock_outline_rounded,
+                            size: 16,
+                            color: Color(0xFF94A3B8),
+                          ),
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text(context.tr('ไม่สามารถเปลี่ยนอีเมลได้', 'Email cannot be changed')),
+                                content: Text(
+                                  context.tr(
+                                    'ไม่สามารถเปลี่ยนอีเมลได้',
+                                    'Email cannot be changed',
+                                  ),
+                                ),
                               ),
                             );
-                        },
-                      ),
-                      
-                      const SizedBox(height: 22),
-                      _SectionLabel(context.tr('การจัดการบัญชีระดับลึก', 'Danger Zone')),
-                      const SizedBox(height: 8),
-                      _SettingsTile(
-                        icon: Icons.delete_forever_rounded,
-                        title: context.tr('ลบบัญชีผู้ใช้งาน', 'Delete Account'),
-                        subtitle: context.tr('ลบข้อมูลทั้งหมดอย่างถาวร', 'Permanently delete all data'),
-                        danger: true,
-                        onTap: _confirmDeleteAccount,
-                      ),
-                    ],
-                  ),
+                          },
+                        ),
+
+                        const SizedBox(height: 22),
+                        _SectionLabel(
+                          context.tr('การอ่านสลิป', 'Slip scanning'),
+                        ),
+                        const SizedBox(height: 8),
+                        _SettingsTile(
+                          icon: Icons.receipt_long_outlined,
+                          title: context.tr(
+                            'อ่านสลิปอัตโนมัติ',
+                            'Automatic slip scanning',
+                          ),
+                          subtitle: context.tr(
+                            'ตรวจสลิปใหม่จากอัลบั้มธนาคารที่ตั้งค่าไว้เมื่อเปิดแอป',
+                            'Check new slips from configured bank albums when the app opens',
+                          ),
+                          trailing: Switch.adaptive(
+                            value: _autoSlipScanningEnabled,
+                            onChanged: (value) async {
+                              setState(() => _autoSlipScanningEnabled = value);
+                              await AppSettings.setAutoSlipScanningEnabled(
+                                value,
+                              );
+                            },
+                          ),
+                          onTap: () async {
+                            final value = !_autoSlipScanningEnabled;
+                            setState(() => _autoSlipScanningEnabled = value);
+                            await AppSettings.setAutoSlipScanningEnabled(value);
+                          },
+                        ),
+
+                        const SizedBox(height: 22),
+                        _SectionLabel(
+                          context.tr('การจัดการบัญชีระดับลึก', 'Danger Zone'),
+                        ),
+                        const SizedBox(height: 8),
+                        _SettingsTile(
+                          icon: Icons.delete_forever_rounded,
+                          title: context.tr(
+                            'ลบบัญชีผู้ใช้งาน',
+                            'Delete Account',
+                          ),
+                          subtitle: context.tr(
+                            'ลบข้อมูลทั้งหมดอย่างถาวร',
+                            'Permanently delete all data',
+                          ),
+                          danger: true,
+                          onTap: _confirmDeleteAccount,
+                        ),
+                      ],
+                    ),
             ),
           ),
         ],
@@ -420,15 +497,15 @@ class _SettingsTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: danger
                   ? (Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF271A1C)
-                      : const Color(0xFFFFF7F7))
+                        ? const Color(0xFF271A1C)
+                        : const Color(0xFFFFF7F7))
                   : context.surfaceColor,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: danger
                     ? (Theme.of(context).brightness == Brightness.dark
-                        ? const Color(0xFF7F1D1D)
-                        : const Color(0xFFFECACA))
+                          ? const Color(0xFF7F1D1D)
+                          : const Color(0xFFFECACA))
                     : context.borderColor,
               ),
               boxShadow: [

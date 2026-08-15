@@ -86,213 +86,221 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
               maxWidth: 800,
               child: Column(
                 children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 5),
-                  child: Row(
-                    children: [
-                      Material(
-                        color: context.surfaceColor.withValues(alpha: 0.92),
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: () => Navigator.pop(context),
-                          child: SizedBox(
-                            width: 40,
-                            height: 40,
-                            child: Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              size: 17,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 5),
+                    child: Row(
+                      children: [
+                        Material(
+                          color: context.surfaceColor.withValues(alpha: 0.92),
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () => Navigator.pop(context),
+                            child: SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 17,
+                                color: context.primaryTextColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            context.tr('รายการที่ตั้งไว้', 'Plans'),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
                               color: context.primaryTextColor,
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          context.tr('รายการที่ตั้งไว้', 'Plans'),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: context.primaryTextColor,
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 7, 14, 7),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: SizedBox(
-                            width: 220,
-                            child: Container(
-                              height: 38,
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                color: context.surfaceColor,
-                                borderRadius: BorderRadius.circular(19),
-                                border: Border.all(color: context.borderColor),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFF0F172A,
-                                    ).withValues(alpha: 0.07),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: Stack(
-                                children: [
-                                  AnimatedAlign(
-                                    duration: const Duration(milliseconds: 280),
-                                    curve: Curves.easeOutCubic,
-                                    alignment: indicatorAlignment,
-                                    child: FractionallySizedBox(
-                                      widthFactor: 1 / 3,
-                                      heightFactor: 1,
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 1,
-                                        ),
-                                        child: AnimatedContainer(
-                                          duration: const Duration(
-                                            milliseconds: 220,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: indicatorColor,
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: indicatorColor
-                                                    .withValues(alpha: 0.55),
-                                                blurRadius: 6,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Row(
-                                    children: [
-                                      _SegmentButton(
-                                        key: _tabIncomeKey,
-                                        label: context.tr('รายรับ', 'Income'),
-                                        selected:
-                                            _section == PlanningSection.income,
-                                        onTap: () =>
-                                            _select(PlanningSection.income),
-                                      ),
-                                      _SegmentButton(
-                                        key: _tabDreamKey,
-                                        label: context.tr('เงินออม', 'Savings'),
-                                        selected:
-                                            _section == PlanningSection.dream,
-                                        onTap: () =>
-                                            _select(PlanningSection.dream),
-                                      ),
-                                      _SegmentButton(
-                                        key: _tabExpenseKey,
-                                        label: context.tr(
-                                          'รายจ่าย',
-                                          'Expenses',
-                                        ),
-                                        selected:
-                                            _section == PlanningSection.expense,
-                                        onTap: () =>
-                                            _select(PlanningSection.expense),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        key: _editButtonKey,
-                        width: 38,
-                        height: 38,
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: _requestAdd,
-                            child: Center(
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 7, 14, 7),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: SizedBox(
+                              width: 220,
                               child: Container(
-                                width: 38,
                                 height: 38,
+                                padding: const EdgeInsets.all(3),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF111111),
-                                  shape: BoxShape.circle,
+                                  color: context.surfaceColor,
+                                  borderRadius: BorderRadius.circular(19),
+                                  border: Border.all(
+                                    color: context.borderColor,
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.22,
-                                      ),
-                                      blurRadius: 7,
+                                      color: const Color(
+                                        0xFF0F172A,
+                                      ).withValues(alpha: 0.07),
+                                      blurRadius: 8,
                                       offset: const Offset(0, 3),
                                     ),
                                   ],
                                 ),
-                                child: const Icon(
-                                  Icons.edit_outlined,
-                                  color: Colors.white,
-                                  size: 18,
+                                child: Stack(
+                                  children: [
+                                    AnimatedAlign(
+                                      duration: const Duration(
+                                        milliseconds: 280,
+                                      ),
+                                      curve: Curves.easeOutCubic,
+                                      alignment: indicatorAlignment,
+                                      child: FractionallySizedBox(
+                                        widthFactor: 1 / 3,
+                                        heightFactor: 1,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 1,
+                                          ),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 220,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: indicatorColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: indicatorColor
+                                                      .withValues(alpha: 0.55),
+                                                  blurRadius: 6,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Row(
+                                      children: [
+                                        _SegmentButton(
+                                          key: _tabIncomeKey,
+                                          label: context.tr('รายรับ', 'Income'),
+                                          selected:
+                                              _section ==
+                                              PlanningSection.income,
+                                          onTap: () =>
+                                              _select(PlanningSection.income),
+                                        ),
+                                        _SegmentButton(
+                                          key: _tabDreamKey,
+                                          label: context.tr(
+                                            'เงินออม',
+                                            'Savings',
+                                          ),
+                                          selected:
+                                              _section == PlanningSection.dream,
+                                          onTap: () =>
+                                              _select(PlanningSection.dream),
+                                        ),
+                                        _SegmentButton(
+                                          key: _tabExpenseKey,
+                                          label: context.tr(
+                                            'รายจ่าย',
+                                            'Expenses',
+                                          ),
+                                          selected:
+                                              _section ==
+                                              PlanningSection.expense,
+                                          onTap: () =>
+                                              _select(PlanningSection.expense),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: MediaQuery.removePadding(
-                    context: context,
-                    removeTop: true,
-                    child: PageView(
-                      controller: _pageController,
-                      onPageChanged: (index) {
-                        setState(() {
-                          _section = PlanningSection.values[index];
-                        });
-                      },
-                      children: [
-                        RecurringIncomeScreen(
-                          embedded: true,
-                          addRequest: _incomeAddRequest,
-                        ),
-                        DreamsScreen(
-                          embedded: true,
-                          addRequest: _dreamAddRequest,
-                        ),
-                        RecurringExpenseScreen(
-                          embedded: true,
-                          addRequest: _expenseAddRequest,
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          key: _editButtonKey,
+                          width: 38,
+                          height: 38,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: _requestAdd,
+                              child: Center(
+                                child: Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF111111),
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.22,
+                                        ),
+                                        blurRadius: 7,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.edit_outlined,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              ],
+                  Expanded(
+                    child: MediaQuery.removePadding(
+                      context: context,
+                      removeTop: true,
+                      child: PageView(
+                        controller: _pageController,
+                        onPageChanged: (index) {
+                          setState(() {
+                            _section = PlanningSection.values[index];
+                          });
+                        },
+                        children: [
+                          RecurringIncomeScreen(
+                            embedded: true,
+                            addRequest: _incomeAddRequest,
+                          ),
+                          DreamsScreen(
+                            embedded: true,
+                            addRequest: _dreamAddRequest,
+                          ),
+                          RecurringExpenseScreen(
+                            embedded: true,
+                            addRequest: _expenseAddRequest,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        _buildTutorialOverlay(),
-      ],
+          _buildTutorialOverlay(),
+        ],
       ),
     );
   }
@@ -402,11 +410,26 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
     ];
 
     final descriptions = [
-      context.tr('ยินดีต้อนรับสู่หน้าแผนการเงิน! หน้านี้คือกระเป๋าหลักในการหักออม วางแผนค่าใช้จ่าย และเก็บเงินทำตามความฝันของคุณ', 'Welcome to the Plans screen! This is your control center to automate savings, schedule fixed bills, and track financial goals.'),
-      context.tr('ใช้สำหรับบันทึกช่องทางรายรับคงที่ต่อเดือนของคุณ (เช่น เงินเดือน, ค่าเช่าบ้าน) เพื่อเป็นยอดอ้างอิงในการคำนวณหักออมรายเดือน', 'Use this to record your fixed monthly income channels (e.g., salary, rent) to use as a baseline for monthly savings calculations.'),
-      context.tr('ใช้สำหรับตั้งเป้าหมายความฝันของคุณ (เช่น ซื้อบ้านใหม่, เที่ยวต่างประเทศ) โดยคุณสามารถออมเงินตามเป้าหมายผ่านการพิมพ์แชทคำว่า "ออม" ได้เลยครับ', 'Use this to set goals for your dreams (e.g., buying a home, traveling). You can save towards goals easily by chatting "save" or "ออม".'),
-      context.tr('ใช้สำหรับบันทึกรายการบิลจ่ายคงที่ประจำเดือน (เช่น ค่าหอพัก, ค่าน้ำไฟ, ค่าเน็ต) เพื่อให้ระบบจดจำยอดและส่งการเตือนก่อนถึงกำหนดจ่ายจริง', 'Use this to record fixed monthly bills (e.g., rent, utility bills, subscription fees) so the system remembers and reminds you before they are due.'),
-      context.tr('แตะที่ปุ่มดินสอด้านบนนี้เพื่อสร้างเป้าหมายรายรับ รายจ่าย หรือความฝันออมเงินใหม่ ๆ เพิ่มเติมได้ด้วยตนเองทันที', 'Tap this pencil button to manually create, edit, or remove your income streams, expense bills, or savings dreams instantly.'),
+      context.tr(
+        'ยินดีต้อนรับสู่หน้าแผนการเงิน! หน้านี้คือกระเป๋าหลักในการหักออม วางแผนค่าใช้จ่าย และเก็บเงินทำตามความฝันของคุณ',
+        'Welcome to the Plans screen! This is your control center to automate savings, schedule fixed bills, and track financial goals.',
+      ),
+      context.tr(
+        'ใช้สำหรับบันทึกช่องทางรายรับคงที่ต่อเดือนของคุณ (เช่น เงินเดือน, ค่าเช่าบ้าน) เพื่อเป็นยอดอ้างอิงในการคำนวณหักออมรายเดือน',
+        'Use this to record your fixed monthly income channels (e.g., salary, rent) to use as a baseline for monthly savings calculations.',
+      ),
+      context.tr(
+        'ใช้สำหรับตั้งเป้าหมายความฝันของคุณ (เช่น ซื้อบ้านใหม่, เที่ยวต่างประเทศ) โดยคุณสามารถออมเงินตามเป้าหมายผ่านการพิมพ์แชทคำว่า "ออม" ได้เลยครับ',
+        'Use this to set goals for your dreams (e.g., buying a home, traveling). You can save towards goals easily by chatting "save" or "ออม".',
+      ),
+      context.tr(
+        'ใช้สำหรับบันทึกรายการบิลจ่ายคงที่ประจำเดือน (เช่น ค่าหอพัก, ค่าน้ำไฟ, ค่าเน็ต) เพื่อให้ระบบจดจำยอดและส่งการเตือนก่อนถึงกำหนดจ่ายจริง',
+        'Use this to record fixed monthly bills (e.g., rent, utility bills, subscription fees) so the system remembers and reminds you before they are due.',
+      ),
+      context.tr(
+        'แตะที่ปุ่มดินสอด้านบนนี้เพื่อสร้างเป้าหมายรายรับ รายจ่าย หรือความฝันออมเงินใหม่ ๆ เพิ่มเติมได้ด้วยตนเองทันที',
+        'Tap this pencil button to manually create, edit, or remove your income streams, expense bills, or savings dreams instantly.',
+      ),
     ];
 
     final totalSteps = titles.length;
@@ -433,14 +456,17 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.primaryColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   '${_tutorialStep + 1} / $totalSteps',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.primaryColor,
@@ -455,7 +481,10 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                 },
                 child: Text(
                   context.tr('ข้ามการแนะนำ', 'Skip'),
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF64748B),
+                  ),
                 ),
               ),
             ],
@@ -594,9 +623,8 @@ class TutorialBackdropPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.75);
-    
+    final paint = Paint()..color = Colors.black.withValues(alpha: 0.75);
+
     if (isWelcomeStep || targetRect == null || targetRect!.width == 0) {
       canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
       return;
@@ -604,25 +632,25 @@ class TutorialBackdropPainter extends CustomPainter {
 
     canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
-    
+
     final maskPaint = Paint()
       ..color = Colors.white
       ..blendMode = BlendMode.clear;
-      
+
     final rrect = RRect.fromRectAndRadius(
       targetRect!.inflate(8),
       Radius.circular(borderRadius + 8),
     );
     canvas.drawRRect(rrect, maskPaint);
-    
+
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant TutorialBackdropPainter oldDelegate) {
-    return oldDelegate.targetRect != targetRect || 
-           oldDelegate.borderRadius != borderRadius ||
-           oldDelegate.isWelcomeStep != isWelcomeStep;
+    return oldDelegate.targetRect != targetRect ||
+        oldDelegate.borderRadius != borderRadius ||
+        oldDelegate.isWelcomeStep != isWelcomeStep;
   }
 }
 

@@ -18,10 +18,7 @@ class GoogleLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      size: Size(size, size),
-      painter: _GoogleLogoPainter(),
-    );
+    return CustomPaint(size: Size(size, size), painter: _GoogleLogoPainter());
   }
 }
 
@@ -32,11 +29,14 @@ class _GoogleLogoPainter extends CustomPainter {
     final double h = size.height;
     final center = Offset(w / 2, h / 2);
     final double radius = w / 2;
-    
+
     // อัตราส่วนความหนาเส้นตรงตามสเปกของ Google (ประมาณ 23%)
     final double thickness = w * 0.23;
-    final rect = Rect.fromCircle(center: center, radius: radius - thickness / 2);
-    
+    final rect = Rect.fromCircle(
+      center: center,
+      radius: radius - thickness / 2,
+    );
+
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = thickness
@@ -63,10 +63,15 @@ class _GoogleLogoPainter extends CustomPainter {
       ..color = const Color(0xFF4285F4)
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
-    
+
     final barHeight = thickness;
     canvas.drawRect(
-      Rect.fromLTRB(w * 0.5, h * 0.5 - barHeight / 2, w, h * 0.5 + barHeight / 2),
+      Rect.fromLTRB(
+        w * 0.5,
+        h * 0.5 - barHeight / 2,
+        w,
+        h * 0.5 + barHeight / 2,
+      ),
       barPaint,
     );
   }
@@ -82,7 +87,8 @@ class AuthScreen extends StatefulWidget {
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateMixin {
+class _AuthScreenState extends State<AuthScreen>
+    with SingleTickerProviderStateMixin {
   final _apiClient = ApiClient();
   bool _isLoading = false;
   String? _errorMessage;
@@ -127,7 +133,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     if (fragment.isNotEmpty) {
       debugPrint("SaveFor: Found raw fragment: $fragment");
       String cleanFragment = fragment;
-      
+
       if (cleanFragment.startsWith('/')) {
         cleanFragment = cleanFragment.substring(1);
       }
@@ -149,7 +155,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       refreshToken = Uri.base.queryParameters['refresh_token'];
     }
 
-    debugPrint("SaveFor: Extraction result -> AccessToken: ${accessToken != null ? 'FOUND' : 'NOT FOUND'}");
+    debugPrint(
+      "SaveFor: Extraction result -> AccessToken: ${accessToken != null ? 'FOUND' : 'NOT FOUND'}",
+    );
 
     if (accessToken != null && accessToken.isNotEmpty) {
       setState(() {
@@ -165,7 +173,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           headers: {'Authorization': 'Bearer $accessToken'},
         );
 
-        debugPrint("SaveFor: Profile API response code: ${response.statusCode}");
+        debugPrint(
+          "SaveFor: Profile API response code: ${response.statusCode}",
+        );
         debugPrint("SaveFor: Profile API response body: ${response.body}");
 
         if (response.statusCode == 200) {
@@ -173,10 +183,14 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           final id = data['id']?.toString();
           final email = data['email']?.toString();
           final userMetadata = data['user_metadata'] as Map<String, dynamic>?;
-          final displayName = userMetadata?['full_name']?.toString() ?? userMetadata?['name']?.toString();
+          final displayName =
+              userMetadata?['full_name']?.toString() ??
+              userMetadata?['name']?.toString();
 
           if (id != null && id.isNotEmpty) {
-            debugPrint("SaveFor: Save session and login -> ID: $id, Email: $email");
+            debugPrint(
+              "SaveFor: Save session and login -> ID: $id, Email: $email",
+            );
             await AuthSession.save(
               id,
               displayName,
@@ -193,7 +207,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             if (mounted) {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const DashboardScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const DashboardScreen(),
+                ),
               );
             }
             return;
@@ -201,14 +217,18 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         }
 
         final errorData = jsonDecode(response.body);
-        final errText = errorData['error_description'] ?? errorData['message'] ?? 'ข้อมูลเซสชันไม่ถูกต้อง';
+        final errText =
+            errorData['error_description'] ??
+            errorData['message'] ??
+            'ข้อมูลเซสชันไม่ถูกต้อง';
         setState(() {
           _errorMessage = 'เข้าสู่ระบบไม่สำเร็จ: $errText';
         });
       } catch (e) {
         debugPrint("SaveFor: Error verifying token: $e");
         setState(() {
-          _errorMessage = 'ไม่สามารถตรวจสอบสิทธิ์การเชื่อมต่อกับเซิร์ฟเวอร์หลังบ้านได้';
+          _errorMessage =
+              'ไม่สามารถตรวจสอบสิทธิ์การเชื่อมต่อกับเซิร์ฟเวอร์หลังบ้านได้';
         });
       } finally {
         if (mounted) {
@@ -232,7 +252,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     try {
       if (kIsWeb) {
         final origin = Uri.base.origin;
-        final response = await _apiClient.get('/auth/google/url?redirect_to=$origin');
+        final response = await _apiClient.get(
+          '/auth/google/url?redirect_to=$origin',
+        );
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           final url = data['url']?.toString();
@@ -246,7 +268,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         // Native Google Sign-In on Android/iOS
         final googleSignIn = GoogleSignIn(
           scopes: ['email', 'profile'],
-          serverClientId: '569249732125-g3s97ooml3nbf5hvelg8mvmmfdo3h5nl.apps.googleusercontent.com',
+          serverClientId:
+              '569249732125-g3s97ooml3nbf5hvelg8mvmmfdo3h5nl.apps.googleusercontent.com',
         );
 
         final googleUser = await googleSignIn.signIn();
@@ -267,10 +290,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
 
         final response = await _apiClient.post(
           '/auth/google/android',
-          body: {
-            'provider': 'google',
-            'id_token': idToken,
-          },
+          body: {'provider': 'google', 'id_token': idToken},
         );
 
         if (response.statusCode == 200 || response.statusCode == 201) {
@@ -281,7 +301,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           final id = user?['id']?.toString();
           final email = user?['email']?.toString();
           final userMetadata = user?['user_metadata'] as Map<String, dynamic>?;
-          final displayName = userMetadata?['full_name']?.toString() ?? userMetadata?['name']?.toString();
+          final displayName =
+              userMetadata?['full_name']?.toString() ??
+              userMetadata?['name']?.toString();
           final avatarUrl = userMetadata?['avatar_url']?.toString();
 
           if (id != null && id.isNotEmpty && accessToken != null) {
@@ -299,18 +321,23 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             if (mounted) {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const DashboardScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const DashboardScreen(),
+                ),
               );
             }
             return;
           }
         }
-        throw Exception('ไม่สามารถแลกเปลี่ยนสิทธิ์ล็อกอินได้: ${response.body}');
+        throw Exception(
+          'ไม่สามารถแลกเปลี่ยนสิทธิ์ล็อกอินได้: ${response.body}',
+        );
       }
     } catch (e) {
       debugPrint("SaveFor: Google Sign In error: $e");
       setState(() {
-        _errorMessage = 'ไม่สามารถเชื่อมต่อระบบ Google ได้ กรุณาลองใหม่อีกครั้ง';
+        _errorMessage =
+            'ไม่สามารถเชื่อมต่อระบบ Google ได้ กรุณาลองใหม่อีกครั้ง';
       });
     } finally {
       if (mounted) {
@@ -324,6 +351,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppTheme.currentPalette;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -331,14 +359,14 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           // 1. Ultra-Premium SaaS Background Gradient
           Positioned.fill(
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xFFE0F2FE), // Light sky blue
-                    Color(0xFFECFDF5), // Light mint green
-                    Color(0xFFF8FAFC), // Off-white
+                    palette.secondary.withValues(alpha: 0.62),
+                    palette.backgroundLight,
+                    Theme.of(context).scaffoldBackgroundColor,
                   ],
                 ),
               ),
@@ -354,13 +382,19 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               maxWidth: 440,
               child: Center(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 28,
+                  ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(28),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 36,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.68),
                           borderRadius: BorderRadius.circular(28),
@@ -405,7 +439,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                                       offset: const Offset(0, 8),
                                     ),
                                     BoxShadow(
-                                      color: AppTheme.primaryColor.withOpacity(0.2),
+                                      color: AppTheme.primaryColor.withOpacity(
+                                        0.2,
+                                      ),
                                       blurRadius: 28,
                                       offset: const Offset(0, 12),
                                     ),
@@ -418,8 +454,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(
-                                        color: AppTheme.primaryColor.withOpacity(0.1),
-                                        child: const Icon(
+                                        color: AppTheme.primaryColor
+                                            .withOpacity(0.1),
+                                        child: Icon(
                                           Icons.account_balance_wallet_outlined,
                                           color: AppTheme.primaryColor,
                                           size: 44,
@@ -444,12 +481,12 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                             const SizedBox(height: 4),
 
                             // App Title
-                            const Text(
+                            Text(
                               'SaveFor',
                               style: TextStyle(
                                 fontSize: 36,
                                 fontWeight: FontWeight.w900,
-                                color: Color(0xFF008B75),
+                                color: palette.primary,
                                 letterSpacing: 0.5,
                               ),
                             ),
@@ -472,11 +509,16 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                             if (_errorMessage != null) ...[
                               Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFEF2F2),
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                                  border: Border.all(
+                                    color: const Color(0xFFFCA5A5),
+                                  ),
                                 ),
                                 child: Text(
                                   _errorMessage!,
@@ -495,11 +537,16 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                             if (_successMessage != null) ...[
                               Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFECFDF5),
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: const Color(0xFFA7F3D0)),
+                                  border: Border.all(
+                                    color: const Color(0xFFA7F3D0),
+                                  ),
                                 ),
                                 child: Text(
                                   _successMessage!,
@@ -521,7 +568,10 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                  width: 1.5,
+                                ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.05),
@@ -537,9 +587,11 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                                   ),
                                   backgroundColor: Colors.transparent,
                                 ),
-                                onPressed: _isLoading ? null : _handleGoogleSignIn,
+                                onPressed: _isLoading
+                                    ? null
+                                    : _handleGoogleSignIn,
                                 child: _isLoading
-                                    ? const SizedBox(
+                                    ? SizedBox(
                                         width: 24,
                                         height: 24,
                                         child: CircularProgressIndicator(
@@ -548,7 +600,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                                         ),
                                       )
                                     : const Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           // เวกเตอร์โลโก้ Google ของแท้ (ไม่มีปัญหา CORS, 100% Offline)
                                           GoogleLogo(size: 24),
@@ -567,18 +620,20 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                               ),
                             ),
                             const SizedBox(height: 24),
-                            
+
                             // Terms and Privacy Disclaimer
                             RichText(
                               textAlign: TextAlign.center,
-                              text: const TextSpan(
+                              text: TextSpan(
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF94A3B8),
                                   height: 1.5,
                                 ),
                                 children: [
-                                  TextSpan(text: 'การเข้าสู่ระบบแสดงว่าคุณยอมรับ\n'),
+                                  TextSpan(
+                                    text: 'การเข้าสู่ระบบแสดงว่าคุณยอมรับ\n',
+                                  ),
                                   TextSpan(
                                     text: 'ข้อตกลงการใช้งาน',
                                     style: TextStyle(

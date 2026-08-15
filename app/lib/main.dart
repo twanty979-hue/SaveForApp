@@ -52,7 +52,9 @@ Future<void> _checkInitialTokens() async {
         final id = data['id']?.toString();
         final email = data['email']?.toString();
         final userMetadata = data['user_metadata'] as Map<String, dynamic>?;
-        final displayName = userMetadata?['full_name']?.toString() ?? userMetadata?['name']?.toString();
+        final displayName =
+            userMetadata?['full_name']?.toString() ??
+            userMetadata?['name']?.toString();
         final googleAvatar = userMetadata?['avatar_url']?.toString();
 
         if (id != null && id.isNotEmpty) {
@@ -106,10 +108,9 @@ class MyApp extends StatelessWidget {
         valueListenable: AppSettings.themeStyle,
         builder: (context, themeStyle, _) => ValueListenableBuilder<ThemeMode>(
           valueListenable: AppSettings.themeMode,
-          builder: (context, themeMode, _) => AppLockWrapper(
-            child: MaterialApp(
-              title: 'SaveFor',
-              locale: locale,
+          builder: (context, themeMode, _) => MaterialApp(
+            title: 'SaveFor',
+            locale: locale,
             supportedLocales: const [Locale('th'), Locale('en')],
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
@@ -131,8 +132,9 @@ class MyApp extends StatelessWidget {
                     : const AuthScreen(),
               );
             },
+            builder: (context, child) =>
+                AppLockWrapper(child: child ?? const SizedBox.shrink()),
             debugShowCheckedModeBanner: false,
-          ),
           ),
         ),
       ),

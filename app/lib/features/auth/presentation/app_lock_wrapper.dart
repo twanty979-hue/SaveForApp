@@ -11,7 +11,8 @@ class AppLockWrapper extends StatefulWidget {
   State<AppLockWrapper> createState() => _AppLockWrapperState();
 }
 
-class _AppLockWrapperState extends State<AppLockWrapper> with WidgetsBindingObserver {
+class _AppLockWrapperState extends State<AppLockWrapper>
+    with WidgetsBindingObserver {
   bool _isLocked = false;
   final LocalAuthentication auth = LocalAuthentication();
 
@@ -39,7 +40,9 @@ class _AppLockWrapperState extends State<AppLockWrapper> with WidgetsBindingObse
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.inactive) {
       if (AppSettings.appLockEnabled && !_isLocked) {
         setState(() {
           _isLocked = true;
@@ -60,7 +63,8 @@ class _AppLockWrapperState extends State<AppLockWrapper> with WidgetsBindingObse
 
     try {
       final bool canAuthenticateWithBiometrics = await auth.canCheckBiometrics;
-      final bool canAuthenticate = canAuthenticateWithBiometrics || await auth.isDeviceSupported();
+      final bool canAuthenticate =
+          canAuthenticateWithBiometrics || await auth.isDeviceSupported();
 
       if (!canAuthenticate) {
         // If device has no security, unlock it.
@@ -69,7 +73,8 @@ class _AppLockWrapperState extends State<AppLockWrapper> with WidgetsBindingObse
       }
 
       final bool didAuthenticate = await auth.authenticate(
-        localizedReason: 'กรุณายืนยันตัวตนเพื่อเข้าใช้งาน (Please authenticate to use the app)',
+        localizedReason:
+            'กรุณายืนยันตัวตนเพื่อเข้าใช้งาน (Please authenticate to use the app)',
       );
 
       if (didAuthenticate) {
@@ -98,7 +103,7 @@ class _AppLockWrapperState extends State<AppLockWrapper> with WidgetsBindingObse
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.lock_rounded,
                       size: 64,
                       color: AppTheme.primaryColor,

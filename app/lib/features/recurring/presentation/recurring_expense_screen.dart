@@ -590,7 +590,7 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
+                            borderSide: BorderSide(
                               color: AppTheme.primaryColor,
                             ),
                           ),
@@ -645,7 +645,7 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
+                                      borderSide: BorderSide(
                                         color: AppTheme.primaryColor,
                                       ),
                                     ),
@@ -699,7 +699,7 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
+                                      borderSide: BorderSide(
                                         color: AppTheme.primaryColor,
                                       ),
                                     ),
@@ -936,7 +936,7 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppTheme.primaryColor),
+                        borderSide: BorderSide(color: AppTheme.primaryColor),
                       ),
                     ),
                   ),
@@ -1271,7 +1271,7 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                 // รายการการ์ดประวัติรายจ่ายประจำ
                 Expanded(
                   child: _isLoading
-                      ? const Center(
+                      ? Center(
                           child: CircularProgressIndicator(
                             color: AppTheme.primaryColor,
                           ),
