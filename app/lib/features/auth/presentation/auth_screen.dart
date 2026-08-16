@@ -90,7 +90,10 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen>
     with SingleTickerProviderStateMixin {
   final _apiClient = ApiClient();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
   String? _successMessage;
 
@@ -117,7 +120,88 @@ class _AuthScreenState extends State<AuthScreen>
   @override
   void dispose() {
     _logoController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleEmailPasswordSignIn() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _errorMessage = 'กรุณากรอกอีเมลให้ถูกต้อง');
+      return;
+    }
+    if (password.isEmpty) {
+      setState(() => _errorMessage = 'กรุณากรอกรหัสผ่าน');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _successMessage = 'กำลังตรวจสอบบัญชี...';
+    });
+
+    try {
+      final response = await _apiClient.post(
+        '/auth/login',
+        body: {'email': email, 'password': password},
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final accessToken = data['access_token']?.toString();
+        final refreshToken = data['refresh_token']?.toString();
+        final user = data['user'] as Map<String, dynamic>?;
+        final id = user?['id']?.toString();
+        final userEmail = user?['email']?.toString() ?? email;
+        final metadata = user?['user_metadata'] as Map<String, dynamic>?;
+        final displayName =
+            metadata?['full_name']?.toString() ??
+            metadata?['name']?.toString() ??
+            userEmail.split('@').first;
+
+        if (id != null &&
+            id.isNotEmpty &&
+            accessToken != null &&
+            accessToken.isNotEmpty &&
+            refreshToken != null &&
+            refreshToken.isNotEmpty) {
+          await AuthSession.save(
+            id,
+            displayName,
+            userEmail,
+            token: accessToken,
+            refresh: refreshToken,
+          );
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const DashboardScreen()),
+            );
+          }
+          return;
+        }
+      }
+
+      final message =
+          data['error_description']?.toString() ??
+          data['msg']?.toString() ??
+          data['message']?.toString() ??
+          'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+      setState(() => _errorMessage = 'เข้าสู่ระบบไม่สำเร็จ: $message');
+    } catch (_) {
+      setState(() => _errorMessage = 'ไม่สามารถเชื่อมต่อระบบเข้าสู่ระบบได้');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _successMessage = null;
+        });
+      }
+    }
   }
 
   // ระบบดึงและวิเคราะห์ Token ขากลับที่ปลอดภัยสูง
@@ -617,6 +701,94 @@ class _AuthScreenState extends State<AuthScreen>
                                           ),
                                         ],
                                       ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+
+                            Row(
+                              children: [
+                                const Expanded(child: Divider()),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: Text(
+                                    'หรือเข้าสู่ระบบด้วยอีเมล',
+                                    style: TextStyle(
+                                      color: Colors.blueGrey.shade500,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                const Expanded(child: Divider()),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+
+                            TextField(
+                              controller: _emailController,
+                              enabled: !_isLoading,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
+                              autofillHints: const [AutofillHints.username],
+                              decoration: InputDecoration(
+                                labelText: 'อีเมล',
+                                hintText: 'กรอกอีเมลของคุณ',
+                                prefixIcon: const Icon(Icons.email_outlined),
+                                filled: true,
+                                fillColor: Colors.white.withOpacity(0.72),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            TextField(
+                              controller: _passwordController,
+                              enabled: !_isLoading,
+                              obscureText: _obscurePassword,
+                              textInputAction: TextInputAction.done,
+                              autofillHints: const [AutofillHints.password],
+                              onSubmitted: (_) => _handleEmailPasswordSignIn(),
+                              decoration: InputDecoration(
+                                labelText: 'รหัสผ่าน',
+                                hintText: 'กรอกรหัสผ่านของคุณ',
+                                prefixIcon: const Icon(Icons.lock_outline),
+                                suffixIcon: IconButton(
+                                  tooltip: _obscurePassword
+                                      ? 'แสดงรหัสผ่าน'
+                                      : 'ซ่อนรหัสผ่าน',
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                  ),
+                                  onPressed: () => setState(
+                                    () => _obscurePassword = !_obscurePassword,
+                                  ),
+                                ),
+                                filled: true,
+                                fillColor: Colors.white.withOpacity(0.72),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            SizedBox(
+                              width: double.infinity,
+                              height: 52,
+                              child: FilledButton.icon(
+                                onPressed: _isLoading
+                                    ? null
+                                    : _handleEmailPasswordSignIn,
+                                icon: const Icon(Icons.login_rounded),
+                                label: const Text('เข้าสู่ระบบด้วยอีเมล'),
                               ),
                             ),
                             const SizedBox(height: 24),
