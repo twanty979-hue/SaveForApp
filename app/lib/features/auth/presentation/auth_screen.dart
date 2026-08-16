@@ -6,7 +6,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../domain/auth_session.dart';
@@ -392,10 +391,7 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
 
-          // 2. Animated Floating Background Icons
-          const Positioned.fill(child: FloatingBackground()),
-
-          // 3. Main Glassmorphic Form Card Content
+          // Main glassmorphic form card content
           SafeArea(
             child: ResponsiveLayout(
               maxWidth: 440,
