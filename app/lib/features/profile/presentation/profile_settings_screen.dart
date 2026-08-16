@@ -395,7 +395,10 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   String _themeStyleName(ThemeStyle style) {
     switch (style) {
       case ThemeStyle.emerald:
-        return context.tr('เอเมอรัลด์ (เขียว)', 'Emerald (Green)');
+        return context.tr(
+          'SaveFor แบรนด์ (น้ำเงิน-เขียวอมฟ้า)',
+          'SaveFor Brand (Navy & Teal)',
+        );
       case ThemeStyle.cartoon:
         return context.tr('การ์ตูนแมวส้ม 🐱', 'Orange Cat Cartoon 🐱');
       case ThemeStyle.sakura:
@@ -920,8 +923,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     switch (style) {
       case ThemeStyle.emerald:
         return context.tr(
-          'สไตล์ดั้งเดิม เรียบหรู สะอาดตา',
-          'Classic slate & clean teal financial theme',
+          'สีหลักเดียวกับโลโก้ SaveFor เรียบ ทันสมัย และสบายตา',
+          'SaveFor logo colors with a clean, modern financial style',
         );
       case ThemeStyle.cartoon:
         return context.tr(

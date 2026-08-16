@@ -31,14 +31,15 @@ class AppTheme {
     switch (style) {
       case ThemeStyle.emerald:
         return const ThemePalette(
-          primary: Color(0xFF0F766E),
-          strong: Color(0xFF115E59),
-          secondary: Color(0xFFCCFBF1),
-          secondaryDark: Color(0xFF173B3A),
-          backgroundLight: Color(0xFFF6FAF9),
-          backgroundDark: Color(0xFF0B1717),
+          // SaveFor brand palette: navy wallet + teal growth accent.
+          primary: Color(0xFF1652A5),
+          strong: Color(0xFF123B7A),
+          secondary: Color(0xFFDFF8F4),
+          secondaryDark: Color(0xFF173D45),
+          backgroundLight: Color(0xFFF5F9FD),
+          backgroundDark: Color(0xFF091628),
           cardLight: Colors.white,
-          cardDark: Color(0xFF132222),
+          cardDark: Color(0xFF12243A),
         );
       case ThemeStyle.cartoon:
         return const ThemePalette(
@@ -274,7 +275,7 @@ class AppTheme {
   static String? _fontFamily(ThemeStyle style) {
     switch (style) {
       case ThemeStyle.emerald:
-        return GoogleFonts.kanit().fontFamily;
+        return GoogleFonts.notoSansThai().fontFamily;
       case ThemeStyle.cartoon:
         return GoogleFonts.itim().fontFamily;
       case ThemeStyle.sakura:
