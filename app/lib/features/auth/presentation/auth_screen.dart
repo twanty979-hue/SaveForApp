@@ -370,6 +370,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = AppTheme.currentPalette;
+    final isCompact = MediaQuery.sizeOf(context).height < 760;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -397,18 +398,18 @@ class _AuthScreenState extends State<AuthScreen> {
               maxWidth: 440,
               child: Center(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 28,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isCompact ? 16 : 20,
+                    vertical: isCompact ? 12 : 28,
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(28),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 28,
-                          vertical: 36,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isCompact ? 22 : 28,
+                          vertical: isCompact ? 20 : 36,
                         ),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.68),
@@ -430,11 +431,13 @@ class _AuthScreenState extends State<AuthScreen> {
                           children: [
                             // Static app logo: clean and professional, without a distracting animation.
                             Container(
-                              width: 88,
-                              height: 88,
+                              width: isCompact ? 68 : 88,
+                              height: isCompact ? 68 : 88,
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(26),
+                                borderRadius: BorderRadius.circular(
+                                  isCompact ? 20 : 26,
+                                ),
                                 border: Border.all(
                                   color: Colors.white,
                                   width: 3.5,
@@ -455,7 +458,9 @@ class _AuthScreenState extends State<AuthScreen> {
                                 ],
                               ),
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(22.5),
+                                borderRadius: BorderRadius.circular(
+                                  isCompact ? 16 : 22.5,
+                                ),
                                 child: Image.asset(
                                   'assets/images/logo.jpg',
                                   fit: BoxFit.cover,
@@ -474,43 +479,31 @@ class _AuthScreenState extends State<AuthScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 18),
+                            SizedBox(height: isCompact ? 10 : 18),
 
                             // Welcome Text
-                            const Text(
-                              'ยินดีต้อนรับเข้าสู่',
+                            Text(
+                              'ยินดีต้อนรับสู่ SaveFor',
                               style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                                fontSize: isCompact ? 21 : 24,
+                                fontWeight: FontWeight.w800,
                                 color: Color(0xFF64748B),
                               ),
                             ),
-                            const SizedBox(height: 4),
-
-                            // App Title
-                            Text(
-                              'SaveFor',
-                              style: TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.w900,
-                                color: palette.primary,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
+                            SizedBox(height: isCompact ? 8 : 12),
 
                             // Subtitle / Instruction
                             const Text(
-                              'จัดการการเงินและบรรลุเป้าหมายของคุณ\nโปรดเข้าสู่ระบบเพื่อดำเนินการต่อ',
+                              'จัดการเงินของคุณให้เป็นเรื่องง่าย',
                               style: TextStyle(
                                 color: Color(0xFF475569),
-                                fontSize: 14,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w500,
-                                height: 1.5,
+                                height: 1.3,
                               ),
                               textAlign: TextAlign.center,
                             ),
-                            const SizedBox(height: 32),
+                            SizedBox(height: isCompact ? 18 : 28),
 
                             // Display Error Message
                             if (_errorMessage != null) ...[
@@ -567,87 +560,6 @@ class _AuthScreenState extends State<AuthScreen> {
                               ),
                               const SizedBox(height: 16),
                             ],
-
-                            // Premium Google Sign-In Button
-                            Container(
-                              width: double.infinity,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: const Color(0xFFE2E8F0),
-                                  width: 1.5,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                              ),
-                              child: TextButton(
-                                style: TextButton.styleFrom(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  backgroundColor: Colors.transparent,
-                                ),
-                                onPressed: _isLoading
-                                    ? null
-                                    : _handleGoogleSignIn,
-                                child: _isLoading
-                                    ? SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                          color: AppTheme.primaryColor,
-                                          strokeWidth: 2.5,
-                                        ),
-                                      )
-                                    : const Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          // เวกเตอร์โลโก้ Google ของแท้ (ไม่มีปัญหา CORS, 100% Offline)
-                                          GoogleLogo(size: 24),
-                                          SizedBox(width: 12),
-                                          Text(
-                                            'เข้าสู่ระบบด้วย Google',
-                                            style: TextStyle(
-                                              color: Color(0xFF0F172A),
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing: 0.2,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-
-                            Row(
-                              children: [
-                                const Expanded(child: Divider()),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  child: Text(
-                                    'หรือเข้าสู่ระบบด้วยอีเมล',
-                                    style: TextStyle(
-                                      color: Colors.blueGrey.shade500,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                const Expanded(child: Divider()),
-                              ],
-                            ),
-                            const SizedBox(height: 18),
 
                             TextField(
                               controller: _emailController,
@@ -715,6 +627,76 @@ class _AuthScreenState extends State<AuthScreen> {
                               ),
                             ),
                             const SizedBox(height: 24),
+
+                            Row(
+                              children: [
+                                const Expanded(child: Divider()),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: Text(
+                                    'หรือ',
+                                    style: TextStyle(
+                                      color: Colors.blueGrey.shade500,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                const Expanded(child: Divider()),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+
+                            // Google remains available as the secondary sign-in method.
+                            Container(
+                              width: double.infinity,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                ),
+                              ),
+                              child: TextButton(
+                                style: TextButton.styleFrom(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                onPressed: _isLoading
+                                    ? null
+                                    : _handleGoogleSignIn,
+                                child: _isLoading
+                                    ? SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          color: AppTheme.primaryColor,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : const Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          GoogleLogo(size: 22),
+                                          SizedBox(width: 10),
+                                          Text(
+                                            'เข้าสู่ระบบด้วย Google',
+                                            style: TextStyle(
+                                              color: Color(0xFF0F172A),
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 18),
 
                             // Terms and Privacy Disclaimer
                             RichText(
