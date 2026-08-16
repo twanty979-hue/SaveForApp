@@ -40,6 +40,7 @@ dependencies:
   http: ^1.6.0
   shared_preferences: ^2.3.2
   google_fonts: ^6.2.0
+  flutter_svg: ^2.0.17
   image_picker: ^1.2.3
   image_cropper: ^12.2.1
   firebase_core: ^4.12.1
@@ -74,6 +75,7 @@ flutter:
   assets:
     - .env
     - assets/images/logo.jpg
+    - assets/images/google_g.svg
     - assets/images/penguin_avatar.jpg
     - assets/images/cat_avatar.jpg
     - assets/images/bear_avatar.jpg

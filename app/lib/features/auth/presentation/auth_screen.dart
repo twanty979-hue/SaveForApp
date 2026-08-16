@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
@@ -11,73 +12,20 @@ import '../../dashboard/presentation/dashboard_screen.dart';
 import '../domain/auth_session.dart';
 import '../../../core/network/web_helper.dart' as web_helper;
 
-// วิดเจ็ตวาดโลโก้ Google ของแท้แบบเวกเตอร์ (ไม่มีความล่าช้าเครือข่าย ไม่ติดปัญหา CORS บนเว็บบราวเซอร์)
+// โลโก้ Google แบบเวกเตอร์จาก asset ภายในแอป ไม่โหลดจากอินเทอร์เน็ต
 class GoogleLogo extends StatelessWidget {
   final double size;
   const GoogleLogo({super.key, this.size = 20});
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(size: Size(size, size), painter: _GoogleLogoPainter());
-  }
-}
-
-class _GoogleLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double w = size.width;
-    final double h = size.height;
-    final center = Offset(w / 2, h / 2);
-    final double radius = w / 2;
-
-    // อัตราส่วนความหนาเส้นตรงตามสเปกของ Google (ประมาณ 23%)
-    final double thickness = w * 0.23;
-    final rect = Rect.fromCircle(
-      center: center,
-      radius: radius - thickness / 2,
-    );
-
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = thickness
-      ..isAntiAlias = true;
-
-    // ส่วนสีแดง (ด้านบน)
-    paint.color = const Color(0xFFEA4335);
-    canvas.drawArc(rect, -2.356, 1.256, false, paint);
-
-    // ส่วนสีเหลือง (ด้านซ้าย)
-    paint.color = const Color(0xFFFBBC05);
-    canvas.drawArc(rect, -3.456, 1.1, false, paint);
-
-    // ส่วนสีเขียว (ด้านล่าง)
-    paint.color = const Color(0xFF34A853);
-    canvas.drawArc(rect, 0.785, 1.57, false, paint);
-
-    // ส่วนสีน้ำเงิน (ด้านขวา)
-    paint.color = const Color(0xFF4285F4);
-    canvas.drawArc(rect, -1.1, 1.885, false, paint);
-
-    // แท่งสีน้ำเงินแนวนอนของตัว G
-    final barPaint = Paint()
-      ..color = const Color(0xFF4285F4)
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-
-    final barHeight = thickness;
-    canvas.drawRect(
-      Rect.fromLTRB(
-        w * 0.5,
-        h * 0.5 - barHeight / 2,
-        w,
-        h * 0.5 + barHeight / 2,
-      ),
-      barPaint,
+    return SvgPicture.asset(
+      'assets/images/google_g.svg',
+      width: size,
+      height: size,
+      semanticsLabel: 'Google',
     );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class AuthScreen extends StatefulWidget {
@@ -87,8 +35,7 @@ class AuthScreen extends StatefulWidget {
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen>
-    with SingleTickerProviderStateMixin {
+class _AuthScreenState extends State<AuthScreen> {
   final _apiClient = ApiClient();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -97,20 +44,9 @@ class _AuthScreenState extends State<AuthScreen>
   String? _errorMessage;
   String? _successMessage;
 
-  late AnimationController _logoController;
-  late Animation<double> _logoAnimation;
-
   @override
   void initState() {
     super.initState();
-    _logoController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat(reverse: true);
-    _logoAnimation = Tween<double>(begin: -6.0, end: 6.0).animate(
-      CurvedAnimation(parent: _logoController, curve: Curves.easeInOut),
-    );
-
     // ตรวจสอบข้อมูลล็อกอินขากลับจาก URL Fragment หรือ Query Parameters
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkUrlFragment();
@@ -119,7 +55,6 @@ class _AuthScreenState extends State<AuthScreen>
 
   @override
   void dispose() {
-    _logoController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -497,57 +432,49 @@ class _AuthScreenState extends State<AuthScreen>
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Floating Logo Animation
-                            AnimatedBuilder(
-                              animation: _logoAnimation,
-                              builder: (context, child) {
-                                return Transform.translate(
-                                  offset: Offset(0, _logoAnimation.value),
-                                  child: child,
-                                );
-                              },
-                              child: Container(
-                                width: 88,
-                                height: 88,
-                                decoration: BoxDecoration(
+                            // Static app logo: clean and professional, without a distracting animation.
+                            Container(
+                              width: 88,
+                              height: 88,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(26),
+                                border: Border.all(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(26),
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 3.5,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.06),
-                                      blurRadius: 15,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                    BoxShadow(
-                                      color: AppTheme.primaryColor.withOpacity(
-                                        0.2,
-                                      ),
-                                      blurRadius: 28,
-                                      offset: const Offset(0, 12),
-                                    ),
-                                  ],
+                                  width: 3.5,
                                 ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(22.5),
-                                  child: Image.asset(
-                                    'assets/images/logo.jpg',
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        color: AppTheme.primaryColor
-                                            .withOpacity(0.1),
-                                        child: Icon(
-                                          Icons.account_balance_wallet_outlined,
-                                          color: AppTheme.primaryColor,
-                                          size: 44,
-                                        ),
-                                      );
-                                    },
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 15,
+                                    offset: const Offset(0, 8),
                                   ),
+                                  BoxShadow(
+                                    color: AppTheme.primaryColor.withOpacity(
+                                      0.2,
+                                    ),
+                                    blurRadius: 28,
+                                    offset: const Offset(0, 12),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(22.5),
+                                child: Image.asset(
+                                  'assets/images/logo.jpg',
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: AppTheme.primaryColor.withOpacity(
+                                        0.1,
+                                      ),
+                                      child: Icon(
+                                        Icons.account_balance_wallet_outlined,
+                                        color: AppTheme.primaryColor,
+                                        size: 44,
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                             ),
