@@ -1,6 +1,6 @@
 class AppConstants {
   static const String appName = 'SaveFor';
-  static const String apiBaseUrl = 'http://localhost:8080/api/v1';
+  static const String apiBaseUrl = 'https://saveforapp.onrender.com/api/v1';
 
   // API Endpoints
   static const String loginPath = '/auth/login';

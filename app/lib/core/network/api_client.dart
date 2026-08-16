@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
@@ -10,20 +9,15 @@ class ApiClient {
   static final Map<String, _CachedResponse> _getCache = {};
   static final Map<String, Future<http.Response>> _getInFlight = {};
 
-  // ตรวจสอบและดึงค่า API_BASE_URL จาก .env หรือใช้ IP คอมพิวเตอร์จริงของผู้ใช้เป็นค่าสำรองตรง
+  // ใช้ค่า API_BASE_URL จาก .env และใช้ Render เป็นค่าเริ่มต้นสำหรับ release
   String get _baseUrl {
-    // หากรันอยู่บน Web และเล่นผ่าน localhost ให้ใช้หลังบ้านเป็น localhost:8080 ทันที ป้องกันปัญหา IP เครื่องคอมพิวเตอร์เปลี่ยนในวง Wi-Fi
-    if (kIsWeb && Uri.base.host == 'localhost') {
-      return 'http://localhost:8080/api/v1';
-    }
-
     if (dotenv.isInitialized &&
         dotenv.env['API_BASE_URL'] != null &&
         dotenv.env['API_BASE_URL']!.isNotEmpty) {
       return '${dotenv.env['API_BASE_URL']}/api/v1';
     }
-    // ใช้ไอพีเครื่องของนาย (192.168.0.103) เป็นค่าเริ่มต้นสำรองทันที เพื่อให้แอปมือถือเชื่อมเข้าคอมได้แม้ติดขัดเรื่องโหลด .env จากแอสเซ็ต
-    return 'http://192.168.0.103:8080/api/v1';
+    // fallback นี้ช่วยให้ build จาก CI ที่ไม่มีไฟล์ .env ยังเชื่อมต่อ production API ได้
+    return 'https://saveforapp.onrender.com/api/v1';
   }
 
   String absoluteUrl(String path) {

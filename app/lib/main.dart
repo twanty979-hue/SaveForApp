@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:app/core/localization/app_material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'core/theme/app_theme.dart';
 import 'core/settings/app_settings.dart';
 import 'core/notifications/notification_service.dart';
@@ -10,6 +12,7 @@ import 'features/auth/domain/auth_session.dart';
 import 'features/auth/presentation/auth_screen.dart';
 import 'features/auth/presentation/app_lock_wrapper.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
+import 'features/marketing/presentation/web_landing_screen.dart';
 
 // ตรวจสอบและล็อกอินผู้ใช้ตั้งแต่เปิดแอปทันทีเพื่อป้องกันบราวเซอร์สับสนพอร์ตเราท์เตอร์ (#access_token)
 Future<void> _checkInitialTokens() async {
@@ -78,6 +81,9 @@ Future<void> _checkInitialTokens() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) {
+    usePathUrlStrategy();
+  }
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
@@ -120,10 +126,73 @@ class MyApp extends StatelessWidget {
             theme: AppTheme.getTheme(themeStyle, ThemeMode.light),
             darkTheme: AppTheme.getTheme(themeStyle, ThemeMode.dark),
             themeMode: themeMode,
-            // หน้าเริ่มต้นหลัก
-            home: AuthSession.isLoggedIn
-                ? const DashboardScreen()
-                : const AuthScreen(),
+            initialRoute: kIsWeb
+                ? (Uri.base.path.isEmpty ? '/' : Uri.base.path)
+                : null,
+            // หน้าเริ่มต้นหลักและ URL สาธารณะของเว็บ
+            home: kIsWeb
+                ? null
+                : (AuthSession.isLoggedIn
+                      ? const DashboardScreen()
+                      : const AuthScreen()),
+            onGenerateRoute: (settings) {
+              if (!kIsWeb) return null;
+              switch (settings.name) {
+                case '/':
+                  return MaterialPageRoute(
+                    builder: (_) => AuthSession.isLoggedIn
+                        ? const DashboardScreen()
+                        : const WebLandingScreen(),
+                  );
+                case webLoginPath:
+                  return MaterialPageRoute(builder: (_) => const AuthScreen());
+                case webPrivacyPath:
+                  return MaterialPageRoute(
+                    builder: (_) => WebDocumentScreen(
+                      title: 'นโยบายความเป็นส่วนตัว',
+                      paragraphs: [
+                        'SaveFor จัดเก็บข้อมูลที่จำเป็นต่อการให้บริการ เช่น บัญชีผู้ใช้ รายรับ รายจ่าย และเป้าหมายการออมของคุณ',
+                        'ข้อมูลของคุณใช้เพื่อแสดงผลและให้บริการภายในบัญชีของคุณเท่านั้น เราไม่ขอรหัสผ่านธนาคารและไม่เชื่อมต่อเข้าบัญชีธนาคารโดยตรง',
+                        'คุณสามารถติดต่อทีมงานเพื่อขอข้อมูลเพิ่มเติมหรือขอลบบัญชีได้ผ่านหน้าช่วยเหลือ',
+                      ],
+                    ),
+                  );
+                case webTermsPath:
+                  return MaterialPageRoute(
+                    builder: (_) => WebDocumentScreen(
+                      title: 'เงื่อนไขการใช้งาน',
+                      paragraphs: [
+                        'การใช้งาน SaveFor หมายถึงคุณยอมรับการใช้บริการเพื่อบันทึกและวางแผนการเงินส่วนบุคคล',
+                        'ข้อมูลและสรุปผลในแอปเป็นเครื่องมือช่วยวางแผน ไม่ใช่คำแนะนำการลงทุนหรือคำแนะนำทางการเงินเฉพาะบุคคล',
+                      ],
+                    ),
+                  );
+                case webSupportPath:
+                  return MaterialPageRoute(
+                    builder: (_) => WebDocumentScreen(
+                      title: 'ช่วยเหลือและติดต่อเรา',
+                      paragraphs: [
+                        'หากพบปัญหาเกี่ยวกับการเข้าสู่ระบบ ข้อมูล หรือการใช้งาน กรุณาเตรียมอีเมลบัญชีและรายละเอียดปัญหาไว้เพื่อให้ทีมงานตรวจสอบได้รวดเร็วขึ้น',
+                        'ช่องทางติดต่อจะถูกเพิ่มในหน้านี้ก่อนเผยแพร่แอปอย่างเป็นทางการ',
+                      ],
+                    ),
+                  );
+                case webDeleteAccountPath:
+                  return MaterialPageRoute(
+                    builder: (_) => WebDocumentScreen(
+                      title: 'การลบบัญชี SaveFor',
+                      paragraphs: [
+                        'คุณสามารถขอลบบัญชีและข้อมูลส่วนตัวที่เกี่ยวข้องได้จากเมนูบัญชีภายในแอป หรือส่งคำขอผ่านหน้าช่วยเหลือ',
+                        'ก่อนเผยแพร่จริง เราจะเพิ่มช่องทางติดต่อและรายละเอียดระยะเวลาการดำเนินการในหน้านี้',
+                      ],
+                    ),
+                  );
+                default:
+                  return MaterialPageRoute(
+                    builder: (_) => const WebLandingScreen(),
+                  );
+              }
+            },
             // ป้องกันเบราว์เซอร์สับสนเส้นทางจาก Hash Fragment คีย์ความปลอดภัย ให้เด้งกลับหน้าหลักแทน
             onUnknownRoute: (settings) {
               return MaterialPageRoute(

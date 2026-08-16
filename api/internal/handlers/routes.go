@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	pathpkg "path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -40,7 +42,7 @@ func SetupRouter() *gin.Engine {
 	// for every request that reaches user data.
 	r.Use(func(c *gin.Context) {
 		path := c.Request.URL.Path
-		if path == "/ping" || strings.HasPrefix(path, "/api/v1/auth/") {
+		if path == "/ping" || !strings.HasPrefix(path, "/api/v1/") || strings.HasPrefix(path, "/api/v1/auth/") {
 			c.Next()
 			return
 		}
@@ -56,6 +58,10 @@ func SetupRouter() *gin.Engine {
 			"message": "pong from savefor api!",
 		})
 	})
+
+	// Flutter Web is served by the same Render service as the API. Only API
+	// routes use the authentication middleware above; public web pages do not.
+	r.NoRoute(serveFlutterWeb)
 
 	v1 := r.Group("/api/v1")
 	{
@@ -205,6 +211,33 @@ func SetupRouter() *gin.Engine {
 	}
 
 	return r
+}
+
+func serveFlutterWeb(c *gin.Context) {
+	requestPath := strings.TrimPrefix(c.Request.URL.Path, "/")
+	if strings.HasPrefix(requestPath, "api/") {
+		c.JSON(http.StatusNotFound, gin.H{"error": "API route not found"})
+		return
+	}
+
+	cleanPath := pathpkg.Clean("/" + requestPath)
+	relativePath := strings.TrimPrefix(cleanPath, "/")
+	if relativePath == "" || strings.HasPrefix(relativePath, "..") {
+		relativePath = "index.html"
+	}
+
+	filePath := filepath.Join("web", filepath.FromSlash(relativePath))
+	if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+		c.File(filePath)
+		return
+	}
+
+	indexPath := filepath.Join("web", "index.html")
+	if _, err := os.Stat(indexPath); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "web client is not deployed"})
+		return
+	}
+	c.File(indexPath)
 }
 
 func handleSupabaseProxy(c *gin.Context, method string, path string) {
