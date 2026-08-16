@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'web_history.dart';
+
 const webLoginPath = '/login';
 const webPrivacyPath = '/privacy';
 const webTermsPath = '/terms';
@@ -54,11 +56,9 @@ class WebLandingScreen extends StatelessWidget {
             SliverToBoxAdapter(
               child: _Footer(
                 onPrivacyPressed: () =>
-                    Navigator.of(context).pushNamed(webPrivacyPath),
-                onTermsPressed: () =>
-                    Navigator.of(context).pushNamed(webTermsPath),
-                onSupportPressed: () =>
-                    Navigator.of(context).pushNamed(webSupportPath),
+                    _openRoute(context, webPrivacyPath),
+                onTermsPressed: () => _openRoute(context, webTermsPath),
+                onSupportPressed: () => _openRoute(context, webSupportPath),
               ),
             ),
           ],
@@ -68,7 +68,12 @@ class WebLandingScreen extends StatelessWidget {
   }
 
   void _openLogin(BuildContext context) {
-    Navigator.of(context).pushNamed(webLoginPath);
+    _openRoute(context, webLoginPath);
+  }
+
+  void _openRoute(BuildContext context, String path) {
+    pushWebPath(path);
+    Navigator.of(context).pushNamed(path);
   }
 }
 
@@ -528,7 +533,22 @@ class WebDocumentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+        leading: IconButton(
+          tooltip: 'กลับหน้าหลัก',
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            replaceWebPath('/');
+            final navigator = Navigator.of(context);
+            if (navigator.canPop()) {
+              navigator.pop();
+            } else {
+              navigator.pushReplacementNamed('/');
+            }
+          },
+        ),
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 820),
