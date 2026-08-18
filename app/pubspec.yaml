@@ -74,7 +74,7 @@ flutter:
   uses-material-design: true
   assets:
     - .env
-    - assets/images/logo.jpg
+    - assets/images/logo_blue.png
     - assets/images/google_g.svg
     - assets/images/penguin_avatar.jpg
     - assets/images/cat_avatar.jpg
@@ -115,9 +115,10 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/images/logo.jpg"
+  remove_alpha_ios: true
+  image_path: "assets/images/logo_blue.png"
   web:
     generate: true
-    image_path: "assets/images/logo.jpg"
+    image_path: "assets/images/logo_blue.png"
     background_color: "#FFFFFF"
     theme_color: "#FFFFFF"

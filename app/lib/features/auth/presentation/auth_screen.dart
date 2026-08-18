@@ -462,7 +462,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   isCompact ? 16 : 22.5,
                                 ),
                                 child: Image.asset(
-                                  'assets/images/logo.jpg',
+                                  'assets/images/logo_blue.png',
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) {
                                     return Container(

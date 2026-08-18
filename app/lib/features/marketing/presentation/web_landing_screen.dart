@@ -237,7 +237,7 @@ class _Hero extends StatelessWidget {
                     ],
                   ),
                   child: Image.asset(
-                    'assets/images/logo.jpg',
+                    'assets/images/logo_blue.png',
                     width: compact ? 250 : 360,
                     height: compact ? 250 : 360,
                     fit: BoxFit.contain,
