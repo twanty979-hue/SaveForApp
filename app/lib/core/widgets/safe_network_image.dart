@@ -1,7 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../network/api_client.dart';
-import '../network/web_helper.dart' as web_helper;
 
 class SafeNetworkImage extends StatelessWidget {
   final String url;
@@ -23,23 +21,8 @@ class SafeNetworkImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
-      final webWidget = web_helper.buildWebImage(url, width: width, height: height, fit: fit, isCircle: isCircle);
-      if (webWidget != null) {
-        return Stack(
-          fit: StackFit.passthrough,
-          children: [
-            webWidget,
-            Positioned.fill(
-              child: Container(color: Colors.transparent),
-            ),
-          ],
-        );
-      }
-    }
-    
     final apiClient = ApiClient();
-    return Image.network(
+    final image = Image.network(
       url,
       width: width,
       height: height,
@@ -47,5 +30,7 @@ class SafeNetworkImage extends StatelessWidget {
       headers: apiClient.imageHeaders(url),
       errorBuilder: errorBuilder,
     );
+
+    return isCircle ? ClipOval(child: image) : image;
   }
 }
