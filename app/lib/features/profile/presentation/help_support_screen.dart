@@ -206,83 +206,118 @@ class HelpSupportScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.pageColor,
-      appBar: AppBar(
-        title: Text(context.tr('ช่วยเหลือและสนับสนุน', 'Help & Support')),
-        foregroundColor: context.primaryTextColor,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-      ),
       body: Stack(
         children: [
           const Positioned.fill(child: FloatingBackground()),
           SafeArea(
-            top: false,
             child: ResponsiveLayout(
               maxWidth: 600,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              child: Column(
                 children: [
-                  _SectionLabel(context.tr('ศูนย์ช่วยเหลือ', 'Help Center')),
-                  const SizedBox(height: 8),
-                  _SettingsTile(
-                    icon: Icons.question_answer_rounded,
-                    title: context.tr('คำถามที่พบบ่อย (FAQ)', 'FAQ'),
-                    subtitle: context.tr(
-                      'รวมคำตอบสำหรับปัญหาที่พบบ่อย',
-                      'Common questions and answers',
-                    ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const FaqScreen()),
-                    ),
-                  ),
-                  _SettingsTile(
-                    icon: Icons.menu_book_rounded,
-                    title: context.tr('คู่มือการใช้งาน', 'User Manual'),
-                    subtitle: context.tr(
-                      'เรียนรู้วิธีใช้แอปพลิเคชัน',
-                      'Learn how to use the app',
-                    ),
-                    onTap: () => _showUserManual(context),
-                  ),
-                  const SizedBox(height: 16),
-                  _SectionLabel(context.tr('ติดต่อและรายงาน', 'Contact & Feedback')),
-                  const SizedBox(height: 8),
-                  _SettingsTile(
-                    icon: Icons.support_agent_rounded,
-                    title: context.tr('ติดต่อแอดมิน', 'Contact Us'),
-                    subtitle: context.tr(
-                      'ติดต่อผ่าน LINE, Facebook หรือ Email',
-                      'Chat via LINE, Facebook, or email',
-                    ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ContactAdminScreen()),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Row(
+                      children: [
+                        Material(
+                          color: context.surfaceColor,
+                          borderRadius: BorderRadius.circular(14),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () => Navigator.pop(context),
+                            child: SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 18,
+                                color: context.primaryTextColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            context.tr('ช่วยเหลือและสนับสนุน', 'Help & Support'),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: context.primaryTextColor,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  _SettingsTile(
-                    icon: Icons.bug_report_rounded,
-                    title: context.tr('รายงานปัญหา', 'Report a Bug'),
-                    subtitle: context.tr(
-                      'แจ้งปัญหาการใช้งานหรือแอปขัดข้อง',
-                      'Report a bug or crash',
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                      children: [
+                        _SectionLabel(context.tr('ศูนย์ช่วยเหลือ', 'Help Center')),
+                        const SizedBox(height: 8),
+                        _SettingsTile(
+                          icon: Icons.question_answer_rounded,
+                          title: context.tr('คำถามที่พบบ่อย (FAQ)', 'FAQ'),
+                          subtitle: context.tr(
+                            'รวมคำตอบสำหรับปัญหาที่พบบ่อย',
+                            'Common questions and answers',
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const FaqScreen()),
+                          ),
+                        ),
+                        _SettingsTile(
+                          icon: Icons.menu_book_rounded,
+                          title: context.tr('คู่มือการใช้งาน', 'User Manual'),
+                          subtitle: context.tr(
+                            'เรียนรู้วิธีใช้แอปพลิเคชัน',
+                            'Learn how to use the app',
+                          ),
+                          onTap: () => _showUserManual(context),
+                        ),
+                        _SettingsTile(
+                          icon: Icons.support_agent_rounded,
+                          title: context.tr('ติดต่อแอดมิน', 'Contact Admin'),
+                          subtitle: context.tr(
+                            'คุยกับทีมงานโดยตรง',
+                            'Chat directly with our team',
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ContactAdminScreen(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _SectionLabel(context.tr('แจ้งเรื่อง', 'Feedback & Reports')),
+                        const SizedBox(height: 8),
+                        _SettingsTile(
+                          icon: Icons.bug_report_rounded,
+                          title: context.tr('แจ้งปัญหาการใช้งาน', 'Report a Bug'),
+                          subtitle: context.tr(
+                            'พบข้อผิดพลาดหรือระบบขัดข้อง',
+                            'Found an issue or glitch',
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SupportRequestScreen(ticketType: 'bug'),
+                            ),
+                          ),
+                        ),
+                        _SettingsTile(
+                          icon: Icons.lightbulb_rounded,
+                          title: context.tr('เสนอฟีเจอร์', 'Suggest a Feature'),
+                          subtitle: context.tr(
+                            'บอกเราว่าอยากให้เพิ่มอะไร',
+                            'Tell us what features you want',
+                          ),
+                          onTap: () => _showFeatureSuggestion(context),
+                        ),
+                      ],
                     ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SupportRequestScreen(ticketType: 'bug'),
-                      ),
-                    ),
-                  ),
-                  _SettingsTile(
-                    icon: Icons.lightbulb_rounded,
-                    title: context.tr('เสนอฟีเจอร์', 'Suggest a Feature'),
-                    subtitle: context.tr(
-                      'บอกเราว่าอยากให้เพิ่มอะไร',
-                      'Tell us what features you want',
-                    ),
-                    onTap: () => _showFeatureSuggestion(context),
                   ),
                 ],
               ),

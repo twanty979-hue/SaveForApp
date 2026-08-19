@@ -325,32 +325,62 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.pageColor,
-      appBar: AppBar(
-        title: Text(context.tr('ตั้งค่าบัญชี', 'Account Settings')),
-        foregroundColor: context.primaryTextColor,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-      ),
       body: Stack(
         children: [
           const Positioned.fill(child: FloatingBackground()),
           SafeArea(
-            top: false,
             child: ResponsiveLayout(
               maxWidth: 600,
-              child: _isLoading
-                  ? Center(
-                      child: CircularProgressIndicator(
-                        color: AppTheme.primaryColor,
-                      ),
-                    )
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Row(
                       children: [
-                        _SectionLabel(
-                          context.tr('ข้อมูลส่วนตัว', 'Profile Information'),
+                        Material(
+                          color: context.surfaceColor,
+                          borderRadius: BorderRadius.circular(14),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () => Navigator.pop(context),
+                            child: SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 18,
+                                color: context.primaryTextColor,
+                              ),
+                            ),
+                          ),
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            context.tr('ตั้งค่าบัญชี', 'Account Settings'),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: context.primaryTextColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: _isLoading
+                        ? Center(
+                            child: CircularProgressIndicator(
+                              color: AppTheme.primaryColor,
+                            ),
+                          )
+                        : ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                            children: [
+                              _SectionLabel(
+                                context.tr('ข้อมูลส่วนตัว', 'Profile Information'),
+                              ),
                         const SizedBox(height: 8),
                         _SettingsTile(
                           icon: Icons.badge_outlined,
@@ -434,6 +464,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                         ),
                       ],
                     ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

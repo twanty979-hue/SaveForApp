@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:app/core/localization/app_material.dart';
 import 'package:flutter/rendering.dart';
@@ -1146,7 +1147,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   }
 
   Widget _buildMessageBubble(Message message) {
-    final compactAiWidth = MediaQuery.sizeOf(context).width * 0.55;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final compactAiWidth = math.min(screenWidth * 0.60, 225.0);
+    final userBubbleMaxWidth = math.min(screenWidth * 0.60, 210.0);
 
     if (message.cardData != null) {
       final card = message.cardData!;
@@ -1333,7 +1336,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: isUser ? 300 : compactAiWidth),
+        constraints: BoxConstraints(
+          maxWidth: isUser ? userBubbleMaxWidth : compactAiWidth,
+        ),
         child: Container(
           margin: EdgeInsets.only(
             left: isUser ? 48 : 0,

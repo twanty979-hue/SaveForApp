@@ -535,32 +535,62 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.pageColor,
-      appBar: AppBar(
-        title: Text(context.tr('โปรไฟล์และการตั้งค่า', 'Profile & settings')),
-        foregroundColor: context.primaryTextColor,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-      ),
       body: Stack(
         children: [
           const Positioned.fill(child: FloatingBackground()),
           SafeArea(
-            top: false,
             child: ResponsiveLayout(
               maxWidth: 600,
-              child: _isLoading
-                  ? Center(
-                      child: CircularProgressIndicator(
-                        color: AppTheme.primaryColor,
-                      ),
-                    )
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Row(
                       children: [
-                        _buildProfileHeader(),
-                        const SizedBox(height: 22),
-                        _SectionLabel(context.tr('การตั้งค่า', 'Settings')),
+                        Material(
+                          color: context.surfaceColor,
+                          borderRadius: BorderRadius.circular(14),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () => Navigator.pop(context),
+                            child: SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 18,
+                                color: context.primaryTextColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            context.tr('โปรไฟล์และการตั้งค่า', 'Profile & settings'),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: context.primaryTextColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: _isLoading
+                        ? Center(
+                            child: CircularProgressIndicator(
+                              color: AppTheme.primaryColor,
+                            ),
+                          )
+                        : ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                            children: [
+                              _buildProfileHeader(),
+                              const SizedBox(height: 22),
+                              _SectionLabel(context.tr('การตั้งค่า', 'Settings')),
                         const SizedBox(height: 8),
                         _SettingsTile(
                           icon: Icons.manage_accounts_outlined,
@@ -667,6 +697,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                         ),
                       ],
                     ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

@@ -100,80 +100,113 @@ class _SupportRequestScreenState extends State<SupportRequestScreen> {
 
     return Scaffold(
       backgroundColor: context.pageColor,
-      appBar: AppBar(
-        title: Text(title),
-        foregroundColor: context.primaryTextColor,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-      ),
       body: Stack(
         children: [
           const Positioned.fill(child: FloatingBackground()),
           SafeArea(
-            top: false,
             child: ResponsiveLayout(
               maxWidth: 600,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              child: Column(
                 children: [
-                  Text(
-                    description,
-                    style: TextStyle(
-                      color: context.secondaryTextColor,
-                      fontSize: 13,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Row(
+                      children: [
+                        Material(
+                          color: context.surfaceColor,
+                          borderRadius: BorderRadius.circular(14),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () => Navigator.pop(context),
+                            child: SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 18,
+                                color: context.primaryTextColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: context.primaryTextColor,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  TextField(
-                    controller: _subjectController,
-                    maxLength: 160,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: context.tr('หัวข้อ', 'Subject'),
-                      hintText: _isBugReport
-                          ? context.tr('เช่น ปุ่มบันทึกกดไม่ได้', 'e.g. Save button does not work')
-                          : context.tr('เช่น ขอเพิ่มการสแกนใบเสร็จ', 'e.g. Add receipt scanning'),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _messageController,
-                    minLines: 5,
-                    maxLines: 9,
-                    maxLength: 10000,
-                    decoration: InputDecoration(
-                      alignLabelWithHint: true,
-                      labelText: _isBugReport
-                          ? context.tr('รายละเอียดปัญหา', 'Problem details')
-                          : context.tr('รายละเอียดข้อเสนอ', 'Request details'),
-                      hintText: context.tr(
-                        'พิมพ์รายละเอียดที่นี่...',
-                        'Type the details here...',
-                      ),
-                    ),
-                  ),
-                  if (_errorMessage != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12),
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    height: 48,
-                    child: FilledButton.icon(
-                      onPressed: _isSubmitting ? null : _submit,
-                      icon: _isSubmitting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.send_rounded),
-                      label: Text(context.tr('ส่งข้อมูล', 'Submit')),
-                      style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                      children: [
+                        Text(
+                          description,
+                          style: TextStyle(
+                            color: context.secondaryTextColor,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        TextField(
+                          controller: _subjectController,
+                          maxLength: 160,
+                          textInputAction: TextInputAction.next,
+                          decoration: InputDecoration(
+                            labelText: context.tr('หัวข้อ', 'Subject'),
+                            hintText: _isBugReport
+                                ? context.tr('เช่น ปุ่มบันทึกกดไม่ได้', 'e.g. Save button does not work')
+                                : context.tr('เช่น ขอเพิ่มการสแกนใบเสร็จ', 'e.g. Add receipt scanning'),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _messageController,
+                          minLines: 5,
+                          maxLines: 9,
+                          maxLength: 10000,
+                          decoration: InputDecoration(
+                            alignLabelWithHint: true,
+                            labelText: _isBugReport
+                                ? context.tr('รายละเอียดปัญหา', 'Problem details')
+                                : context.tr('รายละเอียดข้อเสนอ', 'Request details'),
+                            hintText: context.tr(
+                              'พิมพ์รายละเอียดที่นี่...',
+                              'Type the details here...',
+                            ),
+                          ),
+                        ),
+                        if (_errorMessage != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _errorMessage!,
+                            style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12),
+                          ),
+                        ],
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          height: 48,
+                          child: FilledButton.icon(
+                            onPressed: _isSubmitting ? null : _submit,
+                            icon: _isSubmitting
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.send_rounded),
+                            label: Text(context.tr('ส่งข้อมูล', 'Submit')),
+                            style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
