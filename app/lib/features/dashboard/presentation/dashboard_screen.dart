@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:app/core/localization/app_material.dart';
@@ -16,9 +15,10 @@ import '../../transactions/presentation/transactions_screen.dart';
 import 'notification_inbox_sheet.dart';
 import 'compact_calendar_sheet.dart';
 import 'finance_dashboard_screen.dart';
-import 'package:app/icon_selector_demo.dart';
 import 'package:app/core/settings/app_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/services/slip_scanner_bridge.dart';
+import '../../transactions/presentation/slip_scan_dialog.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -56,7 +56,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
     NotificationService.instance.registerDevice();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndForceMonthlyExpense();
+      _checkAutoSlipScan();
     });
+  }
+
+  Future<void> _checkAutoSlipScan() async {
+    if (!AppSettings.autoSlipScanningEnabled) return;
+    if (!SlipScannerBridge.instance.isSupported) return;
+
+    try {
+      final permission = await SlipScannerBridge.instance.checkPermission();
+      if (permission != 'authorized' && permission != 'limited') return;
+
+      final slips = await SlipScannerBridge.instance.scanRecentSlips(
+        daysBack: 30,
+        forceAll: false,
+      );
+
+      if (mounted && slips.isNotEmpty) {
+        SlipScanDialog.show(
+          context,
+          slips: slips,
+          onTransactionsSaved: () {
+            _fetchHeaderTotals();
+          },
+        );
+      }
+    } catch (e) {
+      debugPrint('Auto slip scan error: $e');
+    }
   }
 
   void _onHideBalancesChanged() {
@@ -180,8 +208,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         page = const PlanningHubScreen(initialSection: PlanningSection.expense);
       case 'plans':
         page = const PlanningHubScreen();
-      case 'icon_picker':
-        page = const IconSelectorDemo();
       default:
         page = const PlanningHubScreen(initialSection: PlanningSection.income);
     }
@@ -416,14 +442,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     'รายการที่ตั้งไว้',
                                     'Plans',
                                   ),
-                                ),
-                              ),
-                              PopupMenuItem<String>(
-                                value: 'icon_picker',
-                                child: _HomeMenuItem(
-                                  icon: Icons.emoji_emotions_outlined,
-                                  color: Colors.purple,
-                                  label: context.tr('เทสไอคอน', 'Test Icon'),
                                 ),
                               ),
                             ],

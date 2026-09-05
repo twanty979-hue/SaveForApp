@@ -1,13 +1,16 @@
 import 'dart:convert';
 import 'package:app/core/localization/app_material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/slip_scanner_bridge.dart';
 import '../../../core/settings/app_settings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../auth/presentation/auth_screen.dart';
+import '../../transactions/presentation/slip_scan_dialog.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -25,6 +28,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   String _tier = 'Free';
   bool _isLoading = true;
   bool _autoSlipScanningEnabled = AppSettings.autoSlipScanningEnabled;
+  int _slipLookbackDays = 30;
+  bool _isScanningSlips = false;
 
   @override
   void initState() {
@@ -321,6 +326,176 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
+  Future<void> _triggerManualScan() async {
+    if (!SlipScannerBridge.instance.isSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              'การสแกนสลิปจากอัลบั้มรองรับบนอุปกรณ์ iOS ในเวอร์ชันนี้ครับ',
+              'Slip scanning from album is supported on iOS in this version',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final permission = await SlipScannerBridge.instance.requestPermission();
+    if (permission == 'denied') {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              'กรุณาอนุญาตการเข้าถึงรูปภาพเพื่อสแกนสลิป',
+              'Please allow photo library access to scan slips',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isScanningSlips = true);
+    try {
+      final slips = await SlipScannerBridge.instance.scanRecentSlips(
+        daysBack: _slipLookbackDays,
+        forceAll: true,
+      );
+      if (!mounted) return;
+      setState(() => _isScanningSlips = false);
+
+      if (slips.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.tr(
+                'ไม่พบสลิปธนาคารใหม่ในช่วงเวลาที่เลือก (รองรับ กสิกร, SCB, กรุงศรี)',
+                'No new bank slips found in the selected period (supports KBank, SCB, Krungsri)',
+              ),
+            ),
+          ),
+        );
+      } else {
+        SlipScanDialog.show(context, slips: slips);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isScanningSlips = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('เกิดข้อผิดพลาดในการสแกน: $e')),
+      );
+    }
+  }
+
+  Future<void> _pickAndScanSingleSlip() async {
+    if (!SlipScannerBridge.instance.isSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              'การสแกนสลิปรองรับบนอุปกรณ์ iOS ในเวอร์ชันนี้ครับ',
+              'Slip scanning is supported on iOS in this version',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (picked == null) return;
+
+      setState(() => _isScanningSlips = true);
+      final slip = await SlipScannerBridge.instance.scanSingleImage(picked.path);
+      if (!mounted) return;
+      setState(() => _isScanningSlips = false);
+
+      if (slip == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.tr(
+                'ไม่พบข้อมูลสลิปที่รองรับในภาพนี้ (รองรับ กสิกร, SCB, กรุงศรี)',
+                'No supported bank slip detected (supports KBank, SCB, Krungsri)',
+              ),
+            ),
+          ),
+        );
+      } else {
+        SlipScanDialog.show(context, slips: [slip]);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isScanningSlips = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+      );
+    }
+  }
+
+  void _chooseLookbackPeriod() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                sheetContext.tr('เลือกระยะเวลาย้อนหลัง', 'Select Lookback Period'),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                title: Text(sheetContext.tr('ย้อนหลัง 7 วัน', 'Past 7 Days')),
+                trailing: _slipLookbackDays == 7 ? Icon(Icons.check, color: AppTheme.primaryColor) : null,
+                onTap: () {
+                  setState(() => _slipLookbackDays = 7);
+                  Navigator.pop(sheetContext);
+                },
+              ),
+              ListTile(
+                title: Text(sheetContext.tr('ย้อนหลัง 30 วัน (แนะนำ)', 'Past 30 Days (Recommended)')),
+                trailing: _slipLookbackDays == 30 ? Icon(Icons.check, color: AppTheme.primaryColor) : null,
+                onTap: () {
+                  setState(() => _slipLookbackDays = 30);
+                  Navigator.pop(sheetContext);
+                },
+              ),
+              ListTile(
+                title: Text(sheetContext.tr('ย้อนหลัง 90 วัน', 'Past 90 Days')),
+                trailing: _slipLookbackDays == 90 ? Icon(Icons.check, color: AppTheme.primaryColor) : null,
+                onTap: () {
+                  setState(() => _slipLookbackDays = 90);
+                  Navigator.pop(sheetContext);
+                },
+              ),
+              ListTile(
+                title: Text(sheetContext.tr('ทั้งหมดที่มีในเครื่อง', 'All available in device')),
+                trailing: _slipLookbackDays == 0 ? Icon(Icons.check, color: AppTheme.primaryColor) : null,
+                onTap: () {
+                  setState(() => _slipLookbackDays = 0);
+                  Navigator.pop(sheetContext);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -415,7 +590,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
                         const SizedBox(height: 22),
                         _SectionLabel(
-                          context.tr('การอ่านสลิป', 'Slip scanning'),
+                          context.tr('การอ่านสลิปธนาคาร (กสิกร / SCB / กรุงศรี)', 'Bank Slip Scanning (KBank / SCB / Krungsri)'),
                         ),
                         const SizedBox(height: 8),
                         _SettingsTile(
@@ -425,8 +600,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                             'Automatic slip scanning',
                           ),
                           subtitle: context.tr(
-                            'ตรวจสลิปใหม่จากอัลบั้มธนาคารที่ตั้งค่าไว้เมื่อเปิดแอป',
-                            'Check new slips from configured bank albums when the app opens',
+                            'ตรวจสลิปใหม่จากอัลบั้มธนาคารในเครื่องเมื่อเปิดแอป',
+                            'Check new slips from bank albums when the app opens',
                           ),
                           trailing: Switch.adaptive(
                             value: _autoSlipScanningEnabled,
@@ -441,6 +616,39 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                             final value = !_autoSlipScanningEnabled;
                             setState(() => _autoSlipScanningEnabled = value);
                             await AppSettings.setAutoSlipScanningEnabled(value);
+                          },
+                        ),
+                        _SettingsTile(
+                          icon: Icons.history_toggle_off_rounded,
+                          title: context.tr('ช่วงเวลาย้อนหลัง', 'Lookback Window'),
+                          subtitle: _slipLookbackDays == 0
+                              ? context.tr('สแกนทั้งหมดที่มีในเครื่อง', 'All available in device')
+                              : context.tr('ย้อนหลัง $_slipLookbackDays วัน', 'Past $_slipLookbackDays days'),
+                          trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFF94A3B8)),
+                          onTap: _chooseLookbackPeriod,
+                        ),
+                        _SettingsTile(
+                          icon: Icons.document_scanner_outlined,
+                          title: context.tr('สแกนสลิปตอนนี้', 'Scan slips now'),
+                          subtitle: context.tr('ค้นหาและนำเข้าสลิปที่ยังไม่ได้บันทึก', 'Search and import unrecorded slips'),
+                          trailing: _isScanningSlips
+                              ? SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryColor),
+                                )
+                              : Icon(Icons.play_arrow_rounded, size: 22, color: AppTheme.primaryColor),
+                          onTap: () {
+                            if (!_isScanningSlips) _triggerManualScan();
+                          },
+                        ),
+                        _SettingsTile(
+                          icon: Icons.photo_library_outlined,
+                          title: context.tr('เลือกรูปสลิปเพื่อทดสอบ', 'Pick a slip to test'),
+                          subtitle: context.tr('เลือกภาพสลิปจากเครื่องเพื่อทดสอบอ่านยอด', 'Select a slip to test OCR recognition'),
+                          trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFF94A3B8)),
+                          onTap: () {
+                            if (!_isScanningSlips) _pickAndScanSingleSlip();
                           },
                         ),
 
