@@ -68,6 +68,8 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
+  config:
+    enable-lldb-debugging: false
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
@@ -81,6 +83,7 @@ flutter:
     - assets/images/bear_avatar.jpg
     - assets/images/home_menu_icon.png
     - assets/sounds/ai_reply.mp3
+    - assets/images/banks/
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

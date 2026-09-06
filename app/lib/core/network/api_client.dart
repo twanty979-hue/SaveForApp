@@ -43,7 +43,31 @@ class ApiClient {
     String path,
     Future<http.Response> Function() request,
   ) async {
-    var response = await request();
+    http.Response? response;
+    for (int attempt = 0; attempt < 3; attempt++) {
+      try {
+        response = await request().timeout(const Duration(seconds: 15));
+        break;
+      } catch (e) {
+        if (attempt == 2) {
+          return http.Response(
+            jsonEncode({'error': 'Network connection issue: $e'}),
+            503,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        await Future.delayed(Duration(milliseconds: 400 * (attempt + 1)));
+      }
+    }
+
+    if (response == null) {
+      return http.Response(
+        jsonEncode({'error': 'No response from server'}),
+        503,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+
     if (response.statusCode != 401 ||
         path.startsWith('/auth/') ||
         AuthSession.refreshToken?.isNotEmpty != true) {
@@ -51,7 +75,11 @@ class ApiClient {
     }
 
     if (await _refreshSession()) {
-      response = await request();
+      try {
+        return await request().timeout(const Duration(seconds: 15));
+      } catch (_) {
+        return response;
+      }
     }
     return response;
   }
@@ -140,14 +168,18 @@ class ApiClient {
   }
 
   Future<void> preloadCoreData(String userId) async {
-    await Future.wait([
-      get('/transactions?user_id=eq.$userId'),
-      get('/dreams?user_id=eq.$userId'),
-      get('/recurring/expenses?user_id=eq.$userId'),
-      get('/recurring/sources?user_id=eq.$userId'),
-      get('/profile?id=eq.$userId&select=*'),
-      get('/profile/avatar', cacheDuration: const Duration(minutes: 5)),
-    ]);
+    try {
+      await Future.wait([
+        get('/transactions?user_id=eq.$userId'),
+        get('/dreams?user_id=eq.$userId'),
+        get('/recurring/expenses?user_id=eq.$userId'),
+        get('/recurring/sources?user_id=eq.$userId'),
+        get('/profile?id=eq.$userId&select=*'),
+        get('/profile/avatar', cacheDuration: const Duration(minutes: 5)),
+      ]);
+    } catch (_) {
+      // Ignore network / handshake / cold-start exceptions so startup is never blocked
+    }
   }
 
   static void clearCache() {

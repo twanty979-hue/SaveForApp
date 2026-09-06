@@ -564,6 +564,8 @@ class _RecentTransactionRow extends StatelessWidget {
         ? const Color(0xFF16A085)
         : const Color(0xFFEF6677);
     final note = rawNote
+        .replaceAll(RegExp(r'\[สลิป\s+[^\]]+\]'), '')
+        .replaceAll(RegExp(r'\[Ref:[^\]]+\]'), '')
         .replaceAll('[รายจ่ายประจำ]', '')
         .replaceAll('[รายรับประจำ]', '')
         .replaceAll('[ออม] หยอดกระปุก:', '')

@@ -867,6 +867,8 @@ class _TransactionRow extends StatelessWidget {
         ? 'รายรับ'
         : 'รายจ่าย';
     final note = rawNote
+        .replaceAll(RegExp(r'\[สลิป\s+[^\]]+\]'), '')
+        .replaceAll(RegExp(r'\[Ref:[^\]]+\]'), '')
         .replaceAll('[รายจ่ายประจำ]', '')
         .replaceAll('[รายรับประจำ]', '')
         .replaceAll('[ออม] หยอดกระปุก:', '')

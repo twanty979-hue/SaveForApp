@@ -36,9 +36,11 @@
 			<array>
 				<dict>
 					<key>UISceneClassName</key>
-					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<string>UIWindowScene</string>
 					<key>UISceneConfigurationName</key>
 					<string>flutter</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
 					<key>UISceneStoryboardFile</key>
 					<string>Main</string>
 				</dict>
@@ -47,12 +49,24 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>SaveFor uses the camera to capture receipt images.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>SaveFor uses your photo library to find receipt images in your selected bank albums.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>SaveFor uses Face ID or Touch ID to protect your app.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>SaveFor needs access to the local network to support Flutter debugging and Hot Reload.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_dartobservatory._tcp</string>
+		<string>_dartvmService._tcp</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:app/core/localization/app_material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -66,7 +67,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         if (profiles.isNotEmpty) {
           final profile = profiles.first as Map<String, dynamic>;
           _profileExists = true;
-          _displayName = profile['display_name']?.toString() ?? _displayName;
+          final dbName = profile['display_name']?.toString().trim();
+          if (dbName != null && dbName.isNotEmpty) {
+            _displayName = dbName;
+            await AuthSession.setDisplayName(dbName);
+          }
           _tier = profile['tier']?.toString() ?? 'free';
         }
       }
@@ -410,6 +415,90 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     }
   }
 
+  void _showFcmTokenDialog() {
+    final token = NotificationService.instance.currentToken;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.key_rounded, color: AppTheme.primaryColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.tr('FCM Device Token', 'FCM Device Token'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              token != null
+                  ? context.tr(
+                      'ใช้โทเคนนี้สำหรับวางในช่อง "Send test message" บน Firebase Console เพื่อยิงทดสอบเฉพาะเครื่องนี้:',
+                      'Use this token in Firebase Console "Send test message" to test targeting this device:',
+                    )
+                  : context.tr(
+                      'ยังไม่พบ Token ในระบบ\n\n(หากรันบน iOS Simulator จะไม่รองรับ APNs ของ Apple แนะนำให้ทดสอบบน iPhone เครื่องจริง หรือเลือก Target เป็นแอป com.savefor.app บนหน้าเว็บ Firebase แทนครับ)',
+                      'Token not found yet.\n\n(iOS Simulator does not support APNs. Test on a real device or target app com.savefor.app directly on Firebase).',
+                    ),
+              style: TextStyle(
+                fontSize: 13,
+                color: context.secondaryTextColor,
+              ),
+            ),
+            if (token != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: context.borderColor),
+                ),
+                child: SelectableText(
+                  token,
+                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          if (token != null)
+            FilledButton.icon(
+              icon: const Icon(Icons.copy_rounded, size: 16),
+              label: Text(context.tr('คัดลอก Token', 'Copy Token')),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: token));
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      context.tr(
+                        'คัดลอก FCM Token เรียบร้อยแล้ว',
+                        'FCM Token copied to clipboard',
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.tr('ปิด', 'Close')),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showLanguageSettings() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -669,6 +758,24 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                             );
                           },
                         ),
+                        if (_notificationsEnabled)
+                          _SettingsTile(
+                            icon: Icons.key_rounded,
+                            title: context.tr(
+                              'FCM Device Token (สำหรับทดสอบยิง)',
+                              'FCM Device Token (For Testing)',
+                            ),
+                            subtitle: context.tr(
+                              'แตะเพื่อดูหรือคัดลอกรหัสโทเคนของเครื่องนี้',
+                              'Tap to view or copy device token',
+                            ),
+                            trailing: Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 14,
+                              color: context.secondaryTextColor,
+                            ),
+                            onTap: _showFcmTokenDialog,
+                          ),
                         _SettingsTile(
                           icon: Icons.help_outline_rounded,
                           title: context.tr(
@@ -956,8 +1063,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     switch (style) {
       case ThemeStyle.emerald:
         return context.tr(
-          'สีหลักเดียวกับโลโก้ SaveFor เรียบ ทันสมัย และสบายตา',
-          'SaveFor logo colors with a clean, modern financial style',
+          'สีเขียวละมุนและครีมวอร์มโทน ตามโลโก้สมุดรายรับรายจ่ายน้องหมู',
+          'Cozy sage green & warm cream palette matching app logo',
         );
       case ThemeStyle.cartoon:
         return context.tr(

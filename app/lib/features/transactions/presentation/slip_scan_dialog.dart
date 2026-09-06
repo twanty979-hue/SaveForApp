@@ -1,8 +1,12 @@
+import 'dart:math' as math;
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/slip_parser_service.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/bank_logo_icon.dart';
 import '../../auth/domain/auth_session.dart';
 
 class SlipScanDialog extends StatefulWidget {
@@ -15,19 +19,37 @@ class SlipScanDialog extends StatefulWidget {
     this.onTransactionsSaved,
   });
 
+  /// แสดงผลเป็นการ์ดสลิปธนาคารทรงสี่เหลี่ยมกะทัดรัด ลอย 3D กลางจอ สไตล์การ์ตูน
   static Future<void> show(
     BuildContext context, {
     required List<ParsedSlip> slips,
     VoidCallback? onTransactionsSaved,
   }) {
-    return showModalBottomSheet<void>(
+    return showGeneralDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => SlipScanDialog(
-        slips: slips,
-        onTransactionsSaved: onTransactionsSaved,
-      ),
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black.withValues(alpha: 0.60),
+      transitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return SlipScanDialog(
+          slips: slips,
+          onTransactionsSaved: onTransactionsSaved,
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+        );
+        return ScaleTransition(
+          scale: Tween<double>(begin: 0.8, end: 1.0).animate(curved),
+          child: FadeTransition(
+            opacity: animation,
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -35,15 +57,269 @@ class SlipScanDialog extends StatefulWidget {
   State<SlipScanDialog> createState() => _SlipScanDialogState();
 }
 
-class _SlipScanDialogState extends State<SlipScanDialog> {
+class _SlipScanDialogState extends State<SlipScanDialog>
+    with TickerProviderStateMixin {
   late List<ParsedSlip> _slips;
   bool _isSaving = false;
   final ApiClient _apiClient = ApiClient();
+
+  late PageController _pageController;
+  int _currentIndex = 0;
+
+  // Animation controller สำหรับสร้างเอฟเฟกต์การ์ดลอยดุ๊กดิ๊ก (Floating Bobbing)
+  AnimationController? _floatController;
+  Animation<double>? _floatAnimation;
+
+  // Animation controller สำหรับลำแสงเลเซอร์สแกน (Laser Beam Scanner)
+  late AnimationController _beamController;
+  late Animation<double> _beamAnimation;
+
+  // สถานะการนับสลิปทีละใบระหว่างสแกน
+  bool _isScanning = true;
+  int _scannedCount = 1;
+
+  void _initAnimation() {
+    if (_floatController != null) return;
+    _floatController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat(reverse: true);
+
+    _floatAnimation = Tween<double>(begin: -4.0, end: 4.0).animate(
+      CurvedAnimation(parent: _floatController!, curve: Curves.easeInOutSine),
+    );
+
+    _beamController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    )..repeat(reverse: true);
+
+    _beamAnimation = Tween<double>(begin: 0.05, end: 0.95).animate(
+      CurvedAnimation(parent: _beamController, curve: Curves.easeInOut),
+    );
+  }
+
+  void _startScanningSequence() async {
+    if (_slips.isEmpty) {
+      if (mounted) setState(() => _isScanning = false);
+      return;
+    }
+
+    final summaryIndex = _slips.length;
+
+    if (_slips.length == 1) {
+      if (mounted) {
+        setState(() {
+          _isScanning = true;
+          _scannedCount = 1;
+        });
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 650));
+      if (!mounted || !_isScanning) return;
+
+      // เลื่อนไปใบสุดท้าย (ใบสรุปยอดรวม)
+      if (_pageController.hasClients && _pageController.positions.length == 1) {
+        _pageController.animateToPage(
+          summaryIndex,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      setState(() {
+        _currentIndex = summaryIndex;
+        _isScanning = false;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isScanning = true;
+        _scannedCount = 1;
+        _currentIndex = 0;
+      });
+    }
+
+    // หยุดดูใบแรก 400ms
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    if (!mounted || !_isScanning) return;
+
+    // เลื่อนเปลี่ยนการ์ดทีละใบ พร้อมนับตัวเลขตามที่นายสั่ง
+    for (int i = 1; i < _slips.length; i++) {
+      if (!mounted || !_isScanning) return;
+
+      if (_pageController.hasClients && _pageController.positions.length == 1) {
+        _pageController.animateToPage(
+          i,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeInOutCubic,
+        );
+      }
+
+      setState(() {
+        _currentIndex = i;
+        _scannedCount = i + 1;
+      });
+
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+    }
+
+    if (!mounted || !_isScanning) return;
+
+    // ค้างแสดงผลสลิปใบสุดท้ายก่อนหน้าเล็กน้อย 300ms
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (!mounted || !_isScanning) return;
+
+    // พอสแกนเสร็จ เลื่อนไปยัง "ใบสุดท้าย (ใบสรุปยอดรวมทั้งหมด)" อัตโนมัติทันที
+    if (_pageController.hasClients && _pageController.positions.length == 1) {
+      _pageController.animateToPage(
+        summaryIndex,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutCubic,
+      );
+    }
+
+    setState(() {
+      _currentIndex = summaryIndex;
+      _isScanning = false;
+      _scannedCount = _slips.length;
+    });
+  }
+
+  void _skipScanning() {
+    if (!_isScanning) return;
+    final summaryIndex = _slips.length;
+    if (_pageController.hasClients && _pageController.positions.length == 1) {
+      _pageController.jumpToPage(summaryIndex);
+    }
+    setState(() {
+      _currentIndex = summaryIndex;
+      _isScanning = false;
+      _scannedCount = _slips.length;
+    });
+  }
+
+  Future<void> _resetAndRescan() async {
+    HapticFeedback.mediumImpact();
+    await SlipScannerBridge.instance.resetScanHistory();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppTheme.primaryColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        content: Text(
+          context.tr('ล้างประวัติการอ่านสลิปแล้ว กำลังสแกนใหม่...', 'History cleared! Re-scanning...'),
+        ),
+        duration: const Duration(milliseconds: 1400),
+      ),
+    );
+    final freshSlips = await SlipScannerBridge.instance.scanRecentSlips(
+      daysBack: 30,
+      limit: 120,
+      forceAll: true,
+      albumName: 'ALL_BANKS',
+    );
+    if (!mounted) return;
+    setState(() {
+      _slips = freshSlips.isNotEmpty ? freshSlips : SlipScannerBridge.instance.getMockSlips();
+      _currentIndex = 0;
+      _scannedCount = 0;
+      _isScanning = true;
+    });
+    try {
+      if (_pageController.hasClients && _pageController.positions.length == 1) {
+        _pageController.jumpToPage(0);
+      }
+    } catch (_) {}
+    _startScanningSequence();
+  }
+
+  Future<void> _pickSingleSlip() async {
+    HapticFeedback.lightImpact();
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (picked == null || !mounted) return;
+
+      final parsed = await SlipScannerBridge.instance.scanSingleImage(picked.path);
+      if (!mounted) return;
+      if (parsed != null) {
+        setState(() {
+          _slips.insert(0, parsed);
+          _currentIndex = 0;
+        });
+        try {
+          if (_pageController.hasClients && _pageController.positions.length == 1) {
+            _pageController.jumpToPage(0);
+          }
+        } catch (_) {}
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppTheme.primaryColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Text(
+              context.tr('เพิ่มสลิปจากรูปภาพสำเร็จ!', 'Slip added from image!'),
+            ),
+            duration: const Duration(milliseconds: 1500),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Text(
+              context.tr('ไม่พบข้อมูลสลิปในรูปที่เลือกครับ', 'No slip found in selected image'),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error picking slip image: $e');
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _slips = widget.slips;
+    _pageController = PageController(
+      viewportFraction: 0.72,
+      initialPage: 0,
+    );
+    _initAnimation();
+    _startScanningSequence();
+
+    final userId = AuthSession.userId;
+    if (userId != null) {
+      SlipScannerBridge.instance.syncSavedSlipsFromServer(
+        userId: userId,
+        apiClient: _apiClient,
+      );
+    }
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    try {
+      _pageController.dispose();
+    } catch (_) {}
+    _pageController = PageController(
+      viewportFraction: 0.72,
+      initialPage: _currentIndex,
+    );
+  }
+
+  @override
+  void dispose() {
+    _beamController.dispose();
+    try {
+      _pageController.dispose();
+    } catch (_) {}
+    _floatController?.dispose();
+    super.dispose();
   }
 
   double get _totalSelectedAmount {
@@ -55,6 +331,7 @@ class _SlipScanDialogState extends State<SlipScanDialog> {
   int get _selectedCount {
     return _slips.where((s) => s.isSelected).length;
   }
+
 
   Future<void> _saveSelectedTransactions() async {
     final selected = _slips.where((s) => s.isSelected).toList();
@@ -79,7 +356,11 @@ class _SlipScanDialogState extends State<SlipScanDialog> {
 
     for (final slip in selected) {
       try {
-        final note = '[สลิป ${slip.bank.displayName}] ${slip.recipient}';
+        final titleText = slip.finalFormattedNoteTitle;
+        final refTag = (slip.referenceNo != null && slip.referenceNo!.trim().isNotEmpty)
+            ? ' [Ref:${slip.referenceNo!.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')}]'
+            : '';
+        final note = '[สลิป ${slip.bank.displayName}] $titleText$refTag';
         final response = await _apiClient.post(
           '/transactions',
           body: {
@@ -111,298 +392,1590 @@ class _SlipScanDialogState extends State<SlipScanDialog> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: AppTheme.primaryColor,
-        content: Text(
-          context.tr(
-            'บันทึกสลิปสำเร็จ $savedSuccessCount รายการ',
-            'Successfully saved $savedSuccessCount slips',
-          ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              context.tr(
+                'บันทึกสลิปสำเร็จ $savedSuccessCount รายการเรียบร้อยครับ!',
+                'Successfully saved $savedSuccessCount slips!',
+              ),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
         ),
       ),
     );
 
     widget.onTransactionsSaved?.call();
   }
+  // โทนสี Gradient ประจำแต่ละธนาคาร (โทนสีสว่าง ละมุนตา ไม่เข้มทึบ สบายตา)
+  List<Color> _getBankGradient(BankType bank) {
+    switch (bank) {
+      case BankType.kbank:
+        // กสิกรไทย (K PLUS): สีเขียวสว่างนุ่มนวล พาสเทลมรกต จางลงสบายตา ไม่เข้มทึบ
+        return const [
+          Color(0xFF269D64),
+          Color(0xFF38B97C),
+          Color(0xFF6EDFA8),
+        ];
+      case BankType.scb:
+        // ไทยพาณิชย์ (SCB EASY): ม่วงสว่างพาสเทล ละมุนตา
+        return const [
+          Color(0xFF7346C9),
+          Color(0xFF8F5FE0),
+          Color(0xFFB188F3),
+        ];
+      case BankType.krungsri:
+        // กรุงศรี (Krungsri): เหลืองทองสว่างละมุน
+        return const [
+          Color(0xFFD4A325),
+          Color(0xFFE5B53C),
+          Color(0xFFF7D472),
+        ];
+      case BankType.truemoney:
+        // ทรูมันนี่ (TrueMoney): ส้มสว่างละมุนสดใส
+        return const [
+          Color(0xFFF07038),
+          Color(0xFFFA8752),
+          Color(0xFFFFB085),
+        ];
+      case BankType.ktb:
+        // กรุงไทย (KTB NEXT): ฟ้าสว่างละมุน
+        return const [
+          Color(0xFF0EA5E9),
+          Color(0xFF38BDF8),
+          Color(0xFF7DD3FC),
+        ];
+      case BankType.bbl:
+        // กรุงเทพ (BBL): น้ำเงินสว่างสดใส
+        return const [
+          Color(0xFF3B82F6),
+          Color(0xFF60A5FA),
+          Color(0xFF93C5FD),
+        ];
+      case BankType.ttb:
+        // ทีทีบี (ttb): น้ำเงินสว่างสดใส
+        return const [
+          Color(0xFF2563EB),
+          Color(0xFF3B82F6),
+          Color(0xFF60A5FA),
+        ];
+      case BankType.gsb:
+        // ออมสิน (GSB): ชมพูสว่างสดใส
+        return const [
+          Color(0xFFDB2777),
+          Color(0xFFF43F5E),
+          Color(0xFFFB7185),
+        ];
+      case BankType.other:
+        return const [
+          Color(0xFF269D64),
+          Color(0xFF38B97C),
+          Color(0xFF6EDFA8),
+        ];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
-    final subColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final palette = AppTheme.currentPalette;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardWidth = math.min(screenWidth * 0.72, 275.0);
+    const cardHeight = 290.0;
+    final bool isSummaryPage = _currentIndex == _slips.length;
+    final currentSlip = _slips[_currentIndex.clamp(0, _slips.length - 1)];
+    final gradientColors = isSummaryPage
+        ? [palette.primary, palette.strong]
+        : _getBankGradient(currentSlip.bank);
+    final anim = _floatAnimation ?? const AlwaysStoppedAnimation(0.0);
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.85,
-      ),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 24,
-            offset: const Offset(0, -6),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle Bar
-            const SizedBox(height: 12),
-            Container(
-              width: 44,
-              height: 5,
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(99),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Header Title
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      Icons.receipt_long_rounded,
-                      color: AppTheme.primaryColor,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+    return Center(
+      child: Material(
+        color: Colors.transparent,
+        child: AnimatedBuilder(
+          animation: anim,
+          builder: (context, child) {
+            return Transform.translate(
+              offset: Offset(0, anim.value),
+              child: child,
+            );
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // แถบเครื่องมือด้านบน: ล้างประวัติ & สแกนใหม่, เลือกภาพเดี่ยว, ปุ่มปิด
+              SizedBox(
+                width: cardWidth + 30,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
                       children: [
-                        Text(
-                          context.tr('ตรวจพบสลิปใหม่', 'New Bank Slips Found'),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: textColor,
+                        Tooltip(
+                          message: context.tr('ล้างประวัติ & สแกนใหม่', 'Reset & Re-scan'),
+                          child: GestureDetector(
+                            onTap: _isScanning ? null : _resetAndRescan,
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.92),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(0xFFE4DAC7),
+                                  width: 1.2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.12),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.restart_alt_rounded,
+                                size: 17,
+                                color: Color(0xFF3F3624),
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          context.tr(
-                            'พบ ${_slips.length} รายการจากอัลบั้มรูปภาพ',
-                            'Found ${_slips.length} slips from your photo library',
-                          ),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: subColor,
+                        const SizedBox(width: 8),
+                        Tooltip(
+                          message: context.tr('เลือกรูปสลิปจากเครื่อง', 'Pick slip from photos'),
+                          child: GestureDetector(
+                            onTap: _isScanning ? null : _pickSingleSlip,
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.92),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(0xFFE4DAC7),
+                                  width: 1.2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.12),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.photo_library_outlined,
+                                size: 16,
+                                color: Color(0xFF3F3624),
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    color: subColor,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-
-            // Slips List
-            Flexible(
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                shrinkWrap: true,
-                itemCount: _slips.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final slip = _slips[index];
-                  final bankColor = Color(slip.bank.brandColorValue);
-
-                  return InkWell(
-                    onTap: () {
-                      setState(() {
-                        slip.isSelected = !slip.isSelected;
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: slip.isSelected
-                            ? (isDark
-                                ? const Color(0xFF0F2327)
-                                : const Color(0xFFF0FDF9))
-                            : (isDark
-                                ? const Color(0xFF0F172A)
-                                : const Color(0xFFF8FAFC)),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: slip.isSelected
-                              ? AppTheme.primaryColor.withValues(alpha: 0.4)
-                              : (isDark
-                                  ? const Color(0xFF1E293B)
-                                  : const Color(0xFFE2E8F0)),
-                          width: slip.isSelected ? 1.5 : 1,
+                    Tooltip(
+                      message: context.tr('ปิด', 'Close'),
+                      child: GestureDetector(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFE4DAC7),
+                              width: 1.2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: Color(0xFF3F3624),
+                          ),
                         ),
                       ),
-                      child: Row(
-                        children: [
-                          Checkbox(
-                            value: slip.isSelected,
-                            activeColor: AppTheme.primaryColor,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // 2. CoverFlow Carousel: ใบซ้าย-ขวาจะย่อขนาดเล็กลง (Scale down) ลอยสวยงาม
+              // ใบสุดท้ายคือ ใบสรุปยอดรวมทั้งหมด
+              SizedBox(
+                height: cardHeight + 15,
+                width: screenWidth,
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: _slips.length + 1,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentIndex = index;
+                    });
+                  },
+                  itemBuilder: (context, index) {
+                    final bool isSummary = index == _slips.length;
+                    return AnimatedBuilder(
+                      animation: _pageController,
+                      builder: (context, child) {
+                        double diff = (_currentIndex - index).toDouble();
+                        try {
+                          if (_pageController.hasClients &&
+                              _pageController.positions.length == 1 &&
+                              _pageController.position.haveDimensions) {
+                            diff = (_pageController.page ?? _currentIndex.toDouble()) - index;
+                          }
+                        } catch (_) {
+                          diff = (_currentIndex - index).toDouble();
+                        }
+                        final dist = diff.abs().clamp(0.0, 1.0);
+                        // การ์ดที่อยู่ข้างๆ จะเล็กลง (scale: 0.84) และจางลง เพื่อให้การ์ดตรงกลางเด่นชัด
+                        final scale = 1.0 - (dist * 0.16);
+                        final opacity = 1.0 - (dist * 0.45);
+                        final translateY = dist * 8.0;
+
+                        return Center(
+                          child: SizedBox(
+                            width: cardWidth,
+                            height: cardHeight,
+                            child: Transform.translate(
+                              offset: Offset(0, translateY),
+                              child: Transform.scale(
+                                scale: scale,
+                                child: Opacity(
+                                  opacity: opacity.clamp(0.45, 1.0),
+                                  child: child,
+                                ),
+                              ),
                             ),
-                            onChanged: (val) {
-                              setState(() {
-                                slip.isSelected = val ?? false;
-                              });
-                            },
                           ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
+                        );
+                      },
+                      child: isSummary
+                          ? _buildSummaryTotalCard(
+                              context,
+                              isActive: index == _currentIndex,
+                            )
+                          : _buildCompactRectangularCard(
+                              context,
+                              _slips[index],
+                              isActive: index == _currentIndex,
+                              index: index,
+                            ),
+                    );
+                  },
+                ),
+              ),
+
+              // จุดบอกตำแหน่งสลิป (Dots Indicator)
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_slips.length + 1, (idx) {
+                  final isCurrent = idx == _currentIndex;
+                  final isSummaryDot = idx == _slips.length;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                    width: isCurrent ? (isSummaryDot ? 18 : 14) : (isSummaryDot ? 7 : 5),
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: isCurrent
+                          ? (isSummaryDot ? const Color(0xFFFBBF24) : Colors.white)
+                          : (isSummaryDot
+                              ? const Color(0xFFFBBF24).withValues(alpha: 0.45)
+                              : Colors.white.withValues(alpha: 0.3)),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 10),
+
+              // 3. แถบควบคุมด้านล่าง: สถานะกำลังสแกน หรือ ปุ่มบันทึกสลิป 3D
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 250),
+                crossFadeState: _isScanning
+                    ? CrossFadeState.showFirst
+                    : CrossFadeState.showSecond,
+                firstChild: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E2D17).withValues(alpha: 0.88),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFF7FA858).withValues(alpha: 0.55),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF7FA858),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'กำลังนับสลิปใบที่ $_scannedCount จาก ${_slips.length} ใบ...',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      GestureDetector(
+                        onTap: _skipScanning,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'ข้าม',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              SizedBox(width: 2),
+                              Icon(
+                                Icons.skip_next_rounded,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                secondChild: SizedBox(
+                  width: cardWidth,
+                  child: GestureDetector(
+                    onTap: _isSaving || _selectedCount == 0
+                        ? null
+                        : _saveSelectedTransactions,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      height: 44,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: _selectedCount > 0
+                              ? (isSummaryPage
+                                  ? [palette.primary, palette.strong]
+                                  : [gradientColors[0], gradientColors[1]])
+                              : const [Color(0xFF475569), Color(0xFF334155)],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _selectedCount > 0
+                              ? (isSummaryPage
+                                  ? palette.secondary.withValues(alpha: 0.85)
+                                  : Colors.white.withValues(alpha: 0.85))
+                              : const Color(0xFF64748B),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _selectedCount > 0
+                                ? (isSummaryPage
+                                    ? palette.strong.withValues(alpha: 0.45)
+                                    : gradientColors[0].withValues(alpha: 0.40))
+                                : Colors.black.withValues(alpha: 0.2),
+                            offset: const Offset(0, 3),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: _isSaving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 3,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: bankColor.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        slip.bank.displayName,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: bankColor,
-                                        ),
-                                      ),
+                                    Icon(
+                                      isSummaryPage
+                                          ? Icons.save_rounded
+                                          : Icons.check_circle_rounded,
+                                      size: 18,
+                                      color: Colors.white,
                                     ),
-                                    const Spacer(),
+                                    const SizedBox(width: 6),
                                     Text(
-                                      '-฿${slip.amount.toStringAsFixed(2)}',
-                                      style: TextStyle(
-                                        fontSize: 16,
+                                      isSummaryPage
+                                          ? context.tr(
+                                              'บันทึกทั้งหมด ($_selectedCount ใบ • ฿${_totalSelectedAmount.toStringAsFixed(2)})',
+                                              'Save All ($_selectedCount • ฿${_totalSelectedAmount.toStringAsFixed(2)})',
+                                            )
+                                          : (_slips.length > 1
+                                              ? context.tr(
+                                                  'บันทึกทั้งหมด ($_selectedCount ใบ • ฿${_totalSelectedAmount.toStringAsFixed(2)})',
+                                                  'Save All ($_selectedCount • ฿${_totalSelectedAmount.toStringAsFixed(2)})',
+                                                )
+                                              : context.tr(
+                                                  'บันทึกสลิป (฿${_totalSelectedAmount.toStringAsFixed(2)})',
+                                                  'Save Slip (฿${_totalSelectedAmount.toStringAsFixed(2)})',
+                                                )),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
                                         fontWeight: FontWeight.w800,
-                                        color: textColor,
                                       ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  slip.recipient,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: textColor,
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // การ์ดใบสุดท้าย: สรุปยอดรวมทั้งหมด พร้อมปุ่มบันทึกทีเดียวจบ
+  Widget _buildSummaryTotalCard(
+    BuildContext context, {
+    required bool isActive,
+  }) {
+    final Map<BankType, int> bankCounts = {};
+    for (final s in _slips) {
+      bankCounts[s.bank] = (bankCounts[s.bank] ?? 0) + 1;
+    }
+
+    return GestureDetector(
+      onTap: () {
+        if (_currentIndex != _slips.length) {
+          if (_pageController.hasClients && _pageController.positions.length == 1) {
+            _pageController.animateToPage(
+              _slips.length,
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+            );
+          }
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFFFFFDF6), // Soft pale ivory
+              Color(0xFFFAF4DC), // Pale eggshell cream (สีครีมไข่ไก่ จางๆ ละมุนตา)
+              Color(0xFFF5EAC6), // Warm soft custard paper tint
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: const Color(0xFFEADBBE), // Delicate egg-cream border
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF5E4E2C).withValues(alpha: isActive ? 0.13 : 0.05),
+              offset: const Offset(0, 8),
+              blurRadius: 20,
+            ),
+            BoxShadow(
+              color: const Color(0xFFFDF0CC).withValues(alpha: isActive ? 0.40 : 0.15),
+              offset: const Offset(0, 2),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(21),
+          child: Stack(
+            children: [
+              // Decorative background shapes - soft pale egg-yolk & meadow tints
+              Positioned(
+                right: -25,
+                top: -25,
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFFDE7A8).withValues(alpha: 0.55), // Warm egg yolk halo
+                  ),
+                ),
+              ),
+              Positioned(
+                left: -20,
+                bottom: -20,
+                child: Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFE2EFCD).withValues(alpha: 0.50), // Soft meadow leaf
+                  ),
+                ),
+              ),
+
+              // Content inside summary card
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Top: Prominent App Logo + Brand Title + Count Badge
+                    Row(
+                      children: [
+                        // Large & Clearly Visible App Logo (46x46)
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(13),
+                            border: Border.all(
+                              color: const Color(0xFFEADBBE),
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(11),
+                            child: Image.asset(
+                              'assets/images/logo_blue.png',
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
+                                        'SaveFor',
+                                        style: TextStyle(
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w900,
+                                          color: Color(0xFF243F1A),
+                                          letterSpacing: 0.2,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.auto_awesome,
+                                        size: 13,
+                                        color: const Color(0xFFE5A922).withValues(alpha: 0.90),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  '${slip.date.day.toString().padLeft(2, '0')}/${slip.date.month.toString().padLeft(2, '0')}/${slip.date.year} ${slip.date.hour.toString().padLeft(2, '0')}:${slip.date.minute.toString().padLeft(2, '0')}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: subColor,
+                                  GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        final allSelected = _selectedCount == _slips.length;
+                                        for (final s in _slips) {
+                                          s.isSelected = !allSelected;
+                                        }
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFF0CD), // Soft egg-custard badge
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: const Color(0xFFF3DD9C),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        '$_selectedCount/${_slips.length} ใบ',
+                                        style: const TextStyle(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF6F4A04), // Warm caramel egg text
+                                        ),
+                                      ),
+                                    ),
                                   ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'สรุปยอดสแกนทั้งหมด',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF6B8353),
                                 ),
-                              ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Amount Section (Large Grand Total)
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'ยอดเงินรวมทั้งสิ้น',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF6D8555),
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '฿${_totalSelectedAmount.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF1E3816),
+                              letterSpacing: -0.6,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Bank Breakdown Chips: เอาแค่ไอคอน x2 ตามคำสั่งนาย เพื่อความประหยัดเนื้อที่
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF6EFE0), // Pale egg-milk tint
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xFFE5D7BD),
+                          width: 1,
+                        ),
+                      ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: bankCounts.entries.map((entry) {
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: const Color(0xFFDFD2B8),
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 3,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  BankLogoIcon(bank: entry.key, size: 20, showShadow: false),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'x${entry.value}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF233E1A),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+
+                    // Status Badge / Summary Verification
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEDF6E5),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xFFCEE3BA),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            size: 16,
+                            color: Color(0xFF5A8E38),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            context.tr(
+                              'พร้อมบันทึกสลิปทั้งหมด $_selectedCount รายการ',
+                              'Ready to save all $_selectedCount slips',
+                            ),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF233E1A),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
 
-            const Divider(height: 1),
-
-            // Bottom Actions
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    // Hint at bottom: ไอคอนปัดเลื่อนซ้าย
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          context.tr('รวมที่เลือก', 'Total Selected'),
-                          style: TextStyle(fontSize: 12, color: subColor),
+                        const Icon(
+                          Icons.swipe_left_rounded,
+                          size: 13,
+                          color: Color(0xFF7A8C6B),
                         ),
+                        const SizedBox(width: 4),
                         Text(
-                          '฿${_totalSelectedAmount.toStringAsFixed(2)}',
+                          'ปัดซ้ายเพื่อดูสลิปทีละใบ',
                           style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.primaryColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF7A8C6B).withValues(alpha: 0.9),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton(
-                    onPressed: _isSaving || _selectedCount == 0
-                        ? null
-                        : _saveSelectedTransactions,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+  void _showEditSlipNoteDialog(ParsedSlip slip) {
+    final textController = TextEditingController(text: slip.customNote ?? '');
+    bool includeRecipient = slip.includeRecipientInNote;
+
+    final quickChips = [
+      {'label': 'ค่าข้าว', 'icon': Icons.restaurant_rounded},
+      {'label': 'ชากาแฟ', 'icon': Icons.local_cafe_rounded},
+      {'label': 'ของใช้ 7-11', 'icon': Icons.storefront_rounded},
+      {'label': 'ค่าน้ำมัน', 'icon': Icons.local_gas_station_rounded},
+      {'label': 'ช้อปปิ้ง', 'icon': Icons.shopping_bag_rounded},
+      {'label': 'ค่าเดินทาง', 'icon': Icons.directions_car_rounded},
+      {'label': 'จ่ายบิล / ค่าห้อง', 'icon': Icons.home_work_rounded},
+      {'label': 'ค่าขนม', 'icon': Icons.cake_rounded},
+      {'label': 'ยา / สุขภาพ', 'icon': Icons.medication_rounded},
+    ];
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Handle bar
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4.5,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                    const SizedBox(height: 16),
+
+                    // Bank Header & Identity
+                    Row(
+                      children: [
+                        BankLogoIcon(
+                          bank: slip.bank,
+                          size: 34,
+                          showShadow: true,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      slip.bank.displayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE0F2FE),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text(
+                                      'สลิปธนาคาร',
+                                      style: TextStyle(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF0284C7),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'ผู้รับเดิม: ${slip.recipient}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '-฿${slip.amount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFEF4444),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                    const SizedBox(height: 14),
+
+                    // Field Title
+                    const Text(
+                      'ระบุชื่อรายการ (เช่น ค่าข้าว, ค่าน้ำมัน, ของใช้)',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // TextField
+                    TextField(
+                      controller: textController,
+                      autofocus: true,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F172A),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'เช่น ค่าข้าวเที่ยง, ค่าน้ำมัน, ช้อปปิ้ง...',
+                        hintStyle: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[400],
+                        ),
+                        prefixIcon: Icon(
+                          Icons.edit_note_rounded,
+                          color: AppTheme.primaryColor,
+                        ),
+                        suffixIcon: textController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  setModalState(() {
+                                    textController.clear();
+                                  });
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: AppTheme.primaryColor,
+                            width: 1.6,
+                          ),
+                        ),
+                      ),
+                      onChanged: (_) => setModalState(() {}),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Quick Chips
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: quickChips.map((chip) {
+                        final label = chip['label'] as String;
+                        final icon = chip['icon'] as IconData;
+                        final isSelected = textController.text.trim() == label;
+                        return InkWell(
+                          onTap: () {
+                            setModalState(() {
+                              textController.text = label;
+                              textController.selection = TextSelection.fromPosition(
+                                TextPosition(offset: label.length),
+                              );
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
                             ),
-                          )
-                        : Text(
-                            context.tr(
-                              'บันทึก ($_selectedCount รายการ)',
-                              'Save ($_selectedCount items)',
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppTheme.primaryColor
+                                  : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppTheme.primaryColor
+                                    : const Color(0xFFE2E8F0),
+                              ),
                             ),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  icon,
+                                  size: 13.5,
+                                  color: isSelected ? Colors.white : AppTheme.primaryColor,
+                                ),
+                                const SizedBox(width: 4.5),
+                                Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isSelected ? Colors.white : const Color(0xFF334155),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                  ),
-                ],
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Checkbox include original recipient
+                    InkWell(
+                      onTap: () {
+                        setModalState(() {
+                          includeRecipient = !includeRecipient;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: Checkbox(
+                                value: includeRecipient,
+                                activeColor: AppTheme.primaryColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                onChanged: (val) {
+                                  setModalState(() {
+                                    includeRecipient = val ?? true;
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'แนบชื่อผู้รับ (${slip.recipient}) ต่อท้ายในประวัติ',
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: Color(0xFF64748B),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Action buttons
+                    Row(
+                      children: [
+                        if (slip.customNote != null && slip.customNote!.isNotEmpty) ...[
+                          Expanded(
+                            flex: 1,
+                            child: OutlinedButton(
+                              onPressed: () {
+                                setState(() {
+                                  slip.customNote = null;
+                                  slip.includeRecipientInNote = true;
+                                });
+                                Navigator.of(context).pop();
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFFEF4444),
+                                side: const BorderSide(color: Color(0xFFFECACA)),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text(
+                                'ล้างชื่อที่แก้',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              final text = textController.text.trim();
+                              setState(() {
+                                slip.customNote = text.isNotEmpty ? text : null;
+                                slip.includeRecipientInNote = includeRecipient;
+                              });
+                              Navigator.of(context).pop();
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryColor,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'บันทึกชื่อรายการ',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ตัวสลิปธนาคารแนวตั้ง สะอาดตา ไม่รก มินิมอล พร้อมแอนิเมชันเลือกและแตะสลับ
+  Widget _buildCompactRectangularCard(
+    BuildContext context,
+    ParsedSlip slip, {
+    required bool isActive,
+    required int index,
+  }) {
+    final gradientColors = _getBankGradient(slip.bank);
+    final isSelected = slip.isSelected;
+
+    return GestureDetector(
+      onTap: () {
+        if (index != _currentIndex) {
+          if (_pageController.hasClients && _pageController.positions.length == 1) {
+            _pageController.animateToPage(
+              index,
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+            );
+          }
+        } else {
+          setState(() {
+            slip.isSelected = !slip.isSelected;
+          });
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradientColors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected
+                ? Colors.white.withValues(alpha: 0.95)
+                : Colors.white.withValues(alpha: 0.35),
+            width: isSelected ? 2.2 : 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: gradientColors[1].withValues(alpha: isActive ? 0.45 : 0.15),
+              offset: const Offset(0, 8),
+              blurRadius: 18,
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.22),
+              offset: const Offset(0, 3),
+              blurRadius: 6,
             ),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(17),
+          child: Stack(
+            children: [
+              // Background cartoon circle wave
+              Positioned(
+                right: -25,
+                top: -25,
+                child: Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: -20,
+                bottom: -20,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                ),
+              ),
+
+              // ลำแสงเลเซอร์สแกนเนอร์เคลื่อนที่ขณะสแกน
+              if (_isScanning && isActive)
+                AnimatedBuilder(
+                  animation: _beamAnimation,
+                  builder: (context, child) {
+                    return Positioned(
+                      top: _beamAnimation.value * 270,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        height: 3.5,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.white.withValues(alpha: 0.0),
+                              const Color(0xFF6EE7B7),
+                              Colors.white,
+                              const Color(0xFF6EE7B7),
+                              Colors.white.withValues(alpha: 0.0),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF34D399).withValues(alpha: 0.95),
+                              blurRadius: 10,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+
+              // Content inside clean minimal card
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Top: Bank Logo + Name + Checkbox
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.22),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: BankLogoIcon(
+                            bank: slip.bank,
+                            size: 22,
+                            showShadow: false,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                slip.bank.displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  Text(
+                                    'โอนเงินสำเร็จ ✓',
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white.withValues(alpha: 0.88),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.20),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'ใบที่ ${index + 1}/${_slips.length}',
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Checkbox
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(7),
+                            border: Border.all(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.5),
+                              width: 1.8,
+                            ),
+                          ),
+                          child: isSelected
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  size: 16,
+                                  color: gradientColors[1],
+                                )
+                              : null,
+                        ),
+                      ],
+                    ),
+
+                    // Amount section (Clean & Big Hero)
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            context.tr('จำนวนเงิน', 'Amount'),
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.8),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '-฿${slip.amount.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: -0.6,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black26,
+                                    offset: Offset(0, 2),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Recipient / Custom Note (Editable on tap)
+                    GestureDetector(
+                      onTap: () => _showEditSlipNoteDialog(slip),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(
+                            alpha: slip.customNote != null && slip.customNote!.isNotEmpty
+                                ? 0.25
+                                : 0.16,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: slip.customNote != null && slip.customNote!.isNotEmpty
+                                ? Colors.white.withValues(alpha: 0.65)
+                                : Colors.white.withValues(alpha: 0.25),
+                            width: 1.1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              slip.customNote != null && slip.customNote!.isNotEmpty
+                                  ? Icons.edit_note_rounded
+                                  : Icons.arrow_forward_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (slip.customNote != null && slip.customNote!.isNotEmpty) ...[
+                                    Text(
+                                      slip.customNote!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    if (slip.includeRecipientInNote)
+                                      Text(
+                                        'โอนให้: ${slip.recipient}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.white.withValues(alpha: 0.82),
+                                        ),
+                                      ),
+                                  ] else
+                                    Text(
+                                      'ถึง: ${slip.recipient}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.edit_rounded,
+                                    size: 9.5,
+                                    color: Colors.white,
+                                  ),
+                                  const SizedBox(width: 2.5),
+                                  Text(
+                                    slip.customNote != null && slip.customNote!.isNotEmpty
+                                        ? 'แก้แล้ว'
+                                        : 'แก้ชื่อ',
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Footer: Date & Ref
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${slip.date.day.toString().padLeft(2, '0')}/${slip.date.month.toString().padLeft(2, '0')}/${slip.date.year} ${slip.date.hour.toString().padLeft(2, '0')}:${slip.date.minute.toString().padLeft(2, '0')} น.',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.85),
+                          ),
+                        ),
+                        if (slip.referenceNo != null && slip.referenceNo!.isNotEmpty)
+                          Text(
+                            'Ref: ${slip.referenceNo!.length > 10 ? '...${slip.referenceNo!.substring(slip.referenceNo!.length - 8)}' : slip.referenceNo!}',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.75),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

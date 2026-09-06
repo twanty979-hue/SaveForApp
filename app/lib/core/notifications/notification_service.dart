@@ -9,10 +9,13 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../features/auth/domain/auth_session.dart';
 import '../network/api_client.dart';
 import '../settings/app_settings.dart';
+import '../../firebase_options.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 }
 
 class NotificationService {
@@ -37,7 +40,9 @@ class NotificationService {
     _initialized = true;
 
     try {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
       _firebaseReady = true;
     } catch (error) {
       debugPrint('Firebase is not ready: $error');
@@ -77,6 +82,12 @@ class NotificationService {
         >()
         ?.createNotificationChannel(channel);
 
+    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     FirebaseMessaging.onMessage.listen(_showForegroundNotification);
     FirebaseMessaging.onMessageOpenedApp.listen((_) => inboxRevision.value++);
@@ -88,25 +99,49 @@ class NotificationService {
     if (AppSettings.notificationsEnabled) await registerDevice();
   }
 
+  String? get currentToken => _token;
+
   Future<void> registerDevice() async {
     if (!_firebaseReady || !AppSettings.notificationsEnabled) return;
-    if (AuthSession.accessToken?.isNotEmpty != true) return;
 
     final permission = await FirebaseMessaging.instance.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
-    if (permission.authorizationStatus == AuthorizationStatus.denied) return;
-
-    if (!kIsWeb && Platform.isIOS) {
-      final apnsToken = await FirebaseMessaging.instance.getAPNSToken();
-      if (apnsToken == null) return;
+    if (permission.authorizationStatus == AuthorizationStatus.denied) {
+      debugPrint('[FCM] Notification permission was denied by user');
+      return;
     }
 
-    _token = await FirebaseMessaging.instance.getToken();
-    await _sendToken(enabled: true);
-    await refreshUnreadCount();
+    if (!kIsWeb && Platform.isIOS) {
+      String? apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+      int retries = 0;
+      while (apnsToken == null && retries < 6) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+        retries++;
+      }
+      if (apnsToken != null) {
+        debugPrint('[FCM] APNs Token ready: $apnsToken');
+      } else {
+        debugPrint('[FCM] APNs token not available yet (normal on Simulator)');
+      }
+    }
+
+    try {
+      _token = await FirebaseMessaging.instance.getToken();
+      debugPrint('\n======================================================');
+      debugPrint('[FCM DEVICE TOKEN] $_token');
+      debugPrint('======================================================\n');
+    } catch (e) {
+      debugPrint('[FCM] Error fetching device token: $e');
+    }
+
+    if (AuthSession.accessToken?.isNotEmpty == true) {
+      await _sendToken(enabled: true);
+      await refreshUnreadCount();
+    }
   }
 
   Future<void> setEnabled(bool enabled) async {
@@ -177,7 +212,11 @@ class NotificationService {
             'alert_positive_marimba_swoop',
           ),
         ),
-        iOS: DarwinNotificationDetails(),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
       ),
       payload: jsonEncode(message.data),
     );

@@ -95,10 +95,16 @@ void main() async {
   await AppSettings.init();
 
   // 2. ดักจับคิวรีส่งกลับจาก OAuth / Magic Link ทันทีก่อน MaterialApp จะประมวลผลเส้นทางชนบั๊กจอขาว
-  await _checkInitialTokens();
+  if (kIsWeb) {
+    await _checkInitialTokens();
+  }
 
   // 3. เริ่มต้นระบบแจ้งเตือน
-  await NotificationService.instance.initialize();
+  try {
+    await NotificationService.instance.initialize();
+  } catch (e) {
+    debugPrint('Notification init error: $e');
+  }
 
   runApp(const MyApp());
 }

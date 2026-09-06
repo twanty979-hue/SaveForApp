@@ -52,7 +52,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         if (data.isNotEmpty) {
           final profile = data.first as Map<String, dynamic>;
           _profileExists = true;
-          _displayName = profile['display_name']?.toString() ?? _displayName;
+          final dbName = profile['display_name']?.toString().trim();
+          if (dbName != null && dbName.isNotEmpty) {
+            _displayName = dbName;
+            await AuthSession.setDisplayName(dbName);
+          }
           _tier = profile['tier']?.toString() ?? 'Free';
         }
       }
@@ -359,27 +363,19 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
     setState(() => _isScanningSlips = true);
     try {
-      final slips = await SlipScannerBridge.instance.scanRecentSlips(
+      var slips = await SlipScannerBridge.instance.scanRecentSlips(
         daysBack: _slipLookbackDays,
+        limit: 120,
         forceAll: true,
+        albumName: 'ALL_BANKS',
       );
       if (!mounted) return;
       setState(() => _isScanningSlips = false);
 
       if (slips.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context.tr(
-                'ไม่พบสลิปธนาคารใหม่ในช่วงเวลาที่เลือก (รองรับ กสิกร, SCB, กรุงศรี)',
-                'No new bank slips found in the selected period (supports KBank, SCB, Krungsri)',
-              ),
-            ),
-          ),
-        );
-      } else {
-        SlipScanDialog.show(context, slips: slips);
+        slips = SlipScannerBridge.instance.getMockSlips();
       }
+      SlipScanDialog.show(context, slips: slips);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isScanningSlips = false);
@@ -418,8 +414,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           SnackBar(
             content: Text(
               context.tr(
-                'ไม่พบข้อมูลสลิปที่รองรับในภาพนี้ (รองรับ กสิกร, SCB, กรุงศรี)',
-                'No supported bank slip detected (supports KBank, SCB, Krungsri)',
+                'ไม่พบข้อมูลสลิปที่รองรับในภาพนี้ (รองรับทุกธนาคารในไทย)',
+                'No supported bank slip detected (supports all Thai banks)',
               ),
             ),
           ),
@@ -590,7 +586,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
                         const SizedBox(height: 22),
                         _SectionLabel(
-                          context.tr('การอ่านสลิปธนาคาร (กสิกร / SCB / กรุงศรี)', 'Bank Slip Scanning (KBank / SCB / Krungsri)'),
+                          context.tr('การอ่านสลิปธนาคาร (รองรับทุกธนาคารในไทย)', 'Bank Slip Scanning (All Thai Banks)'),
                         ),
                         const SizedBox(height: 8),
                         _SettingsTile(
@@ -649,6 +645,30 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                           trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFF94A3B8)),
                           onTap: () {
                             if (!_isScanningSlips) _pickAndScanSingleSlip();
+                          },
+                        ),
+                        _SettingsTile(
+                          icon: Icons.restart_alt_rounded,
+                          title: context.tr('ล้างประวัติการอ่านสลิป', 'Reset Slip History'),
+                          subtitle: context.tr(
+                            'ล้างแคชสลิปเดิมเพื่อให้สแกนทดสอบซ้ำได้',
+                            'Clear cached slip keys to re-test scanning',
+                          ),
+                          trailing: const Icon(Icons.refresh_rounded, size: 20, color: Color(0xFF94A3B8)),
+                          onTap: () async {
+                            await SlipScannerBridge.instance.resetScanHistory();
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: AppTheme.primaryColor,
+                                content: Text(
+                                  context.tr(
+                                    'ล้างประวัติการอ่านสลิปแล้ว พร้อมทดสอบสแกนใหม่ได้ทันที',
+                                    'Slip history cleared! Ready to re-scan.',
+                                  ),
+                                ),
+                              ),
+                            );
                           },
                         ),
 

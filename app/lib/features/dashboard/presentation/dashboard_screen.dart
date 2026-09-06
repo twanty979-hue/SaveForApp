@@ -17,6 +17,7 @@ import 'compact_calendar_sheet.dart';
 import 'finance_dashboard_screen.dart';
 import 'package:app/core/settings/app_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/services/slip_parser_service.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
 import '../../transactions/presentation/slip_scan_dialog.dart';
 
@@ -42,9 +43,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _todaySpent = 0.0;
   double _monthSpent = 0.0;
   String? _avatarUrl = AuthSession.avatarUrl;
+  String _displayName = AuthSession.displayName ?? '';
   final ValueNotifier<DateTime?> _chatDateFilter = ValueNotifier<DateTime?>(
     null,
   );
+  final ValueNotifier<int> _transactionsRefreshNotifier = ValueNotifier<int>(0);
 
   @override
   void initState() {
@@ -53,24 +56,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
     unawaited(_apiClient.preloadCoreData(_activeUserId));
     _fetchHeaderTotals();
     _fetchHeaderAvatar();
+    _fetchHeaderProfile();
     NotificationService.instance.registerDevice();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndForceMonthlyExpense();
       _checkAutoSlipScan();
+      SlipScannerBridge.instance.refreshUnscannedCount();
     });
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    SlipScannerBridge.instance.refreshUnscannedCount();
   }
 
   Future<void> _checkAutoSlipScan() async {
     if (!AppSettings.autoSlipScanningEnabled) return;
-    if (!SlipScannerBridge.instance.isSupported) return;
+    final isSim = await SlipScannerBridge.instance.isSimulator();
+    if (!isSim && !SlipScannerBridge.instance.isSupported) return;
 
     try {
-      final permission = await SlipScannerBridge.instance.checkPermission();
-      if (permission != 'authorized' && permission != 'limited') return;
+      if (!isSim) {
+        final permission = await SlipScannerBridge.instance.checkPermission();
+        if (permission != 'authorized' && permission != 'limited') return;
+      }
 
       final slips = await SlipScannerBridge.instance.scanRecentSlips(
         daysBack: 30,
+        limit: 120,
         forceAll: false,
+        albumName: 'ALL_BANKS',
       );
 
       if (mounted && slips.isNotEmpty) {
@@ -95,6 +111,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     AppSettings.hideBalances.removeListener(_onHideBalancesChanged);
     _chatDateFilter.dispose();
+    _transactionsRefreshNotifier.dispose();
     super.dispose();
   }
 
@@ -116,11 +133,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (mounted) setState(() => _avatarUrl = avatarUrl);
       }
     } catch (_) {
-      // ใช้รูปที่บันทึกไว้ในเครื่องเมื่อเครือข่ายไม่พร้อม
+      // 
     }
   }
 
+  Future<void> _fetchHeaderProfile() async {
+    if (AuthSession.accessToken?.isNotEmpty != true) return;
+    try {
+      final response = await _apiClient.get(
+        '/profile?id=eq.$_activeUserId&select=display_name',
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
+          final profileName = data.first['display_name']?.toString().trim();
+          if (profileName != null && profileName.isNotEmpty) {
+            await AuthSession.setDisplayName(profileName);
+            if (mounted) setState(() => _displayName = profileName);
+          }
+        }
+      }
+    } catch (_) {
+      // 
+    }
+  }
+
+  String get _displayGreetingName {
+    final name = _displayName.trim().isNotEmpty
+        ? _displayName.trim()
+        : (AuthSession.displayName?.trim().isNotEmpty == true
+            ? AuthSession.displayName!.trim()
+            : '');
+
+    if (name.isNotEmpty) {
+      return name.contains('@') ? name.split('@').first : name;
+    }
+
+    if (AuthSession.email?.isNotEmpty == true) {
+      return AuthSession.email!.split('@').first;
+    }
+
+    return context.tr('บัญชีของฉัน', 'My account');
+  }
+
   Future<void> _fetchHeaderTotals() async {
+    _transactionsRefreshNotifier.value++;
     try {
       final response = await _apiClient.get(
         '/transactions?user_id=eq.$_activeUserId',
@@ -194,6 +251,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {});
       _fetchHeaderTotals();
       _fetchHeaderAvatar();
+      _fetchHeaderProfile();
     }
   }
 
@@ -235,6 +293,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       topPadding: 86,
                       inputKey: _inputKey,
                       dateFilter: _chatDateFilter,
+                      refreshNotifier: _transactionsRefreshNotifier,
                       onTransactionSaved: _fetchHeaderTotals,
                     ),
                   ),
@@ -302,8 +361,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  AuthSession.displayName ??
-                                      context.tr('บัญชีของฉัน', 'My account'),
+                                  _displayGreetingName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -353,6 +411,89 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ],
                                 ),
                               ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          ValueListenableBuilder<int>(
+                            valueListenable:
+                                SlipScannerBridge.instance.unscannedCount,
+                            builder: (context, unscannedCount, _) => Tooltip(
+                              message: unscannedCount > 0
+                                  ? context.tr(
+                                      'พบสลิปยังไม่ได้สแกน $unscannedCount รายการ',
+                                      'Found $unscannedCount unscanned slips',
+                                    )
+                                  : context.tr(
+                                      'สแกนสลิปธนาคาร',
+                                      'Scan bank slips',
+                                    ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(13),
+                                onTap: () async {
+                                  HapticFeedback.lightImpact();
+                                  final isSim = await SlipScannerBridge.instance.isSimulator();
+                                  if (!isSim && SlipScannerBridge.instance.isSupported) {
+                                    final permission = await SlipScannerBridge.instance.requestPermission();
+                                    if (permission == 'denied') {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              context.tr(
+                                                'กรุณาเปิดสิทธิ์เข้าถึงรูปภาพเพื่อสแกนสลิปครับ',
+                                                'Please allow photo library access to scan slips',
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      return;
+                                    }
+                                  }
+
+                                  List<ParsedSlip> slips = [];
+                                  try {
+                                    slips = await SlipScannerBridge.instance.scanRecentSlips(
+                                      daysBack: 30,
+                                      limit: 120,
+                                      forceAll: true,
+                                      albumName: 'ALL_BANKS',
+                                    );
+                                  } catch (_) {}
+
+                                  if (slips.isEmpty) {
+                                    slips = SlipScannerBridge.instance.getMockSlips();
+                                  }
+
+                                  if (context.mounted) {
+                                    SlipScanDialog.show(
+                                      context,
+                                      slips: slips,
+                                      onTransactionsSaved: () {
+                                        _fetchHeaderTotals();
+                                        SlipScannerBridge.instance.refreshUnscannedCount();
+                                      },
+                                    );
+                                  }
+                                },
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  alignment: Alignment.center,
+                                  children: [
+                                    _HeaderIcon(
+                                      icon: Icons.qr_code_scanner_rounded,
+                                      color: AppTheme.primaryColor,
+                                      backgroundColor: AppTheme.secondaryColor.withValues(alpha: 0.8),
+                                    ),
+                                    if (unscannedCount > 0)
+                                      Positioned(
+                                        top: -6,
+                                        right: -6,
+                                        child: _BouncingSlipBadge(count: unscannedCount),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -1235,6 +1376,179 @@ class _HeaderIcon extends StatelessWidget {
   }
 }
 
+/// ป้ายแจ้งเตือนตัวเลขสลิปที่ยังไม่สแกน พร้อมแอนิเมชันเด้งกระโดดหลุดบล็อก (Bouncing Out-of-Block Badge)
+class _BouncingSlipBadge extends StatefulWidget {
+  final int count;
+
+  const _BouncingSlipBadge({
+    required this.count,
+  });
+
+  @override
+  State<_BouncingSlipBadge> createState() => _BouncingSlipBadgeState();
+}
+
+class _BouncingSlipBadgeState extends State<_BouncingSlipBadge>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _jumpY;
+  late Animation<double> _scale;
+  late Animation<double> _rotation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+
+    // เด้งกระโดดหลุดบล็อกลอยขึ้นสู่อากาศ (Jump up & bounce down)
+    _jumpY = TweenSequence<double>([
+      // เตรียมตัวย่อตัวก่อนโดด
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 1.5)
+            .chain(CurveTween(curve: Curves.easeInQuad)),
+        weight: 15,
+      ),
+      // กระโดดพุ่งขึ้นหลุดบล็อกสู่ความสูง -9px!
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.5, end: -9.0)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 35,
+      ),
+      // ตกลงมากระแทกบล็อกอย่างเด้งดึ๋ง
+      TweenSequenceItem(
+        tween: Tween<double>(begin: -9.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.bounceOut)),
+        weight: 35,
+      ),
+      // พักนิ่งชั่วครู่ก่อนกระโดดรอบถัดไป
+      TweenSequenceItem(
+        tween: ConstantTween<double>(0.0),
+        weight: 15,
+      ),
+    ]).animate(_controller);
+
+    // ยืดและหดตามแรงดีด (Squash & Stretch)
+    _scale = TweenSequence<double>([
+      // ย่อตัว
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.92)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 15,
+      ),
+      // ลอยกลางอากาศ ยืดขยาย 1.25 เท่า
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.92, end: 1.26)
+            .chain(CurveTween(curve: Curves.easeOutBack)),
+        weight: 35,
+      ),
+      // กระแทกลงมา แบนลงเล็กน้อย
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.26, end: 0.95)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 35,
+      ),
+      // คืนทรงปกติ
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.95, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 15,
+      ),
+    ]).animate(_controller);
+
+    // ส่ายดุ๊กดิ๊กเล็กน้อยตอนลอยกลางอากาศ
+    _rotation = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween<double>(0.0), weight: 15),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: -0.10)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 18,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: -0.10, end: 0.08)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 22,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.08, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 45,
+      ),
+    ]).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = widget.count > 99 ? '99+' : '${widget.count}';
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, _jumpY.value),
+          child: Transform.rotate(
+            angle: _rotation.value,
+            child: Transform.scale(
+              scale: _scale.value,
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        constraints: const BoxConstraints(
+          minWidth: 19,
+          minHeight: 19,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFFFF334B),
+              Color(0xFFDC2626),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: Colors.white,
+            width: 1.8,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFEF4444).withValues(alpha: 0.65),
+              blurRadius: 6,
+              spreadRadius: 1,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              height: 1.1,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HeaderAssetIcon extends StatelessWidget {
   final String assetPath;
   final Color color;
@@ -1779,7 +2093,14 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                               child: ListTile(
                                 dense: true,
                                 title: Text(
-                                  tx['note'] ?? '',
+                                  (tx['note'] ?? '')
+                                      .toString()
+                                      .replaceAll(RegExp(r'\[สลิป\s+[^\]]+\]'), '')
+                                      .replaceAll(RegExp(r'\[Ref:[^\]]+\]'), '')
+                                      .replaceAll('[รายจ่ายประจำ]', '')
+                                      .replaceAll('[รายรับประจำ]', '')
+                                      .replaceAll('[ออม] หยอดกระปุก:', '')
+                                      .trim(),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),

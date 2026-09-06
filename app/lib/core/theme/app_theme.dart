@@ -25,21 +25,21 @@ class ThemePalette {
 }
 
 class AppTheme {
-  static const Color highlightColor = Color(0xFFF59E0B);
+  static const Color highlightColor = Color(0xFFF5B731);
 
   static ThemePalette paletteFor(ThemeStyle style) {
     switch (style) {
       case ThemeStyle.emerald:
         return const ThemePalette(
-          // SaveFor brand palette: navy wallet + teal growth accent.
-          primary: Color(0xFF1652A5),
-          strong: Color(0xFF123B7A),
-          secondary: Color(0xFFDFF8F4),
-          secondaryDark: Color(0xFF173D45),
-          backgroundLight: Color(0xFFF5F9FD),
-          backgroundDark: Color(0xFF091628),
+          // SaveFor brand palette: cute organic notebook & piggy bank logo
+          primary: Color(0xFF7EA459), // Fresh leafy green extracted directly from logo_blue.png
+          strong: Color(0xFF5A8238),  // Rich organic green from logo
+          secondary: Color(0xFFE2EFCF), // Soft meadow pastel from logo
+          secondaryDark: Color(0xFF2E451C),
+          backgroundLight: Color(0xFFFAF7E8), // Warm paper cream from logo
+          backgroundDark: Color(0xFF141910),
           cardLight: Colors.white,
-          cardDark: Color(0xFF12243A),
+          cardDark: Color(0xFF1C2417),
         );
       case ThemeStyle.cartoon:
         return const ThemePalette(

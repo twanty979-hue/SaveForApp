@@ -65,6 +65,16 @@ class AuthSession {
     await prefs.setString('refreshToken', refresh);
   }
 
+  static Future<void> setDisplayName(String? value) async {
+    displayName = value;
+    final prefs = await SharedPreferences.getInstance();
+    if (value == null || value.isEmpty) {
+      await prefs.remove('displayName');
+    } else {
+      await prefs.setString('displayName', value);
+    }
+  }
+
   static Future<void> setAvatarUrl(String? value) async {
     avatarUrl = value;
     final prefs = await SharedPreferences.getInstance();

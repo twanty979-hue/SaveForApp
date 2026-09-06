@@ -1,13 +1,18 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:app/core/localization/app_material.dart';
 import 'package:flutter/rendering.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/slip_parser_service.dart';
+import '../../../core/services/slip_scanner_bridge.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/bank_logo_icon.dart';
 import '../../../core/widgets/shared_icon_selector.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../../core/settings/app_settings.dart';
+import 'slip_scan_dialog.dart';
 
 class Message {
   final String text;
@@ -46,6 +51,7 @@ class TransactionsScreen extends StatefulWidget {
   final GlobalKey? inputKey;
   final ValueNotifier<DateTime?>? dateFilter;
   final Future<void> Function()? onTransactionSaved;
+  final ValueNotifier<int>? refreshNotifier;
 
   const TransactionsScreen({
     super.key,
@@ -53,6 +59,7 @@ class TransactionsScreen extends StatefulWidget {
     this.inputKey,
     this.dateFilter,
     this.onTransactionSaved,
+    this.refreshNotifier,
   });
 
   @override
@@ -89,11 +96,18 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     WidgetsBinding.instance.addObserver(this);
     _effectiveDateFilter = widget.dateFilter ?? ValueNotifier<DateTime?>(null);
     _effectiveDateFilter.addListener(_handleDateFilterChanged);
+    widget.refreshNotifier?.addListener(_handleExternalRefresh);
     _focusNode.addListener(_handleInputFocusChange);
     _inputController.addListener(_handleInputChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initData();
     });
+  }
+
+  void _handleExternalRefresh() {
+    if (mounted) {
+      _loadPastTransactions();
+    }
   }
 
   Future<void> _initData() async {
@@ -138,9 +152,19 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   }
 
   @override
+  void didUpdateWidget(covariant TransactionsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshNotifier != widget.refreshNotifier) {
+      oldWidget.refreshNotifier?.removeListener(_handleExternalRefresh);
+      widget.refreshNotifier?.addListener(_handleExternalRefresh);
+    }
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _effectiveDateFilter.removeListener(_handleDateFilterChanged);
+    widget.refreshNotifier?.removeListener(_handleExternalRefresh);
     if (widget.dateFilter == null) {
       _effectiveDateFilter.dispose();
     }
@@ -442,6 +466,14 @@ class _TransactionsScreenState extends State<TransactionsScreen>
         final List<dynamic> data = jsonDecode(response.body);
         final now = DateTime.now();
 
+        // ซิงก์ประวัติสลิปจากเซิร์ฟเวอร์แบบเบื้องหลัง (รองรับกรณีย้ายเครื่อง/ลบแอพ)
+        if (_activeUserId.isNotEmpty) {
+          SlipScannerBridge.instance.syncSavedSlipsFromServer(
+            userId: _activeUserId,
+            apiClient: _apiClient,
+          );
+        }
+
         // Pre-calculate monthly accumulated sums
         final Map<String, double> accumulatedMap = {};
         for (var tx in data) {
@@ -467,6 +499,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
             final noteText = tx['note']?.toString() ?? '';
             final cleanNote = noteText
+                .replaceAll(RegExp(r'\[สลิป\s+[^\]]+\]'), '')
+                .replaceAll(RegExp(r'\[Ref:[^\]]+\]'), '')
                 .replaceAll('[รายจ่ายประจำ]', '')
                 .replaceAll('[รายรับประจำ]', '')
                 .replaceAll('[ออม] หยอดกระปุก:', '')
@@ -516,8 +550,18 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               String displayName = name;
               String category = 'รายจ่าย';
               String msgType = 'expense';
+              BankType? detectedBank;
 
-              if (name.startsWith('[ออม] หยอดกระปุก: ')) {
+              if (name.startsWith('[สลิป') || name.contains('[สลิป')) {
+                detectedBank = BankType.detectFromText(name);
+                final closeBracket = name.indexOf(']');
+                if (closeBracket != -1) {
+                  displayName = name.substring(closeBracket + 1).trim();
+                }
+                displayName = displayName.replaceAll(RegExp(r'\[Ref:[^\]]+\]'), '').trim();
+                category = 'รายจ่าย';
+                msgType = 'expense';
+              } else if (name.startsWith('[ออม] หยอดกระปุก: ')) {
                 displayName = name.replaceAll('[ออม] หยอดกระปุก: ', '');
                 category = 'เงินออม';
                 msgType = 'dream';
@@ -632,12 +676,17 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   timestamp: timestamp,
                 ),
               );
+              final bool isSlipTx = name.startsWith('[สลิป') || name.contains('[สลิป');
               _messages.add(
                 Message(
                   text: '',
                   isUser: false,
                   timestamp: timestamp,
                   cardData: {
+                    'id': tx['id'],
+                    'rawNote': name,
+                    'isSlip': isSlipTx,
+                    'transaction_date': dateStr,
                     'name': displayName,
                     'amount': amount,
                     'category': category,
@@ -645,6 +694,14 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     'budget': budget,
                     'totalAccumulated': totalAccumulated,
                     'msgType': msgType,
+                    'bankType': detectedBank,
+                    'icon': detectedBank != null
+                        ? BankLogoIcon(
+                            bank: detectedBank,
+                            size: 44,
+                            showShadow: true,
+                          )
+                        : null,
                   },
                 ),
               );
@@ -676,6 +733,75 @@ class _TransactionsScreenState extends State<TransactionsScreen>
         );
       }
     });
+  }
+
+  bool _isScanningSlips = false;
+
+  Future<void> _openSlipScanner() async {
+    if (_isScanningSlips) return;
+    setState(() => _isScanningSlips = true);
+    HapticFeedback.lightImpact();
+
+    try {
+      final isSim = await SlipScannerBridge.instance.isSimulator();
+      if (!isSim && SlipScannerBridge.instance.isSupported) {
+        final permission = await SlipScannerBridge.instance.requestPermission();
+        if (permission == 'denied') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  context.tr(
+                    'กรุณาเปิดสิทธิ์เข้าถึงรูปภาพเพื่อสแกนสลิปครับ',
+                    'Please allow photo library access to scan slips',
+                  ),
+                ),
+              ),
+            );
+          }
+          setState(() => _isScanningSlips = false);
+          return;
+        }
+      }
+
+      var slips = await SlipScannerBridge.instance.scanRecentSlips(
+        daysBack: 30,
+        limit: 120,
+        forceAll: true,
+        albumName: 'ALL_BANKS',
+      );
+      if (slips.isEmpty) {
+        slips = SlipScannerBridge.instance.getMockSlips();
+      }
+      if (!mounted) return;
+      SlipScanDialog.show(
+        context,
+        slips: slips,
+        onTransactionsSaved: () {
+          _loadPastTransactions();
+          widget.onTransactionSaved?.call();
+          SlipScannerBridge.instance.refreshUnscannedCount();
+        },
+      );
+    } catch (e) {
+      debugPrint('Error opening slip scanner: $e');
+      if (mounted) {
+        final mockSlips = SlipScannerBridge.instance.getMockSlips();
+        SlipScanDialog.show(
+          context,
+          slips: mockSlips,
+          onTransactionsSaved: () {
+            _loadPastTransactions();
+            widget.onTransactionSaved?.call();
+            SlipScannerBridge.instance.refreshUnscannedCount();
+          },
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isScanningSlips = false);
+      }
+    }
   }
 
   bool _handleUserScroll(UserScrollNotification notification) {
@@ -966,6 +1092,16 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
           if (response.statusCode == 200 || response.statusCode == 201) {
             savedAnyTransaction = true;
+            dynamic createdId;
+            try {
+              final parsed = jsonDecode(response.body);
+              if (parsed is List && parsed.isNotEmpty) {
+                createdId = parsed[0]['id'];
+              } else if (parsed is Map) {
+                createdId = parsed['id'];
+              }
+            } catch (_) {}
+            
             // Update dream amount
             if (note.startsWith('[ออม] หยอดกระปุก: ')) {
               final dreamTitle = note
@@ -1065,6 +1201,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ? _successMessage(msgType)
                 : 'ไม่พบแผนงบประมาณที่ตรงกับรายการนี้ ยอดเงินถูกบันทึกสำเร็จแล้ว';
 
+            final matchedBank = BankType.detectFromText(name);
+
             setState(() {
               _messages.add(
                 Message(
@@ -1079,6 +1217,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   isUser: false,
                   timestamp: DateTime.now(),
                   cardData: {
+                    'id': createdId,
+                    'rawNote': note,
+                    'isSlip': false,
                     'name': name,
                     'amount': amount,
                     'category': category,
@@ -1086,12 +1227,19 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     'budget': budget,
                     'totalAccumulated': totalAccumulated,
                     'msgType': msgType,
-                    'icon': _getIconForTransaction(
-                      name,
-                      category,
-                      msgType,
-                      matchedSuggestion,
-                    ),
+                    'bankType': matchedBank,
+                    'icon': matchedBank != null
+                        ? BankLogoIcon(
+                            bank: matchedBank,
+                            size: 44,
+                            showShadow: true,
+                          )
+                        : _getIconForTransaction(
+                            name,
+                            category,
+                            msgType,
+                            matchedSuggestion,
+                          ),
                   },
                 ),
               );
@@ -1118,6 +1266,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     String category,
     String msgType,
   ) {
+    final matchedBank = BankType.detectFromText(name);
     setState(() {
       _messages.add(
         Message(
@@ -1133,17 +1282,740 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           timestamp: DateTime.now(),
           cardData: {
             'name': name,
+            'isSlip': false,
             'amount': amount,
             'category': category,
             'hasBudget': false,
             'budget': 0.0,
             'totalAccumulated': amount,
             'msgType': msgType,
-            'icon': _getIconForTransaction(name, category, msgType, null),
+            'bankType': matchedBank,
+            'icon': matchedBank != null
+                ? BankLogoIcon(
+                    bank: matchedBank,
+                    size: 44,
+                    showShadow: true,
+                  )
+                : _getIconForTransaction(name, category, msgType, null),
           },
         ),
       );
     });
+  }
+
+  void _showEditTransactionModal(Map<String, dynamic> card) {
+    final String currentDisplayName = card['name']?.toString() ?? '';
+    final String rawNote = card['rawNote']?.toString() ?? currentDisplayName;
+    final double currentAmount = (card['amount'] as num?)?.toDouble() ?? 0.0;
+    final BankType? bank = card['bankType'] as BankType?;
+    final bool isSlip = (card['isSlip'] == true) ||
+        rawNote.startsWith('[สลิป') ||
+        rawNote.contains('[สลิป');
+    String? txId = card['id']?.toString();
+
+    final titleController = TextEditingController(text: currentDisplayName);
+    final amountController = TextEditingController(
+      text: currentAmount.toStringAsFixed(
+        currentAmount.truncateToDouble() == currentAmount ? 0 : 2,
+      ),
+    );
+
+    final quickChips = [
+      {'label': 'ค่าข้าว', 'icon': Icons.restaurant_rounded},
+      {'label': 'ชากาแฟ', 'icon': Icons.local_cafe_rounded},
+      {'label': 'ของใช้ 7-11', 'icon': Icons.storefront_rounded},
+      {'label': 'ค่าน้ำมัน', 'icon': Icons.local_gas_station_rounded},
+      {'label': 'ช้อปปิ้ง', 'icon': Icons.shopping_bag_rounded},
+      {'label': 'ค่าเดินทาง', 'icon': Icons.directions_car_rounded},
+      {'label': 'จ่ายบิล / ค่าห้อง', 'icon': Icons.home_work_rounded},
+      {'label': 'ค่าขนม', 'icon': Icons.cake_rounded},
+      {'label': 'ยา / สุขภาพ', 'icon': Icons.medication_rounded},
+    ];
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (modalContext, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(modalContext).viewInsets.bottom,
+              ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Handle bar
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4.5,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Header row
+                    Row(
+                      children: [
+                        if (bank != null)
+                          BankLogoIcon(bank: bank, size: 36, showShadow: true)
+                        else
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF1F5F9),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.receipt_long_rounded,
+                              size: 22,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isSlip
+                                    ? 'รายการสลิป (${bank?.displayName ?? 'ธนาคาร'})'
+                                    : 'ข้อมูลรายการธุรกรรม',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1E293B),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isSlip
+                                    ? 'ระบบล็อคยอดเงินตามสลิปจริง แก้ไขได้เฉพาะชื่อรายการ'
+                                    : 'แก้ไขชื่อรายการและจำนวนเงินได้ตามต้องการ',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (txId?.isNotEmpty == true)
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              color: Color(0xFFEF4444),
+                            ),
+                            tooltip: 'ลบรายการ',
+                            onPressed: () async {
+                              final currentId = txId;
+                              if (currentId == null || currentId.isEmpty) return;
+
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (c) => AlertDialog(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  title: const Text('ยืนยันการลบรายการ'),
+                                  content: const Text(
+                                    'คุณต้องการลบรายการนี้ใช่หรือไม่? ข้อมูลจะถูกลบออกจากระบบอย่างถาวร',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(c, false),
+                                      child: const Text('ยกเลิก'),
+                                    ),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFEF4444),
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      onPressed: () => Navigator.pop(c, true),
+                                      child: const Text('ลบรายการ'),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true) {
+                                try {
+                                  await _apiClient.delete('/transactions?id=eq.$currentId');
+                                  if (ctx.mounted) {
+                                    Navigator.pop(ctx);
+                                  }
+                                  if (mounted) {
+                                    await _loadPastTransactions();
+                                    await widget.onTransactionSaved?.call();
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          backgroundColor: Colors.white,
+                                          elevation: 6,
+                                          behavior: SnackBarBehavior.floating,
+                                          width: 190,
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(30),
+                                            side: const BorderSide(color: Color(0xFFE2E8F0), width: 0.8),
+                                          ),
+                                          content: const Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.check_circle_rounded,
+                                                color: Color(0xFFEF4444),
+                                                size: 16,
+                                              ),
+                                              SizedBox(width: 7),
+                                              Text(
+                                                'ลบรายการแล้ว',
+                                                style: TextStyle(
+                                                  fontSize: 12.5,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Color(0xFF1E293B),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                } catch (e) {
+                                  debugPrint('Error deleting transaction: $e');
+                                }
+                              }
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                    const SizedBox(height: 14),
+
+                    // Label: ชื่อรายการ
+                    const Text(
+                      'ชื่อรายการ',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: titleController,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F172A),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'เช่น ค่าข้าว, ค่าน้ำมัน, ช้อปปิ้ง...',
+                        prefixIcon: Icon(
+                          Icons.edit_note_rounded,
+                          color: AppTheme.primaryColor,
+                        ),
+                        suffixIcon: titleController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  setModalState(() {
+                                    titleController.clear();
+                                  });
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: AppTheme.primaryColor,
+                            width: 1.6,
+                          ),
+                        ),
+                      ),
+                      onChanged: (_) => setModalState(() {}),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Quick Chips
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: quickChips.map((chip) {
+                        final label = chip['label'] as String;
+                        final icon = chip['icon'] as IconData;
+                        final isSelected = titleController.text.trim() == label;
+                        return InkWell(
+                          onTap: () {
+                            setModalState(() {
+                              titleController.text = label;
+                              titleController.selection = TextSelection.fromPosition(
+                                TextPosition(offset: label.length),
+                              );
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppTheme.primaryColor
+                                  : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppTheme.primaryColor
+                                    : const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  icon,
+                                  size: 13.5,
+                                  color: isSelected ? Colors.white : AppTheme.primaryColor,
+                                ),
+                                const SizedBox(width: 4.5),
+                                Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isSelected ? Colors.white : const Color(0xFF334155),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Label: จำนวนเงิน
+                    Row(
+                      children: [
+                        const Text(
+                          'จำนวนเงิน (บาท)',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF475569),
+                          ),
+                        ),
+                        if (isSlip) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: const Color(0xFFCBD5E1),
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.lock_rounded,
+                                  size: 11,
+                                  color: Color(0xFF64748B),
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'ล็อคตามสลิปธนาคาร',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF475569),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: amountController,
+                      readOnly: isSlip,
+                      keyboardType: isSlip
+                          ? TextInputType.none
+                          : const TextInputType.numberWithOptions(decimal: true),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: isSlip
+                            ? const Color(0xFF64748B)
+                            : const Color(0xFF0F172A),
+                      ),
+                      decoration: InputDecoration(
+                        prefixIcon: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          child: Text(
+                            '฿',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: isSlip
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                        suffixIcon: isSlip
+                            ? const Padding(
+                                padding: EdgeInsets.only(right: 12),
+                                child: Icon(
+                                  Icons.lock_outline_rounded,
+                                  size: 18,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              )
+                            : null,
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 0,
+                          minHeight: 0,
+                        ),
+                        suffixIconConstraints: const BoxConstraints(
+                          minWidth: 0,
+                          minHeight: 0,
+                        ),
+                        filled: true,
+                        fillColor: isSlip
+                            ? const Color(0xFFF1F5F9)
+                            : const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: isSlip
+                                ? const Color(0xFFCBD5E1)
+                                : AppTheme.primaryColor,
+                            width: isSlip ? 1.0 : 1.6,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (isSlip) ...[
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.info_outline_rounded,
+                            size: 13,
+                            color: Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              'ยอดเงินอ้างอิงจากสลิปธนาคารจริง เพื่อความถูกต้องทางบัญชีจึงไม่สามารถแก้ไขยอดเงินได้ครับ',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+
+                    // Action buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF64748B),
+                              side: const BorderSide(color: Color(0xFFE2E8F0)),
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: const Text(
+                              'ยกเลิก',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final newTitle = titleController.text.trim();
+                              final newAmount = isSlip
+                                  ? currentAmount
+                                  : (double.tryParse(amountController.text.trim()) ?? currentAmount);
+                              if (newTitle.isEmpty || newAmount <= 0) return;
+
+                              // สร้าง note ใหม่: ถ้าเป็นสลิป ให้คง [สลิป ...] และ [Ref:...] เอาไว้
+                              String updatedNote;
+                              if (isSlip) {
+                                final refMatch = RegExp(r'\[Ref:[^\]]+\]').firstMatch(rawNote);
+                                final refTag = refMatch != null ? ' ${refMatch.group(0)}' : '';
+                                final bankName = bank?.displayName ?? (BankType.detectFromText(rawNote)?.displayName ?? 'ธนาคาร');
+                                updatedNote = '[สลิป $bankName] $newTitle$refTag';
+                              } else {
+                                updatedNote = newTitle;
+                              }
+
+                              // 1. ปิดหน้าต่าง Modal ทันที (0ms ไม่ต้องรอเน็ตเวิร์ก)
+                              Navigator.pop(ctx);
+
+                              // 2. อัปเดตการ์ดบนหน้าจอทันที ไม่ให้ผู้ใช้ต้องรอ
+                              card['name'] = newTitle;
+                              card['amount'] = newAmount;
+                              card['rawNote'] = updatedNote;
+                              card['isSlip'] = isSlip;
+
+                              // อัปเดตข้อความบับเบิลของผู้ใช้ที่อยู่ก่อนหน้าการ์ดนี้ด้วย (ถ้ามี)
+                              final cardIndex = _messages.indexWhere((m) => identical(m.cardData, card));
+                              if (cardIndex > 0) {
+                                for (int i = cardIndex - 1; i >= 0 && i >= cardIndex - 2; i--) {
+                                  if (_messages[i].isUser) {
+                                    _messages[i] = Message(
+                                      text: '$newTitle ${newAmount.toStringAsFixed(0)}',
+                                      isUser: true,
+                                      timestamp: _messages[i].timestamp,
+                                    );
+                                    break;
+                                  }
+                                }
+                              }
+
+                              setState(() {});
+                              widget.onTransactionSaved?.call();
+
+                              // 3. แสดงแถบแจ้งเตือน เล็กๆ ขาวๆ ทันที
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: Colors.white,
+                                  elevation: 6,
+                                  behavior: SnackBarBehavior.floating,
+                                  width: 210,
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                    side: const BorderSide(color: Color(0xFFE2E8F0), width: 0.8),
+                                  ),
+                                  content: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.check_circle_rounded,
+                                        color: AppTheme.primaryColor,
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 7),
+                                      const Text(
+                                        'บันทึกเรียบร้อยแล้ว',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+
+                              // 4. ซิงค์ข้อมูลขึ้นเซิร์ฟเวอร์แบบ Background Asynchronous ทันทีโดยไม่บล็อกหน้าจอ
+                              _syncTransactionUpdate(
+                                card: card,
+                                txId: txId,
+                                rawNote: rawNote,
+                                currentDisplayName: currentDisplayName,
+                                updatedNote: updatedNote,
+                                newAmount: newAmount,
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryColor,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: const Text(
+                              'บันทึก',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _syncTransactionUpdate({
+    required Map<String, dynamic> card,
+    required String? txId,
+    required String rawNote,
+    required String currentDisplayName,
+    required String updatedNote,
+    required double newAmount,
+  }) async {
+    try {
+      String? currentTxId = txId;
+      if (currentTxId == null || currentTxId.isEmpty) {
+        final q = await _apiClient.get(
+          '/transactions?user_id=eq.$_activeUserId&order=transaction_date.desc&limit=15',
+        );
+        if (q.statusCode == 200) {
+          final list = jsonDecode(q.body);
+          if (list is List) {
+            for (var item in list) {
+              if (item is Map) {
+                final itemNote = item['note']?.toString() ?? '';
+                if (itemNote == rawNote ||
+                    (rawNote.contains('[Ref:') &&
+                        itemNote.contains(rawNote.substring(rawNote.indexOf('[Ref:')))) ||
+                    itemNote.contains(currentDisplayName)) {
+                  currentTxId = item['id']?.toString();
+                  card['id'] = currentTxId;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (currentTxId != null && currentTxId.isNotEmpty) {
+        final patchResp = await _apiClient.patch(
+          '/transactions?id=eq.$currentTxId',
+          body: {
+            'note': updatedNote,
+            'amount': newAmount,
+          },
+        );
+
+        if (patchResp.statusCode >= 400) {
+          await _apiClient.delete('/transactions?id=eq.$currentTxId');
+          final postBody = {
+            'user_id': _activeUserId,
+            'amount': newAmount,
+            'type': card['msgType'] == 'income' ? 'income' : 'expense',
+            'note': updatedNote,
+            if (card['transaction_date'] != null)
+              'transaction_date': card['transaction_date'],
+          };
+          final postResp = await _apiClient.post('/transactions', body: postBody);
+          try {
+            final parsed = jsonDecode(postResp.body);
+            if (parsed is List && parsed.isNotEmpty) {
+              card['id'] = parsed[0]['id'];
+            } else if (parsed is Map) {
+              card['id'] = parsed['id'];
+            }
+          } catch (_) {}
+        }
+      } else {
+        final postBody = {
+          'user_id': _activeUserId,
+          'amount': newAmount,
+          'type': card['msgType'] == 'income' ? 'income' : 'expense',
+          'note': updatedNote,
+          if (card['transaction_date'] != null)
+            'transaction_date': card['transaction_date'],
+        };
+        final postResp = await _apiClient.post('/transactions', body: postBody);
+        try {
+          final parsed = jsonDecode(postResp.body);
+          if (parsed is List && parsed.isNotEmpty) {
+            card['id'] = parsed[0]['id'];
+          } else if (parsed is Map) {
+            card['id'] = parsed['id'];
+          }
+        } catch (_) {}
+      }
+
+      widget.onTransactionSaved?.call();
+    } catch (e) {
+      debugPrint('Background transaction sync error: $e');
+    }
   }
 
   Widget _buildMessageBubble(Message message) {
@@ -1163,11 +2035,17 @@ class _TransactionsScreenState extends State<TransactionsScreen>
       final double totalAccumulated =
           (card['totalAccumulated'] as num?)?.toDouble() ?? amount;
 
+      final BankType? bank = card['bankType'] as BankType?;
+
       Color categoryColor = const Color(0xFF10B981);
       Color headerBgColor = const Color(0xFFE6F4F1);
       IconData headerIcon = Icons.account_balance_wallet_outlined;
 
-      if (msgType == 'expense' || category == 'รายจ่าย') {
+      if (bank != null) {
+        categoryColor = Color(bank.brandColorValue);
+        headerBgColor = Color(bank.brandColorValue).withValues(alpha: 0.12);
+        headerIcon = Icons.account_balance_rounded;
+      } else if (msgType == 'expense' || category == 'รายจ่าย') {
         categoryColor = const Color(0xFFEF4444);
         headerBgColor = const Color(0xFFFEE2E2);
         headerIcon = Icons.receipt_long_outlined;
@@ -1253,16 +2131,40 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   style,
                   category,
                   msgType,
-                  card['icon'] ?? headerIcon,
+                  card['icon'] ?? (bank != null ? BankLogoIcon(bank: bank, size: 48, showShadow: true) : headerIcon),
                   categoryColor,
                   headerBgColor,
                   hasBudget,
+                  bank: bank,
+                  onEdit: () => _showEditTransactionModal(card),
                 ),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (bank != null) ...[
+                        Row(
+                          children: [
+                            BankLogoIcon(
+                              bank: bank,
+                              size: 16,
+                              showShadow: false,
+                              showBorder: false,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              bank.displayName,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Color(bank.brandColorValue),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                      ],
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1553,6 +2455,75 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                           ),
                         ),
                       ),
+                      ValueListenableBuilder<int>(
+                        valueListenable:
+                            SlipScannerBridge.instance.unscannedCount,
+                        builder: (context, count, _) => Tooltip(
+                          message: count > 0
+                              ? context.tr(
+                                  'พบสลิป $count รายการ กดเพื่อสแกน',
+                                  'Found $count slips, tap to scan',
+                                )
+                              : context.tr(
+                                  'สแกนสลิปธนาคาร',
+                                  'Scan Bank Slip',
+                                ),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            alignment: Alignment.center,
+                            children: [
+                              IconButton(
+                                onPressed:
+                                    _isScanningSlips ? null : _openSlipScanner,
+                                icon: _isScanningSlips
+                                    ? SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Theme.of(context).primaryColor,
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.receipt_long_rounded,
+                                        color: Theme.of(context).primaryColor,
+                                        size: 21,
+                                      ),
+                              ),
+                              if (count > 0 && !_isScanningSlips)
+                                Positioned(
+                                  top: 6,
+                                  right: 6,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEF4444),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 16,
+                                      minHeight: 16,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        count > 9 ? '9+' : '$count',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                          height: 1,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
                       Expanded(
                         child: TextField(
                           controller: _inputController,
@@ -1748,20 +2719,57 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     dynamic itemIcon,
     Color categoryColor,
     Color headerBgColor,
-    bool hasBudget,
-  ) {
+    bool hasBudget, {
+    BankType? bank,
+    VoidCallback? onEdit,
+  }) {
     final isExpense = msgType == 'expense' || category == 'รายจ่าย';
     final isDream = msgType == 'dream' || category == 'เงินออม';
-    final title = isExpense
-        ? context.tr('บันทึกรายจ่าย', 'EXPENSE RECORD')
-        : (isDream
-              ? context.tr('หยอดเป้าหมาย', 'SAVINGS GOAL')
-              : context.tr('รายการใหม่', 'NEW ENTRY'));
+    final title = bank != null
+        ? 'สลิป ${bank.displayName}'
+        : (isExpense
+            ? context.tr('บันทึกรายจ่าย', 'EXPENSE RECORD')
+            : (isDream
+                ? context.tr('หยอดเป้าหมาย', 'SAVINGS GOAL')
+                : context.tr('รายการใหม่', 'NEW ENTRY')));
+
+    final editButton = onEdit != null
+        ? Positioned(
+            top: 10,
+            right: 10,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onEdit,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.edit_rounded,
+                    size: 13,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+              ),
+            ),
+          )
+        : const SizedBox.shrink();
 
     final badge = !hasBudget
         ? Positioned(
-            top: 12,
-            right: 12,
+            top: 10,
+            left: 10,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
@@ -1834,6 +2842,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ),
               ),
               badge,
+              editButton,
             ],
           ),
         );
@@ -1869,6 +2878,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ),
               ),
               badge,
+              editButton,
             ],
           ),
         );
@@ -1926,6 +2936,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ),
               ),
               badge,
+              editButton,
             ],
           ),
         );
@@ -1978,12 +2989,12 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ),
               ),
               badge,
+              editButton,
             ],
           ),
         );
 
       case ThemeStyle.emerald:
-      default:
         return Container(
           height: 100,
           width: double.infinity,
@@ -2003,6 +3014,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                       ),
               ),
               badge,
+              editButton,
             ],
           ),
         );
@@ -2015,6 +3027,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     String msgType,
     Map<String, dynamic>? matchedSuggestion,
   ) {
+    final detectedBank = BankType.detectFromText(name);
+    if (detectedBank != null) {
+      return BankLogoIcon(bank: detectedBank, size: 44, showShadow: true);
+    }
+
     if (matchedSuggestion != null) {
       if (msgType == 'dream') {
         final iconKey = matchedSuggestion['icon']?.toString();

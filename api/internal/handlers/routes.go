@@ -165,6 +165,12 @@ func SetupRouter() *gin.Engine {
 		v1.POST("/transactions", func(c *gin.Context) {
 			handleSupabaseProxy(c, "POST", "/rest/v1/transactions")
 		})
+		v1.PATCH("/transactions", func(c *gin.Context) {
+			handleSupabaseProxy(c, "PATCH", "/rest/v1/transactions")
+		})
+		v1.PUT("/transactions", func(c *gin.Context) {
+			handleSupabaseProxy(c, "PUT", "/rest/v1/transactions")
+		})
 		v1.DELETE("/transactions", func(c *gin.Context) {
 			handleSupabaseProxy(c, "DELETE", "/rest/v1/transactions")
 		})
