@@ -143,10 +143,15 @@ class _DreamsScreenState extends State<DreamsScreen> {
     }
   }
 
-  // นับจำนวนครั้งที่ผู้ใช้หยอดกระปุกจริง โดยเช็กคำว่า "[ออม] หยอดกระปุก: [ชื่อฝัน]" ในโน้ตธุรกรรม
-  int _getDepositCount(String title) {
+  // นับจำนวนครั้งที่ผู้ใช้หยอดกระปุกจริง โดยเช็ก dream_id หรือข้อความ "[ออม] หยอดกระปุก: [ชื่อฝัน]"
+  int _getDepositCount(String title, [String? dreamId]) {
     final searchKey = '[ออม] หยอดกระปุก: $title';
-    return _transactions.where((tx) => tx['note'] == searchKey).length;
+    return _transactions.where((tx) {
+      if (dreamId != null && tx['dream_id']?.toString() == dreamId) {
+        return true;
+      }
+      return tx['note'] == searchKey;
+    }).length;
   }
 
   Widget _buildIcon(String? iconName, {double size = 24, Color? color}) {
@@ -354,15 +359,30 @@ class _DreamsScreenState extends State<DreamsScreen> {
                             'type': 'expense', // ออมเงินลดจากกระเป๋าหลัก
                             'amount': amt,
                             'note': '[ออม] หยอดกระปุก: $dreamTitle',
+                            'dream_id': dreamId,
+                            'source': 'dream_saving',
                             'transaction_date': DateTime.now()
                                 .toUtc()
                                 .toIso8601String(),
                           };
 
-                          final txResp = await _apiClient.post(
+                          var txResp = await _apiClient.post(
                             '/transactions',
                             body: txBody,
                           );
+                          // Fallback if migration 003 has not been run yet
+                          if (txResp.statusCode >= 400 && txResp.body.contains('column')) {
+                            txResp = await _apiClient.post(
+                              '/transactions',
+                              body: {
+                                'user_id': _activeUserId,
+                                'type': 'expense',
+                                'amount': amt,
+                                'note': '[ออม] หยอดกระปุก: $dreamTitle',
+                                'transaction_date': DateTime.now().toUtc().toIso8601String(),
+                              },
+                            );
+                          }
 
                           // 2. อัปเดตตารางยอดออมสะสม (current_amount) ในตาราง dreams
                           final newCurrent = currentSaved + amt;
@@ -1451,6 +1471,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                 : 0.0;
                             final depositCount = _getDepositCount(
                               dream['title'] ?? '',
+                              dream['id']?.toString(),
                             );
 
                             // คำนวณจำนวนเดือนที่ต้องเก็บต่อ

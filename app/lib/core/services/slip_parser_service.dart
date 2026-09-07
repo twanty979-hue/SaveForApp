@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 enum BankType {
   kbank,
   scb,
@@ -96,6 +98,8 @@ class ParsedSlip {
   final DateTime date;
   final String? referenceNo;
   final String rawText;
+  final String? imagePath;
+  final String? albumName;
   bool isSelected;
   String? customNote;
   bool includeRecipientInNote;
@@ -108,6 +112,8 @@ class ParsedSlip {
     required this.date,
     this.referenceNo,
     required this.rawText,
+    this.imagePath,
+    this.albumName,
     this.isSelected = true,
     this.customNote,
     this.includeRecipientInNote = true,
@@ -153,6 +159,8 @@ class SlipParserService {
     required List<String> lines,
     required String fullText,
     DateTime? fallbackDate,
+    String? imagePath,
+    String? albumName,
   }) {
     if (lines.isEmpty && fullText.trim().isEmpty) return null;
 
@@ -163,7 +171,10 @@ class SlipParserService {
 
     // 2. ดึงยอดเงิน (Amount)
     final amount = _extractAmount(lines, fullText);
+    debugPrint('[SlipParser] Parsing id: $id, lines: ${lines.length}, detected bank: ${bank.name}, amount: $amount');
+
     if (amount == null || amount <= 0) {
+      debugPrint('[SlipParser] Discarded slip: amount could not be extracted or <= 0');
       return null;
     }
 
@@ -184,14 +195,16 @@ class SlipParserService {
       date: date,
       referenceNo: ref,
       rawText: fullText,
+      imagePath: imagePath,
+      albumName: albumName,
     );
   }
 
   BankType _detectBank(String lower) {
-    if (lower.contains('กสิกรไทย') || lower.contains('kbank') || lower.contains('k plus') || lower.contains('kbiz')) {
+    if (lower.contains('กสิกร') || lower.contains('kbank') || lower.contains('k plus') || lower.contains('k+') || lower.contains('kbiz') || lower.contains('kasikorn')) {
       return BankType.kbank;
     }
-    if (lower.contains('ไทยพาณิชย์') || lower.contains('scb') || lower.contains('easy')) {
+    if (lower.contains('ไทยพาณิชย์') || lower.contains('scb') || lower.contains('แม่มณี') || lower.contains('easy')) {
       return BankType.scb;
     }
     if (lower.contains('กรุงศรี') || lower.contains('krungsri') || lower.contains('kma') || lower.contains('bay')) {
@@ -212,76 +225,97 @@ class SlipParserService {
     if (lower.contains('truemoney') || lower.contains('ทรูมันนี่') || lower.contains('true money') || lower.contains('tmn')) {
       return BankType.truemoney;
     }
+    if (lower.contains('พร้อมเพย์') || lower.contains('promptpay')) {
+      return BankType.other;
+    }
     return BankType.other;
   }
 
+  bool _isFeeLine(String line) {
+    final lower = line.toLowerCase();
+    return lower.contains('ค่าธรรมเนียม') || lower.contains('fee');
+  }
+
   double? _extractAmount(List<String> lines, String fullText) {
-    // Pattern 1: บรรทัดเดียวกัน เช่น "จำนวนเงิน: 1,500.00 บาท" หรือ "Amount 120.00"
-    final regexSameLine = RegExp(
-      r'(?:จำนวนเงิน|จํานวนเงิน|ยอดเงิน|Amount|ยอดโอน|จำนวน|ยอดชำระ|ชำระเงิน)\s*[:]?\s*(?:THB|฿|บาท)?\s*([0-9,]+\.[0-9]{2})',
+    // 1. ระดับความมั่นใจสูงสุด (High Priority): มองหาข้อความระบุยอดเงินชัดเจน พร้อมทศนิยม 2 ตำแหน่ง
+    // เช่น "ยอดชำระทั้งหมด ฿ 82.00", "จำนวนเงิน 1,500.00 บาท", "ยอดเงิน: 250.00"
+    // สำคัญ: ห้ามรวมคำว่า "ชำระเงิน" เดี่ยวๆ เพราะเป็นชื่อฟิลด์ผู้รับ เช่น "ชำระเงิน 7-Eleven"
+    final highConfidenceDecimalRegex = RegExp(
+      r'(?:ยอดชำระทั้งหมด|ยอดชำระสุทธิ|ยอดเงินที่ชำระ|จำนวนเงินที่โอน|จำนวนเงินโอน|จำนวนเงิน|จํานวนเงิน|ยอดเงิน|ยอดโอน|ยอดชำระ|ยอดรวมสุทธิ|ยอดรวม|total\s*amount|amount)\s*[:]?\s*(?:THB|฿|บาท)?\s*([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}|[0-9]+\.[0-9]{2})\b(?!\s*[-/a-zA-Z])',
       caseSensitive: false,
     );
 
-    final match = regexSameLine.firstMatch(fullText);
-    if (match != null) {
-      final clean = match.group(1)?.replaceAll(',', '');
+    final highMatch = highConfidenceDecimalRegex.firstMatch(fullText);
+    if (highMatch != null) {
+      final clean = highMatch.group(1)?.replaceAll(',', '');
       if (clean != null) {
         final val = double.tryParse(clean);
-        if (val != null && val > 0) return val;
+        if (val != null && val > 0 && val < 50000000) return val;
       }
     }
 
-    // Pattern 2: คำว่า "จำนวนเงิน" อยู่คนละบรรทัดกับตัวเลขยอดเงิน (พบบ่อยใน K PLUS และ Vision OCR)
-    // รองรับกรณีมีบรรทัด "(บาท)" หรือ "บาท" คั่นกลาง
+    // 2. ป้ายกำกับยอดเงินอยู่คนละบรรทัดกับตัวเลขทศนิยม (เช่น K PLUS / SCB บรรทัดถัดไป)
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i].trim().toLowerCase();
+      if (_isFeeLine(line)) continue;
+
       final isAmountLabel = line == 'จำนวนเงิน' ||
           line == 'จํานวนเงิน' ||
           line.startsWith('จำนวนเงิน') ||
           line.startsWith('จํานวนเงิน') ||
-          line.contains('จำนวนเงิน') ||
-          line.contains('จํานวนเงิน') ||
-          line.contains('ยอดเงิน') ||
-          line.contains('ยอดโอน') ||
+          line.startsWith('ยอดเงิน') ||
+          line.startsWith('ยอดโอน') ||
+          line.startsWith('ยอดชำระทั้งหมด') ||
+          line.startsWith('ยอดชำระสุทธิ') ||
+          line.startsWith('ยอดชำระ') ||
           line == 'amount' ||
-          line.startsWith('amount');
+          line.startsWith('amount') ||
+          line.startsWith('total amount');
 
       if (isAmountLabel) {
         for (int j = i + 1; j < lines.length && j <= i + 3; j++) {
           final nextLine = lines[j].trim();
+          if (_isFeeLine(nextLine)) continue;
           final lowerNext = nextLine.toLowerCase();
           if (lowerNext == '(บาท)' || lowerNext == 'บาท' || lowerNext == 'baht' || lowerNext == 'thb' || lowerNext == ':') {
             continue;
           }
-          final amountMatch = RegExp(r'([0-9,]+\.[0-9]{2})').firstMatch(nextLine);
+          final amountMatch = RegExp(r'^([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}|[0-9]+\.[0-9]{2})$').firstMatch(nextLine) ??
+              RegExp(r'([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}|[0-9]+\.[0-9]{2})\b(?!\s*[-/a-zA-Z])').firstMatch(nextLine);
           if (amountMatch != null) {
             final clean = amountMatch.group(1)?.replaceAll(',', '');
             if (clean != null) {
               final val = double.tryParse(clean);
-              if (val != null && val > 0) return val;
+              if (val != null && val > 0 && val < 50000000) return val;
             }
           }
         }
       }
     }
 
-    // Pattern 3: สแกนหาตัวเลขทศนิยม 2 ตำแหน่งที่มีสัญลักษณ์ บาท / Baht / THB / ฿ อยู่ข้างๆ
-    final regexCurrency = RegExp(
-      r'(?:(?:฿|thb)\s*([0-9,]+\.[0-9]{2})|([0-9,]+\.[0-9]{2})\s*(?:บาท|baht|thb))',
+    // 3. สแกนหาตัวเลขทศนิยม 2 ตำแหน่งที่มีสัญลักษณ์สกุลเงิน (฿, THB, บาท) อยู่ติดกัน
+    // เช่น "฿ 82.00" ใน TrueMoney หรือ "1,500.00 บาท"
+    final regexCurrencyDecimal = RegExp(
+      r'(?:(?:฿|thb)\s*([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}|[0-9]+\.[0-9]{2})\b(?!\s*[-/a-zA-Z])|([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}|[0-9]+\.[0-9]{2})\s*(?:บาท|baht|thb)\b)',
       caseSensitive: false,
     );
-    final currencyMatch = regexCurrency.firstMatch(fullText);
-    if (currencyMatch != null) {
-      final rawNum = currencyMatch.group(1) ?? currencyMatch.group(2);
-      final clean = rawNum?.replaceAll(',', '');
-      if (clean != null) {
-        final val = double.tryParse(clean);
-        if (val != null && val > 0) return val;
+
+    for (final line in lines) {
+      if (_isFeeLine(line)) continue;
+      final currencyMatch = regexCurrencyDecimal.firstMatch(line);
+      if (currencyMatch != null) {
+        final rawNum = currencyMatch.group(1) ?? currencyMatch.group(2);
+        final clean = rawNum?.replaceAll(',', '');
+        if (clean != null) {
+          final val = double.tryParse(clean);
+          if (val != null && val > 0 && val < 50000000) return val;
+        }
       }
     }
 
-    // Pattern 4: ตัวเลขทศนิยม 2 ตำแหน่งโดดๆ ในบรรทัด (พบบ่อยใน K PLUS สลิปแบบกราฟิกธีม)
+    // 4. ตัวเลขทศนิยม 2 ตำแหน่งโดดๆ ในบรรทัด (พบบ่อยใน K PLUS สลิปแบบกราฟิกธีม)
     for (final line in lines) {
+      if (_isFeeLine(line)) continue;
       final trimmed = line.trim();
       final standaloneMatch = RegExp(r'^([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})$').firstMatch(trimmed);
       if (standaloneMatch != null) {
@@ -293,21 +327,108 @@ class SlipParserService {
       }
     }
 
+    // 5. สแกนหาตัวเลขทศนิยม 2 ตำแหน่งในบรรทัดทั่วไป (ข้ามบรรทัดค่าธรรมเนียมและเลขอ้างอิง)
+    final anyDecimalRegex = RegExp(r'\b([0-9]{1,3}(?:,[0-9]{3})*|[0-9]+)\s*[\.]\s*([0-9]{2})\b(?!\s*[-/a-zA-Z])');
+    for (final line in lines) {
+      if (_isFeeLine(line)) continue;
+      if (line.contains('เลขที่') || line.contains('รหัส') || line.contains('ref') || line.contains('order')) continue;
+      final match = anyDecimalRegex.firstMatch(line);
+      if (match != null) {
+        final whole = match.group(1)?.replaceAll(',', '').trim() ?? '';
+        final dec = match.group(2)?.trim() ?? '';
+        final val = double.tryParse('$whole.$dec');
+        if (val != null && val > 0 && val < 50000000) {
+          return val;
+        }
+      }
+    }
+
+    // 6. ระดับตัวเลขจำนวนเต็ม (Integer) - เมื่อสลิปไม่มีทศนิยม เช่น ธีม K PLUS "864" หรือ "จำนวนเงิน 500 บาท"
+    final integerKeywordRegex = RegExp(
+      r'(?:ยอดชำระทั้งหมด|ยอดชำระสุทธิ|ยอดเงินที่ชำระ|จำนวนเงินที่โอน|จำนวนเงินโอน|จำนวนเงิน|จํานวนเงิน|ยอดเงิน|ยอดโอน|ยอดชำระ|ยอดรวมสุทธิ|ยอดรวม|total\s*amount|amount)\s*[:]?\s*(?:THB|฿|บาท)?\s*([0-9]{1,3}(?:,[0-9]{3})*|[1-9][0-9]*)\b(?!\s*[-/a-zA-Z])',
+      caseSensitive: false,
+    );
+    for (final line in lines) {
+      if (_isFeeLine(line)) continue;
+      final intMatch = integerKeywordRegex.firstMatch(line);
+      if (intMatch != null) {
+        final clean = intMatch.group(1)?.replaceAll(',', '').trim();
+        if (clean != null) {
+          final val = double.tryParse(clean);
+          if (val != null && val > 0 && val < 50000000) {
+            final intVal = val.toInt();
+            if (!(intVal >= 2020 && intVal <= 2030) && !(intVal >= 2560 && intVal <= 2575)) {
+              return val;
+            }
+          }
+        }
+      }
+    }
+
+    // 7. ตัวเลขจำนวนเต็มที่มีสัญลักษณ์สกุลเงิน เช่น "100 บาท", "฿ 500"
+    final integerCurrencyRegex = RegExp(
+      r'(?:(?:฿|thb)\s*([0-9]{1,3}(?:,[0-9]{3})*|[1-9][0-9]*)\b(?!\s*[-/a-zA-Z])|([0-9]{1,3}(?:,[0-9]{3})*|[1-9][0-9]*)\s*(?:บาท|baht|thb)\b)',
+      caseSensitive: false,
+    );
+    for (final line in lines) {
+      if (_isFeeLine(line)) continue;
+      final intMatch = integerCurrencyRegex.firstMatch(line);
+      if (intMatch != null) {
+        final rawNum = intMatch.group(1) ?? intMatch.group(2);
+        final clean = rawNum?.replaceAll(',', '').trim();
+        if (clean != null) {
+          final val = double.tryParse(clean);
+          if (val != null && val > 0 && val < 50000000) {
+            final intVal = val.toInt();
+            if (!(intVal >= 2020 && intVal <= 2030) && !(intVal >= 2560 && intVal <= 2575)) {
+              return val;
+            }
+          }
+        }
+      }
+    }
+
+    // 8. ตัวเลขจำนวนเต็มโดดๆ ในบรรทัด (Fallback สำหรับ K PLUS Theme เช่น "864", "10")
+    for (final line in lines) {
+      if (_isFeeLine(line)) continue;
+      final trimmed = line.trim();
+      // ข้ามถ้าเป็นเวลา เช่น 12:30, 09:15
+      if (trimmed.contains(':')) continue;
+      // ข้ามถ้าเป็นวันที่ เช่น 07/09/2026 หรือ 2026-09-07 หรือ 7-Eleven
+      if (trimmed.contains('/') || trimmed.contains('-')) continue;
+
+      final pureNumMatch = RegExp(r'^([0-9]{1,3}(?:,[0-9]{3})*|[1-9][0-9]{0,6})$').firstMatch(trimmed);
+      if (pureNumMatch != null) {
+        final clean = pureNumMatch.group(1)?.replaceAll(',', '');
+        if (clean != null) {
+          final val = double.tryParse(clean);
+          if (val != null && val > 0 && val < 50000000) {
+            final intVal = val.toInt();
+            // ข้ามเลขปี พ.ศ. หรือ ค.ศ.
+            if ((intVal >= 2020 && intVal <= 2030) || (intVal >= 2560 && intVal <= 2575)) {
+              continue;
+            }
+            return val;
+          }
+        }
+      }
+    }
+
     return null;
   }
 
   String _extractRecipient(List<String> lines, String fullText, BankType bank) {
-    // มองหาบรรทัดที่บอกว่า "ไปยัง" หรือ "To"
+    // 1. ตรวจสอบป้ายกำกับมาตรฐานในแต่ละบรรทัด
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i].trim();
+      if (line.isEmpty) continue;
 
-      // บรรทัดที่มีคำว่า "ไปยัง" นำหน้า
-      if (line.startsWith('ไปยัง') || line.startsWith('โอนไปยัง')) {
-        var recipient = line.replaceFirst(RegExp(r'^(?:ไปยัง|โอนไปยัง)\s*[:]?\s*'), '').trim();
+      // 1.1 ไปยัง, โอนไปยัง, ส่งไปยัง
+      if (line.startsWith('ไปยัง') || line.startsWith('โอนไปยัง') || line.startsWith('ส่งไปยัง')) {
+        var recipient = line.replaceFirst(RegExp(r'^(?:ไปยัง|โอนไปยัง|ส่งไปยัง)\s*[:]?\s*'), '').trim();
         if (recipient.isNotEmpty && !_isGenericLabel(recipient)) {
           return _cleanRecipient(recipient);
         }
-        // ถ้าบรรทัดนี้มีแค่คำว่า "ไปยัง" ให้ดูบรรทัดถัดไป
         if (i + 1 < lines.length) {
           final nextLine = lines[i + 1].trim();
           if (!_isGenericLabel(nextLine)) {
@@ -316,10 +437,86 @@ class SlipParserService {
         }
       }
 
-      if (line.toLowerCase() == 'to' && i + 1 < lines.length) {
-        final nextLine = lines[i + 1].trim();
-        if (!_isGenericLabel(nextLine)) {
-          return _cleanRecipient(nextLine);
+      // 1.2 ผู้รับเงิน, ผู้รับ, โอนให้, โอนเงินให้, ชำระให้, จ่ายให้, ร้านค้า
+      if (line.startsWith('ผู้รับเงิน') ||
+          line.startsWith('ชื่อผู้รับ') ||
+          line.startsWith('ผู้รับ') ||
+          line.startsWith('โอนให้') ||
+          line.startsWith('โอนเงินให้') ||
+          line.startsWith('โอนเข้า') ||
+          line.startsWith('ชำระให้') ||
+          line.startsWith('จ่ายให้') ||
+          line.startsWith('ร้านค้า') ||
+          line.startsWith('ชื่อร้านค้า')) {
+        var recipient = line.replaceFirst(
+          RegExp(r'^(?:ผู้รับเงิน|ชื่อผู้รับ(?:เงิน)?|ผู้รับ|โอนเงินให้|โอนให้|โอนเข้า|ชำระให้|จ่ายให้|ร้านค้า|ชื่อร้านค้า)\s*[:]?\s*'),
+          '',
+        ).trim();
+        if (recipient.isNotEmpty && !_isGenericLabel(recipient)) {
+          return _cleanRecipient(recipient);
+        }
+        if (i + 1 < lines.length) {
+          final nextLine = lines[i + 1].trim();
+          if (!_isGenericLabel(nextLine)) {
+            return _cleanRecipient(nextLine);
+          }
+        }
+      }
+
+      // 1.3 ชำระเงิน (เช่น "ชำระเงิน 7-Eleven(Thailand)" สำหรับ TrueMoney / บิลชำระค่าสินค้า)
+      if (line.startsWith('ชำระเงิน') &&
+          !line.contains('ช่องทาง') &&
+          !line.contains('สำเร็จ') &&
+          !line.contains('เสร็จสิ้น') &&
+          !line.contains('ทั้งหมด') &&
+          !line.contains('สุทธิ') &&
+          !line.contains('ยอด')) {
+        var recipient = line.replaceFirst(RegExp(r'^ชำระเงิน\s*[:]?\s*'), '').trim();
+        if (recipient.isNotEmpty && !_isGenericLabel(recipient)) {
+          return _cleanRecipient(recipient);
+        }
+        if (i + 1 < lines.length) {
+          final nextLine = lines[i + 1].trim();
+          if (!_isGenericLabel(nextLine)) {
+            return _cleanRecipient(nextLine);
+          }
+        }
+      }
+
+      // 1.4 To / Receiver
+      if (line.toLowerCase() == 'to' || line.toLowerCase().startsWith('to:')) {
+        var recipient = line.replaceFirst(RegExp(r'^to\s*[:]?\s*', caseSensitive: false), '').trim();
+        if (recipient.isNotEmpty && !_isGenericLabel(recipient)) {
+          return _cleanRecipient(recipient);
+        }
+        if (i + 1 < lines.length) {
+          final nextLine = lines[i + 1].trim();
+          if (!_isGenericLabel(nextLine)) {
+            return _cleanRecipient(nextLine);
+          }
+        }
+      }
+    }
+
+    // 2. กรณี TrueMoney หรือสลิปร้านค้า ที่มีชื่อร้านค้าหรือผู้รับอยู่แถวบนสุด (เช่น "เซเว่น อีเลฟเว่น")
+    if (bank == BankType.truemoney) {
+      for (int i = 0; i < lines.length && i < 4; i++) {
+        final line = lines[i].trim();
+        final lower = line.toLowerCase();
+        if (lower.isEmpty ||
+            lower.contains('truemoney') ||
+            lower.contains('ทรูมันนี่') ||
+            lower.contains('วอลเล็ท') ||
+            lower.contains('wallet') ||
+            lower.contains('฿') ||
+            lower.contains('thb') ||
+            lower.contains('บาท') ||
+            lower.contains('สำเร็จ') ||
+            _isGenericLabel(line)) {
+          continue;
+        }
+        if (line.length >= 2 && !RegExp(r'^[0-9:\./\-]+$').hasMatch(line)) {
+          return _cleanRecipient(line);
         }
       }
     }
@@ -336,6 +533,14 @@ class SlipParserService {
         lower.contains('รหัสอ้างอิง') ||
         lower.contains('ref') ||
         lower.contains('บาท') ||
+        lower.contains('ช่องทาง') ||
+        lower.contains('สำเร็จ') ||
+        lower.contains('เสร็จสิ้น') ||
+        lower.contains('วอลเล็ท') ||
+        lower.contains('wallet') ||
+        lower.contains('ยอดชำระ') ||
+        lower.contains('ค่าธรรมเนียม') ||
+        lower.contains('fee') ||
         lower.length < 2;
   }
 

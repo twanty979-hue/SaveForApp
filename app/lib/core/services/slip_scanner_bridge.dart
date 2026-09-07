@@ -63,136 +63,7 @@ class SlipScannerBridge {
   /// [daysBack]: จำนวนวันที่ต้องการย้อนหลัง (0 หมายถึงใช้ lastScanTimestamp)
   /// [forceAll]: บังคับสแกนทั้งหมดโดยไม่สน lastScanTimestamp
   /// [albumName]: ระบุชื่ออัลบั้มที่ต้องการสแกน (ค่าเริ่มต้น: 'ALL_BANKS' สแกนทุกธนาคาร K PLUS, SCB, Krungsri, TrueMoney)
-  /// ดึงข้อมูลสลิปจำลอง (Mock Bank Slips) สำหรับทดสอบบน Simulator หรือเดโม
-  List<ParsedSlip> getMockSlips() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final twoDaysAgo = today.subtract(const Duration(days: 2));
-
-    return [
-      // 1. K PLUS (วันนี้)
-      ParsedSlip(
-        id: 'mock_kplus_01',
-        bank: BankType.kbank,
-        amount: 350.00,
-        recipient: 'นายธนกร วงศ์สมบูรณ์ (พร้อมเพย์)',
-        date: DateTime(today.year, today.month, today.day, 12, 45),
-        referenceNo: '01424518294958102',
-        rawText: 'โอนเงินสำเร็จ กสิกรไทย K PLUS 350.00 บาท นายธนกร วงศ์สมบูรณ์',
-      ),
-      // 2. SCB EASY (วันนี้)
-      ParsedSlip(
-        id: 'mock_scb_01',
-        bank: BankType.scb,
-        amount: 1250.00,
-        recipient: 'น.ส. นภา สุวรรณโชติ',
-        date: DateTime(today.year, today.month, today.day, 10, 15),
-        referenceNo: '2026090614029103',
-        rawText: 'SCB EASY โอนเงินสำเร็จ 1,250.00 บาท น.ส. นภา สุวรรณโชติ',
-      ),
-      // 3. TrueMoney (วันนี้)
-      ParsedSlip(
-        id: 'mock_tmn_01',
-        bank: BankType.truemoney,
-        amount: 189.50,
-        recipient: '7-Eleven สาขาปากซอย',
-        date: DateTime(today.year, today.month, today.day, 8, 30),
-        referenceNo: 'TMN9940192841029',
-        rawText: 'TrueMoney Wallet ชำระเงิน 189.50 บาท 7-Eleven',
-      ),
-      // 4. K PLUS (เมื่อวานนี้)
-      ParsedSlip(
-        id: 'mock_kplus_02',
-        bank: BankType.kbank,
-        amount: 429.00,
-        recipient: 'บจก. เคเอฟซี ประเทศไทย',
-        date: DateTime(yesterday.year, yesterday.month, yesterday.day, 19, 20),
-        referenceNo: '01424519920194821',
-        rawText: 'K PLUS ชำระเงิน 429.00 บาท เคเอฟซี ประเทศไทย',
-      ),
-      // 5. SCB EASY (เมื่อวานนี้)
-      ParsedSlip(
-        id: 'mock_scb_02',
-        bank: BankType.scb,
-        amount: 75.00,
-        recipient: 'ร้านกาแฟ คาเฟ่อเมซอน',
-        date: DateTime(yesterday.year, yesterday.month, yesterday.day, 9, 10),
-        referenceNo: '2026090518291039',
-        rawText: 'SCB EASY โอนเงินสำเร็จ 75.00 บาท คาเฟ่อเมซอน',
-      ),
-      // 6. Krungsri (2 วันก่อน)
-      ParsedSlip(
-        id: 'mock_bay_01',
-        bank: BankType.krungsri,
-        amount: 2500.00,
-        recipient: 'นายพีรพล พลอยไพศาล',
-        date: DateTime(twoDaysAgo.year, twoDaysAgo.month, twoDaysAgo.day, 15, 40),
-        referenceNo: 'BAY2026090499102',
-        rawText: 'กรุงศรี KMA โอนเงินสำเร็จ 2,500.00 บาท นายพีรพล พลอยไพศาล',
-      ),
-      // 7. Krungthai NEXT (2 วันก่อน)
-      ParsedSlip(
-        id: 'mock_ktb_01',
-        bank: BankType.ktb,
-        amount: 220.00,
-        recipient: 'ร้านค้าคนละครึ่ง / ตลาดสด',
-        date: DateTime(twoDaysAgo.year, twoDaysAgo.month, twoDaysAgo.day, 11, 20),
-        referenceNo: 'KTB20260904102948',
-        rawText: 'Krungthai NEXT โอนเงินสำเร็จ 220.00 บาท ร้านค้าคนละครึ่ง',
-      ),
-      // 8. Bangkok Bank BBL (2 วันก่อน)
-      ParsedSlip(
-        id: 'mock_bbl_01',
-        bank: BankType.bbl,
-        amount: 850.00,
-        recipient: 'นายกิตติศักดิ์ รุ่งโรจน์',
-        date: DateTime(twoDaysAgo.year, twoDaysAgo.month, twoDaysAgo.day, 13, 10),
-        referenceNo: 'BBL9920194820194',
-        rawText: 'ธนาคารกรุงเทพ โอนเงินสำเร็จ 850.00 บาท นายกิตติศักดิ์ รุ่งโรจน์',
-      ),
-      // 9. ttb touch (3 วันก่อน)
-      ParsedSlip(
-        id: 'mock_ttb_01',
-        bank: BankType.ttb,
-        amount: 499.00,
-        recipient: 'บมจ. ทรู คอร์ปอเรชั่น (ค่าเน็ต)',
-        date: DateTime(twoDaysAgo.year, twoDaysAgo.month, twoDaysAgo.day, 9, 30),
-        referenceNo: 'TTB2026090382910',
-        rawText: 'ttb touch ชำระค่าบริการ 499.00 บาท ทรู คอร์ปอเรชั่น',
-      ),
-      // 10. MyMo ออมสิน GSB (3 วันก่อน)
-      ParsedSlip(
-        id: 'mock_gsb_01',
-        bank: BankType.gsb,
-        amount: 1000.00,
-        recipient: 'กองทุนเงินออม / ออมสิน',
-        date: DateTime(twoDaysAgo.year, twoDaysAgo.month, twoDaysAgo.day, 8, 15),
-        referenceNo: 'GSB992019482910',
-        rawText: 'MyMo ออมสิน โอนเงินสำเร็จ 1,000.00 บาท กองทุนเงินออม',
-      ),
-      // 11. TrueMoney (2 วันก่อน)
-      ParsedSlip(
-        id: 'mock_tmn_02',
-        bank: BankType.truemoney,
-        amount: 699.00,
-        recipient: 'Steam Games / Game Topup',
-        date: DateTime(twoDaysAgo.year, twoDaysAgo.month, twoDaysAgo.day, 21, 05),
-        referenceNo: 'TMN9931829401928',
-        rawText: 'TrueMoney Wallet ซื้อสินค้า 699.00 บาท Steam Games',
-      ),
-      // 12. สลิปพร้อมเพย์ / ธนาคารอื่นๆ
-      ParsedSlip(
-        id: 'mock_other_01',
-        bank: BankType.other,
-        amount: 140.00,
-        recipient: 'ร้านข้าวมันไก่ตอน (PromptPay)',
-        date: DateTime(today.year, today.month, today.day, 13, 00),
-        referenceNo: 'PP994019284102',
-        rawText: 'พร้อมเพย์ ชำระเงินสำเร็จ 140.00 บาท ร้านข้าวมันไก่ตอน',
-      ),
-    ];
-  }
+  /// ล้างประวัติและตัวแปรจำลองทั้งหมด (ไม่ใช้ Mockup ใดๆ อีกต่อไป ใช้งานข้อมูลจริง 100%)
 
   /// ตรวจสอบว่าเป็นเครื่อง Simulator หรือไม่
   Future<bool> isSimulator() async {
@@ -224,40 +95,49 @@ class SlipScannerBridge {
   }
 
   /// สแกนหาภาพสลิปย้อนหลังจากอัลบั้มรูปภาพ
-  /// [daysBack]: จำนวนวันที่ต้องการย้อนหลัง (0 หมายถึงใช้ lastScanTimestamp)
+  /// [daysBack]: จำนวนวันที่ต้องการย้อนหลัง (สูงสุด 30 วัน)
+  /// [startDate]: วันที่เริ่มต้นที่ต้องการสแกนย้อนหลัง (ต้องไม่เกิน 30 วัน)
+  /// [endDate]: วันที่สิ้นสุด (ดีฟอลต์คือปัจจุบัน)
   /// [forceAll]: บังคับสแกนทั้งหมดโดยไม่สน lastScanTimestamp
-  /// [albumName]: ระบุชื่ออัลบั้มที่ต้องการสแกน (ค่าเริ่มต้น: 'ALL_BANKS' สแกนทุกธนาคาร K PLUS, SCB, Krungsri, TrueMoney)
+  /// [albumName]: ระบุชื่ออัลบั้มที่ต้องการสแกน (ค่าเริ่มต้น: 'ALL_BANKS' สแกน 4 ธนาคาร)
   Future<List<ParsedSlip>> scanRecentSlips({
     int daysBack = 30,
-    int limit = 120,
+    DateTime? startDate,
+    DateTime? endDate,
+    int limit = 50,
     bool forceAll = false,
     String? albumName = 'ALL_BANKS',
   }) async {
-    final bool isSim = await isSimulator();
-    if (isSim) {
-      // เฉพาะบน Simulator: คืนค่าสลิปจำลองตัวอย่าง และกรองรายการที่บันทึกแล้วออก
-      final prefs = await SharedPreferences.getInstance();
-      final savedKeys = prefs.getStringList(_prefSavedSlipKeys)?.toSet() ?? <String>{};
-      final mocks = getMockSlips();
-      if (forceAll) return mocks;
-      final remaining = mocks.where((s) => !savedKeys.contains(s.deduplicationKey)).toList();
-      return remaining.isNotEmpty ? remaining : mocks;
-    }
-
     if (!isSupported) return [];
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final lastScan = forceAll ? 0.0 : (prefs.getDouble(_prefLastScanTimestamp) ?? 0.0);
 
+      // คำนวณวันย้อนหลัง (จำกัดไม่ให้เกิน 30 วันตามเงื่อนไขผู้ใช้)
+      int effectiveDaysBack = daysBack.clamp(1, 30);
+      DateTime? effectiveStartDate = startDate;
+      if (effectiveStartDate != null) {
+        final diff = DateTime.now().difference(effectiveStartDate).inDays + 1;
+        effectiveDaysBack = diff.clamp(1, 30);
+      } else {
+        effectiveStartDate = DateTime.now().subtract(Duration(days: effectiveDaysBack));
+      }
+
+      final startMs = effectiveStartDate.millisecondsSinceEpoch.toDouble();
+      final endMs = (endDate ?? DateTime.now()).millisecondsSinceEpoch.toDouble();
+
       final dynamic result = await _channel.invokeMethod('scanRecentSlips', {
-        'daysBack': daysBack,
+        'daysBack': effectiveDaysBack,
+        'startTimestamp': startMs,
+        'endTimestamp': endMs,
         'limit': limit,
         'lastScanTimestamp': lastScan,
         'albumName': albumName,
       });
 
       if (result is! List) return [];
+      debugPrint('[SlipScannerBridge] Received ${result.length} candidate slips from native iOS');
 
       final savedKeys = prefs.getStringList(_prefSavedSlipKeys)?.toSet() ?? <String>{};
       final List<ParsedSlip> parsedList = [];
@@ -272,34 +152,42 @@ class SlipScannerBridge {
 
         final rawLines = (item['lines'] as List?)?.map((e) => e.toString()).toList() ?? [];
         final fullText = item['fullText']?.toString() ?? '';
+        final imagePath = item['imagePath']?.toString();
+        final albumName = item['albumName']?.toString();
 
         final parsed = SlipParserService.instance.parse(
           id: id,
           lines: rawLines,
           fullText: fullText,
           fallbackDate: fallbackDate,
+          imagePath: imagePath,
+          albumName: albumName,
         );
 
         if (parsed != null) {
+          // ตรวจสอบว่าวันที่ของสลิปต้องไม่อยู่ก่อน startDate
+          if (effectiveStartDate != null) {
+            final cutoff = DateTime(effectiveStartDate.year, effectiveStartDate.month, effectiveStartDate.day);
+            if (parsed.date.isBefore(cutoff)) {
+              debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped: date ${parsed.date} is before cutoff $cutoff');
+              continue;
+            }
+          }
+
           // คัดกรองรายการที่เคยบันทึกไปแล้วออก (หาก forceAll เป็นจริง ให้แสดงทั้งหมดเพื่อทดสอบ)
           if (forceAll || !savedKeys.contains(parsed.deduplicationKey)) {
             parsedList.add(parsed);
+          } else {
+            debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped (already saved: ${parsed.deduplicationKey})');
           }
         }
       }
 
-      // บนเครื่องจริง: อัปเดต timestamp และคืนเฉพาะรายการจริงที่สแกนเจอ
-      await prefs.setDouble(_prefLastScanTimestamp, DateTime.now().millisecondsSinceEpoch / 1000.0);
-
-      if (parsedList.isEmpty) {
-        // หากในอัลบั้มรูปภาพไม่มีสลิปธนาคารจริงเลย ให้ดึงสลิปตัวอย่างมาแสดงเพื่อให้ทดสอบระบบได้
-        return getMockSlips();
-      }
-
+      debugPrint('[SlipScannerBridge] Successfully parsed ${parsedList.length} valid slips');
       return parsedList;
     } catch (e) {
       debugPrint('Error scanning recent slips on device: $e');
-      return getMockSlips();
+      return [];
     }
   }
 
@@ -316,12 +204,16 @@ class SlipScannerBridge {
 
       final rawLines = (result['lines'] as List?)?.map((e) => e.toString()).toList() ?? [];
       final fullText = result['fullText']?.toString() ?? '';
+      final imagePath = result['imagePath']?.toString() ?? filePath;
+      final albumName = result['albumName']?.toString() ?? 'รูปภาพที่เลือก';
 
       return SlipParserService.instance.parse(
         id: filePath,
         lines: rawLines,
         fullText: fullText,
         fallbackDate: DateTime.now(),
+        imagePath: imagePath,
+        albumName: albumName,
       );
     } catch (e) {
       debugPrint('Error scanning single slip: $e');
@@ -332,14 +224,16 @@ class SlipScannerBridge {
   static const String _prefSlipHistoryReset = 'slip_history_was_reset';
   bool _historyWasReset = false;
 
-  /// รีเซ็ตประวัติการสแกน (สำหรับกรณีผู้ใช้ต้องการเริ่มสแกนใหม่ทั้งหมด)
+  /// รีเซ็ตประวัติการสแกนทั้งหมด (ล้างทั้งแคชคีย์ และ timestamp เพื่อให้ตรวจจับสลิปที่มีอยู่ใหม่ได้ทั้งหมด)
   Future<void> resetScanHistory() async {
     _historyWasReset = true;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_prefSavedSlipKeys);
     await prefs.remove(_prefLastScanTimestamp);
     await prefs.setBool(_prefSlipHistoryReset, true);
-    unscannedCount.value = getMockSlips().length;
+
+    unscannedCount.value = 0;
+    await refreshUnscannedCount();
   }
 
   /// บันทึกคีย์สลิปที่ยืนยันแล้วลง SharedPreferences เพื่อไม่ให้อ่านซ้ำ
@@ -353,6 +247,8 @@ class SlipScannerBridge {
         savedKeys.add(s.deduplicationKey);
       }
       await prefs.setStringList(_prefSavedSlipKeys, savedKeys.toList());
+      // อัปเดต timestamp ล่าสุดหลังจากบันทึกแล้ว
+      await prefs.setDouble(_prefLastScanTimestamp, DateTime.now().millisecondsSinceEpoch / 1000.0);
       await refreshUnscannedCount();
     } catch (e) {
       debugPrint('Error saving slip dedup keys: $e');
@@ -376,22 +272,27 @@ class SlipScannerBridge {
       final dynamic data = jsonDecode(response.body);
       if (data is! List) return 0;
 
-      final prefs = await SharedPreferences.getInstance();
       final savedKeys = prefs.getStringList(_prefSavedSlipKeys)?.toSet() ?? <String>{};
       int restored = 0;
 
       for (var row in data) {
         if (row is! Map) continue;
         final note = row['note']?.toString() ?? '';
-        if (!note.contains('[สลิป')) continue;
-
-        final bank = BankType.detectFromText(note);
+        final bankStr = row['bank']?.toString();
+        final bank = (bankStr != null && bankStr.isNotEmpty)
+            ? BankType.values.cast<BankType?>().firstWhere((b) => b?.name == bankStr, orElse: () => null)
+            : BankType.detectFromText(note);
         if (bank == null) continue;
 
-        // 1. ตรวจหา Ref number จาก note เช่น [Ref:01424518294958102]
-        final refMatch = RegExp(r'\[Ref:([a-zA-Z0-9]+)\]').firstMatch(note);
-        if (refMatch != null && refMatch.group(1) != null) {
-          final refNo = refMatch.group(1)!;
+        // 1. ตรวจหา Ref number จากคอลัมน์ reference_no หรือจาก note เช่น [Ref:01424518294958102]
+        String? refNo = row['reference_no']?.toString();
+        if (refNo == null || refNo.isEmpty) {
+          final refMatch = RegExp(r'\[Ref:([a-zA-Z0-9]+)\]').firstMatch(note);
+          if (refMatch != null && refMatch.group(1) != null) {
+            refNo = refMatch.group(1)!;
+          }
+        }
+        if (refNo != null && refNo.isNotEmpty) {
           final key = '${bank.name}_$refNo';
           if (savedKeys.add(key)) {
             restored++;
@@ -429,16 +330,6 @@ class SlipScannerBridge {
       final prefs = await SharedPreferences.getInstance();
       final savedKeys = prefs.getStringList(_prefSavedSlipKeys)?.toSet() ?? <String>{};
 
-      final bool isSim = await isSimulator();
-      if (isSim) {
-        final mocks = getMockSlips();
-        final remaining = mocks.where((s) => !savedKeys.contains(s.deduplicationKey)).length;
-        // บน Simulator: หากผู้ใช้ยังไม่ได้บันทึก หรือเทสจนหมดแล้ว ให้แสดงจำนวนสลิปจำลองรอเทสเสมอ
-        final count = remaining > 0 ? remaining : mocks.length;
-        unscannedCount.value = count;
-        return count;
-      }
-
       if (!isSupported) {
         unscannedCount.value = 0;
         return 0;
@@ -450,10 +341,13 @@ class SlipScannerBridge {
         return 0;
       }
 
-      final lastScan = prefs.getDouble(_prefLastScanTimestamp) ?? 0.0;
+      final isReset = _historyWasReset || (prefs.getBool(_prefSlipHistoryReset) ?? false);
+      final lastScan = isReset ? 0.0 : (prefs.getDouble(_prefLastScanTimestamp) ?? 0.0);
+      final daysBack = isReset ? 0 : 30;
+
       final dynamic result = await _channel.invokeMethod('scanRecentSlips', {
-        'daysBack': 30,
-        'limit': 120,
+        'daysBack': daysBack,
+        'limit': 50,
         'lastScanTimestamp': lastScan,
         'albumName': 'ALL_BANKS',
       });
@@ -490,7 +384,8 @@ class SlipScannerBridge {
       return count;
     } catch (e) {
       debugPrint('Error refreshing unscanned count: $e');
-      return unscannedCount.value;
+      unscannedCount.value = 0;
+      return 0;
     }
   }
 }

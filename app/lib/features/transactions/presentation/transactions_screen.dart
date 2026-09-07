@@ -12,7 +12,7 @@ import '../../../core/widgets/bank_logo_icon.dart';
 import '../../../core/widgets/shared_icon_selector.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../../core/settings/app_settings.dart';
-import 'slip_scan_dialog.dart';
+import 'slip_scan_date_sheet.dart';
 
 class Message {
   final String text;
@@ -106,19 +106,19 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
   void _handleExternalRefresh() {
     if (mounted) {
-      _loadPastTransactions();
+      _loadPastTransactions(preserveScroll: true);
     }
   }
 
   Future<void> _initData() async {
     _addIntroMessage();
     await _loadQuickSuggestions();
-    await _loadPastTransactions();
+    await _loadPastTransactions(forceScrollToBottom: true);
   }
 
   void _handleDateFilterChanged() {
     if (mounted) {
-      _loadPastTransactions();
+      _loadPastTransactions(forceScrollToBottom: true);
     }
   }
 
@@ -137,6 +137,49 @@ class _TransactionsScreenState extends State<TransactionsScreen>
       'พ.ย.',
       'ธ.ค.',
     ][month - 1];
+  }
+
+  String _formatTinyDate(DateTime dt) {
+    final now = DateTime.now();
+    final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final yesterday = now.subtract(const Duration(days: 1));
+    final isYesterday = dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day;
+    final isSameYear = dt.year == now.year;
+    final isThai = Localizations.localeOf(context).languageCode == 'th';
+
+    final hourStr = dt.hour.toString().padLeft(2, '0');
+    final minStr = dt.minute.toString().padLeft(2, '0');
+    final timeStr = '$hourStr:$minStr';
+
+    if (isThai) {
+      final monthStr = _monthName(dt.month);
+      final yearStr = ((dt.year + 543) % 100).toString().padLeft(2, '0');
+      if (isToday) {
+        return 'วันนี้ (${dt.day} $monthStr) • $timeStr';
+      } else if (isYesterday) {
+        return 'เมื่อวาน (${dt.day} $monthStr) • $timeStr';
+      } else if (isSameYear) {
+        return '${dt.day} $monthStr • $timeStr';
+      } else {
+        return '${dt.day} $monthStr $yearStr • $timeStr';
+      }
+    } else {
+      const enMonths = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      final monthStr = enMonths[dt.month - 1];
+      final yearStr = (dt.year % 100).toString().padLeft(2, '0');
+      if (isToday) {
+        return 'Today (${dt.day} $monthStr) • $timeStr';
+      } else if (isYesterday) {
+        return 'Yesterday (${dt.day} $monthStr) • $timeStr';
+      } else if (isSameYear) {
+        return '${dt.day} $monthStr • $timeStr';
+      } else {
+        return '${dt.day} $monthStr $yearStr • $timeStr';
+      }
+    }
   }
 
   void _addIntroMessage() {
@@ -452,7 +495,15 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     _focusNode.requestFocus();
   }
 
-  Future<void> _loadPastTransactions() async {
+  Future<void> _loadPastTransactions({
+    bool preserveScroll = false,
+    bool forceScrollToBottom = false,
+  }) async {
+    final double? previousScrollOffset =
+        _scrollController.hasClients ? _scrollController.offset : null;
+    final bool wasNearBottom = _scrollController.hasClients &&
+        (_scrollController.position.maxScrollExtent - _scrollController.offset).abs() < 150;
+
     setState(() {
       _isLoading = true;
     });
@@ -552,8 +603,23 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               String msgType = 'expense';
               BankType? detectedBank;
 
-              if (name.startsWith('[สลิป') || name.contains('[สลิป')) {
+              final source = tx['source']?.toString();
+              final bankStr = tx['bank']?.toString();
+              final dreamId = tx['dream_id']?.toString();
+              final fixedId = tx['fixed_expense_id']?.toString();
+              final incomeId = tx['income_source_id']?.toString();
+
+              if (bankStr != null && bankStr.isNotEmpty) {
+                detectedBank = BankType.values.cast<BankType?>().firstWhere(
+                  (b) => b?.name == bankStr,
+                  orElse: () => null,
+                );
+              }
+              if (detectedBank == null && (name.startsWith('[สลิป') || name.contains('[สลิป'))) {
                 detectedBank = BankType.detectFromText(name);
+              }
+
+              if (detectedBank != null || source == 'slip' || name.startsWith('[สลิป') || name.contains('[สลิป')) {
                 final closeBracket = name.indexOf(']');
                 if (closeBracket != -1) {
                   displayName = name.substring(closeBracket + 1).trim();
@@ -561,16 +627,20 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 displayName = displayName.replaceAll(RegExp(r'\[Ref:[^\]]+\]'), '').trim();
                 category = 'รายจ่าย';
                 msgType = 'expense';
-              } else if (name.startsWith('[ออม] หยอดกระปุก: ')) {
-                displayName = name.replaceAll('[ออม] หยอดกระปุก: ', '');
+              } else if (source == 'dream_saving' || dreamId != null || name.startsWith('[ออม]')) {
+                displayName = name
+                    .replaceAll('[ออม] หยอดกระปุก: ', '')
+                    .replaceAll('[ออม] ', '')
+                    .replaceAll('[ออม]', '')
+                    .trim();
                 category = 'เงินออม';
                 msgType = 'dream';
-              } else if (name.startsWith('[รายจ่ายประจำ] ')) {
-                displayName = name.replaceAll('[รายจ่ายประจำ] ', '');
+              } else if (source == 'recurring_expense' || fixedId != null || name.startsWith('[รายจ่ายประจำ]')) {
+                displayName = name.replaceAll('[รายจ่ายประจำ] ', '').replaceAll('[รายจ่ายประจำ]', '').trim();
                 category = 'รายจ่าย';
                 msgType = 'expense';
-              } else if (name.startsWith('[รายรับประจำ] ')) {
-                displayName = name.replaceAll('[รายรับประจำ] ', '');
+              } else if (source == 'recurring_income' || incomeId != null || name.startsWith('[รายรับประจำ]')) {
+                displayName = name.replaceAll('[รายรับประจำ] ', '').replaceAll('[รายรับประจำ]', '').trim();
                 category = 'รายรับ';
                 msgType = 'income';
               } else if (type == 'income') {
@@ -686,6 +756,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     'id': tx['id'],
                     'rawNote': name,
                     'isSlip': isSlipTx,
+                    'bank': bankStr ?? detectedBank?.name,
+                    'reference_no': tx['reference_no'],
+                    'source': source ?? (detectedBank != null ? 'slip' : 'manual'),
+                    'dream_id': dreamId,
                     'transaction_date': dateStr,
                     'name': displayName,
                     'amount': amount,
@@ -710,7 +784,20 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             }
           }
         });
-        _scrollToBottom();
+        if (forceScrollToBottom || (!preserveScroll && wasNearBottom)) {
+          _scrollToBottom(force: forceScrollToBottom);
+        } else if (preserveScroll && previousScrollOffset != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _scrollController.hasClients) {
+              _scrollController.jumpTo(
+                previousScrollOffset.clamp(
+                  0.0,
+                  _scrollController.position.maxScrollExtent,
+                ),
+              );
+            }
+          });
+        }
       } else {
         debugPrint('Failed to load transactions: ${response.statusCode}');
       }
@@ -723,9 +810,17 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     }
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool force = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _scrollController.hasClients) {
+        if (!force) {
+          final max = _scrollController.position.maxScrollExtent;
+          final current = _scrollController.offset;
+          if ((max - current) > 150) {
+            // User has scrolled up to review or edit history; don't auto-scroll down
+            return;
+          }
+        }
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
@@ -738,70 +833,15 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   bool _isScanningSlips = false;
 
   Future<void> _openSlipScanner() async {
-    if (_isScanningSlips) return;
-    setState(() => _isScanningSlips = true);
     HapticFeedback.lightImpact();
-
-    try {
-      final isSim = await SlipScannerBridge.instance.isSimulator();
-      if (!isSim && SlipScannerBridge.instance.isSupported) {
-        final permission = await SlipScannerBridge.instance.requestPermission();
-        if (permission == 'denied') {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  context.tr(
-                    'กรุณาเปิดสิทธิ์เข้าถึงรูปภาพเพื่อสแกนสลิปครับ',
-                    'Please allow photo library access to scan slips',
-                  ),
-                ),
-              ),
-            );
-          }
-          setState(() => _isScanningSlips = false);
-          return;
-        }
-      }
-
-      var slips = await SlipScannerBridge.instance.scanRecentSlips(
-        daysBack: 30,
-        limit: 120,
-        forceAll: true,
-        albumName: 'ALL_BANKS',
-      );
-      if (slips.isEmpty) {
-        slips = SlipScannerBridge.instance.getMockSlips();
-      }
-      if (!mounted) return;
-      SlipScanDialog.show(
-        context,
-        slips: slips,
-        onTransactionsSaved: () {
-          _loadPastTransactions();
-          widget.onTransactionSaved?.call();
-          SlipScannerBridge.instance.refreshUnscannedCount();
-        },
-      );
-    } catch (e) {
-      debugPrint('Error opening slip scanner: $e');
-      if (mounted) {
-        final mockSlips = SlipScannerBridge.instance.getMockSlips();
-        SlipScanDialog.show(
-          context,
-          slips: mockSlips,
-          onTransactionsSaved: () {
-            _loadPastTransactions();
-            widget.onTransactionSaved?.call();
-            SlipScannerBridge.instance.refreshUnscannedCount();
-          },
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isScanningSlips = false);
-      }
-    }
+    SlipScanDateSheet.show(
+      context,
+      onTransactionsSaved: () {
+        _loadPastTransactions(forceScrollToBottom: true);
+        widget.onTransactionSaved?.call();
+        SlipScannerBridge.instance.refreshUnscannedCount();
+      },
+    );
   }
 
   bool _handleUserScroll(UserScrollNotification notification) {
@@ -1050,20 +1090,29 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             final suggestionId = matchedSuggestion['id']?.toString();
             if (msgType == 'expense') {
               fixedExpenseId = suggestionId;
-              finalNote = '[รายจ่ายประจำ] $name';
+              finalNote = name;
             } else if (msgType == 'income') {
               incomeSourceId = suggestionId;
-              finalNote = '[รายรับประจำ] $name';
+              finalNote = name;
             } else if (msgType == 'dream') {
-              finalNote = '[ออม] หยอดกระปุก: $name';
+              finalNote = name;
             }
           }
+
+          final detectedBank = BankType.detectFromText(name);
+          final String source = msgType == 'dream'
+              ? 'dream_saving'
+              : (fixedExpenseId != null
+                  ? 'recurring_expense'
+                  : (incomeSourceId != null ? 'recurring_income' : 'ai_chat'));
 
           final Map<String, dynamic> body = {
             'user_id': _activeUserId,
             'type': type,
             'amount': amount,
             'note': finalNote,
+            'source': source,
+            if (detectedBank != null) 'bank': detectedBank.name,
             'transaction_date': () {
               if (_effectiveDateFilter.value != null) {
                 final now = DateTime.now();
@@ -1087,8 +1136,21 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           if (incomeSourceId != null) {
             body['income_source_id'] = incomeSourceId;
           }
+          if (msgType == 'dream' && matchedSuggestion != null) {
+            final dreamId = matchedSuggestion['id']?.toString();
+            if (dreamId != null) {
+              body['dream_id'] = dreamId;
+            }
+          }
 
-          final response = await _apiClient.post('/transactions', body: body);
+          var response = await _apiClient.post('/transactions', body: body);
+          if (response.statusCode >= 400 && response.body.contains('column')) {
+            final fallbackBody = Map<String, dynamic>.from(body)
+              ..remove('source')
+              ..remove('bank')
+              ..remove('dream_id');
+            response = await _apiClient.post('/transactions', body: fallbackBody);
+          }
 
           if (response.statusCode == 200 || response.statusCode == 201) {
             savedAnyTransaction = true;
@@ -1220,6 +1282,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     'id': createdId,
                     'rawNote': note,
                     'isSlip': false,
+                    'bank': matchedBank?.name,
+                    'source': source,
+                    'transaction_date': body['transaction_date'],
                     'name': name,
                     'amount': amount,
                     'category': category,
@@ -1460,7 +1525,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                                     Navigator.pop(ctx);
                                   }
                                   if (mounted) {
-                                    await _loadPastTransactions();
+                                    await _loadPastTransactions(preserveScroll: true);
                                     await widget.onTransactionSaved?.call();
                                     if (mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1964,13 +2029,26 @@ class _TransactionsScreenState extends State<TransactionsScreen>
       }
 
       if (currentTxId != null && currentTxId.isNotEmpty) {
-        final patchResp = await _apiClient.patch(
+        final patchBody = {
+          'note': updatedNote,
+          'amount': newAmount,
+          if (card['bank'] != null) 'bank': card['bank'],
+          if (card['reference_no'] != null) 'reference_no': card['reference_no'],
+          if (card['source'] != null) 'source': card['source'],
+        };
+        var patchResp = await _apiClient.patch(
           '/transactions?id=eq.$currentTxId',
-          body: {
-            'note': updatedNote,
-            'amount': newAmount,
-          },
+          body: patchBody,
         );
+        if (patchResp.statusCode >= 400 && patchResp.body.contains('column')) {
+          patchResp = await _apiClient.patch(
+            '/transactions?id=eq.$currentTxId',
+            body: {
+              'note': updatedNote,
+              'amount': newAmount,
+            },
+          );
+        }
 
         if (patchResp.statusCode >= 400) {
           await _apiClient.delete('/transactions?id=eq.$currentTxId');
@@ -1979,10 +2057,26 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             'amount': newAmount,
             'type': card['msgType'] == 'income' ? 'income' : 'expense',
             'note': updatedNote,
+            if (card['bank'] != null) 'bank': card['bank'],
+            if (card['reference_no'] != null) 'reference_no': card['reference_no'],
+            if (card['source'] != null) 'source': card['source'],
             if (card['transaction_date'] != null)
               'transaction_date': card['transaction_date'],
           };
-          final postResp = await _apiClient.post('/transactions', body: postBody);
+          var postResp = await _apiClient.post('/transactions', body: postBody);
+          if (postResp.statusCode >= 400 && postResp.body.contains('column')) {
+            postResp = await _apiClient.post(
+              '/transactions',
+              body: {
+                'user_id': _activeUserId,
+                'amount': newAmount,
+                'type': card['msgType'] == 'income' ? 'income' : 'expense',
+                'note': updatedNote,
+                if (card['transaction_date'] != null)
+                  'transaction_date': card['transaction_date'],
+              },
+            );
+          }
           try {
             final parsed = jsonDecode(postResp.body);
             if (parsed is List && parsed.isNotEmpty) {
@@ -1998,10 +2092,26 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           'amount': newAmount,
           'type': card['msgType'] == 'income' ? 'income' : 'expense',
           'note': updatedNote,
+          if (card['bank'] != null) 'bank': card['bank'],
+          if (card['reference_no'] != null) 'reference_no': card['reference_no'],
+          if (card['source'] != null) 'source': card['source'],
           if (card['transaction_date'] != null)
             'transaction_date': card['transaction_date'],
         };
-        final postResp = await _apiClient.post('/transactions', body: postBody);
+        var postResp = await _apiClient.post('/transactions', body: postBody);
+        if (postResp.statusCode >= 400 && postResp.body.contains('column')) {
+          postResp = await _apiClient.post(
+            '/transactions',
+            body: {
+              'user_id': _activeUserId,
+              'amount': newAmount,
+              'type': card['msgType'] == 'income' ? 'income' : 'expense',
+              'note': updatedNote,
+              if (card['transaction_date'] != null)
+                'transaction_date': card['transaction_date'],
+            },
+          );
+        }
         try {
           final parsed = jsonDecode(postResp.body);
           if (parsed is List && parsed.isNotEmpty) {
@@ -2029,6 +2139,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
       final amount = (card['amount'] as num?)?.toDouble() ?? 0.0;
       final category = card['category'] ?? 'รายจ่าย';
       final msgType = card['msgType'] as String? ?? 'expense';
+      final cardDate = DateTime.tryParse(card['transaction_date']?.toString() ?? '')?.toLocal() ?? message.timestamp;
 
       final bool hasBudget = card['hasBudget'] as bool? ?? false;
       final double budget = (card['budget'] as num?)?.toDouble() ?? 0.0;
@@ -2143,28 +2254,61 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (bank != null) ...[
-                        Row(
-                          children: [
-                            BankLogoIcon(
-                              bank: bank,
-                              size: 16,
-                              showShadow: false,
-                              showBorder: false,
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              bank.displayName,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Color(bank.brandColorValue),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          if (bank != null)
+                            Expanded(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  BankLogoIcon(
+                                    bank: bank,
+                                    size: 16,
+                                    showShadow: false,
+                                    showBorder: false,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Flexible(
+                                    child: Text(
+                                      bank.displayName,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(bank.brandColorValue),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                      ],
+                            )
+                          else
+                            const Spacer(),
+                          const SizedBox(width: 6),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.access_time_rounded,
+                                size: 10,
+                                color: context.secondaryTextColor.withValues(alpha: 0.6),
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                _formatTinyDate(cardDate),
+                                style: TextStyle(
+                                  fontFamily: 'SukhumvitSet',
+                                  fontSize: 9.0,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.secondaryTextColor.withValues(alpha: 0.75),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -2265,32 +2409,54 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               bottomRight: Radius.circular(isUser ? 4 : 16),
             ),
           ),
-          child: message.isThinking
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
+          child: Column(
+            crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              message.isThinking
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          message.text,
+                          style: TextStyle(
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF475569),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
                       message.text,
                       style: TextStyle(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFF94A3B8)
-                            : const Color(0xFF475569),
-                        fontSize: 13,
+                        color: isUser
+                            ? Colors.white
+                            : (Theme.of(context).brightness == Brightness.dark
+                                  ? const Color(0xFFE2E8F0)
+                                  : const Color(0xFF1E293B)),
+                        fontSize: isUser ? 14 : 13,
                       ),
                     ),
-                  ],
-                )
-              : Text(
-                  message.text,
+              if (!message.isThinking) ...[
+                const SizedBox(height: 3),
+                Text(
+                  _formatTinyDate(message.timestamp),
                   style: TextStyle(
+                    fontFamily: 'SukhumvitSet',
+                    fontSize: 9.0,
+                    fontWeight: FontWeight.w500,
                     color: isUser
-                        ? Colors.white
+                        ? Colors.white.withValues(alpha: 0.70)
                         : (Theme.of(context).brightness == Brightness.dark
-                              ? const Color(0xFFE2E8F0)
-                              : const Color(0xFF1E293B)),
-                    fontSize: isUser ? 14 : 13,
+                            ? const Color(0xFF64748B)
+                            : const Color(0xFF94A3B8)),
                   ),
                 ),
+              ],
+            ],
+          ),
         ),
       ),
     );

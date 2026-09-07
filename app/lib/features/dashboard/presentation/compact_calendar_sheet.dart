@@ -849,7 +849,9 @@ class _TransactionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rawNote = transaction['note']?.toString() ?? 'รายการ';
-    final saving = rawNote.startsWith('[ออม]');
+    final source = transaction['source']?.toString();
+    final dreamId = transaction['dream_id']?.toString();
+    final saving = source == 'dream_saving' || dreamId != null || rawNote.startsWith('[ออม]');
     final income = transaction['type'] == 'income';
     final color = saving
         ? const Color(0xFF8B5CF6)

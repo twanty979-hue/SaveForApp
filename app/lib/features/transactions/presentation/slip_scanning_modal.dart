@@ -116,41 +116,7 @@ class _SlipScanningModalState extends State<SlipScanningModal>
 
     await Future<void>.delayed(const Duration(milliseconds: 400));
 
-    final isSim = await SlipScannerBridge.instance.isSimulator();
-    if (isSim) {
-      setState(() {
-        _phase = ScanPhase.scanning;
-        _statusMessage = context.tr(
-          'กำลังสแกนสลิปตัวอย่างทุกธนาคาร (Simulator)...',
-          'Scanning mock slips from all banks (Simulator)...',
-        );
-      });
-      await Future<void>.delayed(const Duration(milliseconds: 700));
-      if (!mounted) return;
-      final mockSlips = SlipScannerBridge.instance.getMockSlips();
-      setState(() {
-        _detectedSlips = mockSlips;
-        _phase = ScanPhase.completed;
-        _countAnimation = Tween<double>(
-          begin: 0,
-          end: mockSlips.length.toDouble(),
-        ).animate(
-          CurvedAnimation(parent: _countController, curve: Curves.easeOutBack),
-        );
-      });
-      _countController.forward(from: 0);
-      await Future.delayed(const Duration(milliseconds: 1400));
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      SlipScanDialog.show(
-        context,
-        slips: mockSlips,
-        onTransactionsSaved: widget.onTransactionsSaved,
-      );
-      return;
-    }
-
-    // บนเครื่องจริง: ขอสิทธิ์ Photo จริง
+    // ขอสิทธิ์ Photo จริง (ใช้งานระบบสแกนจริง 100%)
     final permission = await SlipScannerBridge.instance.requestPermission();
     if (!mounted) return;
 
@@ -175,8 +141,8 @@ class _SlipScanningModalState extends State<SlipScanningModal>
 
     try {
       final slips = await SlipScannerBridge.instance.scanRecentSlips(
-        daysBack: 30,
-        limit: 120,
+        daysBack: 0,
+        limit: 50,
         forceAll: true,
         albumName: 'ALL_BANKS',
       );
@@ -591,30 +557,7 @@ class _SlipScanningModalState extends State<SlipScanningModal>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  // ปุ่มทดสอบด้วยสลิปจำลอง
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.tonalIcon(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        SlipScanDialog.show(
-                          context,
-                          slips: SlipScannerBridge.instance.getMockSlips(),
-                          onTransactionsSaved: widget.onTransactionsSaved,
-                        );
-                      },
-                      icon: const Icon(Icons.science_rounded, size: 18),
-                      label: Text(
-                        context.tr('ทดสอบด้วยสลิปจำลอง 7 รายการ', 'Test 7 Mock Slips'),
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                      ),
-                      style: FilledButton.styleFrom(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                    ),
-                  ),
+
                   const SizedBox(height: 8),
                   // ปุ่มเลือกภาพทดสอบเอง
                   SizedBox(

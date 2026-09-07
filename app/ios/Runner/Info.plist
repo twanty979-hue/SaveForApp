@@ -58,6 +58,8 @@
 	<string>SaveFor uses the camera to capture receipt images.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>SaveFor uses your photo library to find receipt images in your selected bank albums.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>SaveFor uses your photo library to save and manage receipt images.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>SaveFor uses Face ID or Touch ID to protect your app.</string>
 	<key>NSLocalNetworkUsageDescription</key>

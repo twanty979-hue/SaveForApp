@@ -60,6 +60,9 @@ type transactionItem struct {
 	TransactionDate string  `json:"transaction_date"`
 	FixedExpenseID  any     `json:"fixed_expense_id"`
 	IncomeSourceID  any     `json:"income_source_id"`
+	DreamID         any     `json:"dream_id"`
+	Source          string  `json:"source"`
+	Bank            string  `json:"bank"`
 }
 
 func handleNotificationDeviceToken(c *gin.Context) {
@@ -351,10 +354,15 @@ func matchedRecurringAmount(transactions []transactionItem, item recurringItem, 
 
 func savedForDreamThisMonth(transactions []transactionItem, dream dreamItem) float64 {
 	needle := normalizeName("[ออม] หยอดกระปุก: " + dream.Title)
+	cleanDreamTitle := normalizeName(dream.Title)
 	total := 0.0
 	for _, tx := range transactions {
-		if tx.UserID == dream.UserID && tx.Type == "expense" && normalizeName(tx.Note) == needle {
-			total += tx.Amount
+		if tx.UserID == dream.UserID && tx.Type == "expense" {
+			linkedDreamID := valueString(tx.DreamID)
+			cleanNote := normalizeName(tx.Note)
+			if (linkedDreamID != "" && linkedDreamID == dream.ID) || cleanNote == needle || cleanNote == cleanDreamTitle {
+				total += tx.Amount
+			}
 		}
 	}
 	return total

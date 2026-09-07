@@ -17,9 +17,9 @@ import 'compact_calendar_sheet.dart';
 import 'finance_dashboard_screen.dart';
 import 'package:app/core/settings/app_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/services/slip_parser_service.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
 import '../../transactions/presentation/slip_scan_dialog.dart';
+import '../../transactions/presentation/slip_scan_date_sheet.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -48,6 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     null,
   );
   final ValueNotifier<int> _transactionsRefreshNotifier = ValueNotifier<int>(0);
+  bool _isScanningSlip = false;
 
   @override
   void initState() {
@@ -84,7 +85,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       final slips = await SlipScannerBridge.instance.scanRecentSlips(
         daysBack: 30,
-        limit: 120,
+        limit: 20,
         forceAll: false,
         albumName: 'ALL_BANKS',
       );
@@ -176,8 +177,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return context.tr('บัญชีของฉัน', 'My account');
   }
 
-  Future<void> _fetchHeaderTotals() async {
-    _transactionsRefreshNotifier.value++;
+  Future<void> _fetchHeaderTotals({bool refreshChat = true}) async {
+    if (refreshChat) {
+      _transactionsRefreshNotifier.value++;
+    }
     try {
       final response = await _apiClient.get(
         '/transactions?user_id=eq.$_activeUserId',
@@ -294,7 +297,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       inputKey: _inputKey,
                       dateFilter: _chatDateFilter,
                       refreshNotifier: _transactionsRefreshNotifier,
-                      onTransactionSaved: _fetchHeaderTotals,
+                      onTransactionSaved: () => _fetchHeaderTotals(refreshChat: false),
                     ),
                   ),
                   Positioned(
@@ -418,80 +421,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             valueListenable:
                                 SlipScannerBridge.instance.unscannedCount,
                             builder: (context, unscannedCount, _) => Tooltip(
-                              message: unscannedCount > 0
-                                  ? context.tr(
-                                      'พบสลิปยังไม่ได้สแกน $unscannedCount รายการ',
-                                      'Found $unscannedCount unscanned slips',
-                                    )
-                                  : context.tr(
-                                      'สแกนสลิปธนาคาร',
-                                      'Scan bank slips',
-                                    ),
+                              message: _isScanningSlip
+                                  ? context.tr('กำลังสแกนสลิป...', 'Scanning slips...')
+                                  : (unscannedCount > 0
+                                      ? context.tr(
+                                          'พบสลิปยังไม่ได้สแกน $unscannedCount รายการ',
+                                          'Found $unscannedCount unscanned slips',
+                                        )
+                                      : context.tr(
+                                          'สแกนสลิปธนาคาร',
+                                          'Scan bank slips',
+                                        )),
                               child: InkWell(
-                                borderRadius: BorderRadius.circular(13),
-                                onTap: () async {
+                                borderRadius: BorderRadius.circular(15),
+                                onTap: () {
                                   HapticFeedback.lightImpact();
-                                  final isSim = await SlipScannerBridge.instance.isSimulator();
-                                  if (!isSim && SlipScannerBridge.instance.isSupported) {
-                                    final permission = await SlipScannerBridge.instance.requestPermission();
-                                    if (permission == 'denied') {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              context.tr(
-                                                'กรุณาเปิดสิทธิ์เข้าถึงรูปภาพเพื่อสแกนสลิปครับ',
-                                                'Please allow photo library access to scan slips',
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                      return;
-                                    }
-                                  }
-
-                                  List<ParsedSlip> slips = [];
-                                  try {
-                                    slips = await SlipScannerBridge.instance.scanRecentSlips(
-                                      daysBack: 30,
-                                      limit: 120,
-                                      forceAll: true,
-                                      albumName: 'ALL_BANKS',
-                                    );
-                                  } catch (_) {}
-
-                                  if (slips.isEmpty) {
-                                    slips = SlipScannerBridge.instance.getMockSlips();
-                                  }
-
-                                  if (context.mounted) {
-                                    SlipScanDialog.show(
-                                      context,
-                                      slips: slips,
-                                      onTransactionsSaved: () {
-                                        _fetchHeaderTotals();
-                                        SlipScannerBridge.instance.refreshUnscannedCount();
-                                      },
-                                    );
-                                  }
+                                  SlipScanDateSheet.show(
+                                    context,
+                                    onTransactionsSaved: () {
+                                      _fetchHeaderTotals();
+                                      SlipScannerBridge.instance.refreshUnscannedCount();
+                                    },
+                                  );
                                 },
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  alignment: Alignment.center,
-                                  children: [
-                                    _HeaderIcon(
-                                      icon: Icons.qr_code_scanner_rounded,
-                                      color: AppTheme.primaryColor,
-                                      backgroundColor: AppTheme.secondaryColor.withValues(alpha: 0.8),
-                                    ),
-                                    if (unscannedCount > 0)
-                                      Positioned(
-                                        top: -6,
-                                        right: -6,
-                                        child: _BouncingSlipBadge(count: unscannedCount),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(3.0),
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    alignment: Alignment.center,
+                                    children: [
+                                      _HeaderIcon(
+                                        icon: _isScanningSlip ? null : Icons.qr_code_scanner_rounded,
+                                        color: AppTheme.primaryColor,
+                                        backgroundColor: AppTheme.secondaryColor.withValues(alpha: 0.8),
+                                        child: _isScanningSlip
+                                            ? SizedBox(
+                                                width: 17,
+                                                height: 17,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2.2,
+                                                  color: AppTheme.primaryColor,
+                                                ),
+                                              )
+                                            : null,
                                       ),
-                                  ],
+                                      if (unscannedCount > 0 && !_isScanningSlip)
+                                        Positioned(
+                                          top: -6,
+                                          right: -6,
+                                          child: IgnorePointer(
+                                            child: _BouncingSlipBadge(count: unscannedCount),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -1352,14 +1335,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 class _HeaderIcon extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
   final Color color;
   final Color backgroundColor;
+  final Widget? child;
 
   const _HeaderIcon({
-    required this.icon,
+    this.icon,
     required this.color,
     required this.backgroundColor,
+    this.child,
   });
 
   @override
@@ -1371,7 +1356,9 @@ class _HeaderIcon extends StatelessWidget {
         color: backgroundColor,
         borderRadius: BorderRadius.circular(13),
       ),
-      child: Icon(icon, color: color, size: 19),
+      child: Center(
+        child: child ?? (icon != null ? Icon(icon, color: color, size: 19) : const SizedBox()),
+      ),
     );
   }
 }

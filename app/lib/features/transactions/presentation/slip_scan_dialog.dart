@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,7 +8,10 @@ import '../../../core/services/slip_parser_service.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/bank_logo_icon.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../auth/domain/auth_session.dart';
+import 'no_slips_found_sheet.dart';
+import 'slip_scan_date_sheet.dart';
 
 class SlipScanDialog extends StatefulWidget {
   final List<ParsedSlip> slips;
@@ -214,15 +218,55 @@ class _SlipScanDialogState extends State<SlipScanDialog>
         duration: const Duration(milliseconds: 1400),
       ),
     );
+    final prefs = await SharedPreferences.getInstance();
+    final savedDays = prefs.getInt('pref_slip_scan_selected_days_back') ?? 30;
     final freshSlips = await SlipScannerBridge.instance.scanRecentSlips(
-      daysBack: 30,
-      limit: 120,
+      daysBack: savedDays.clamp(1, 30),
+      limit: 50,
       forceAll: true,
       albumName: 'ALL_BANKS',
     );
     if (!mounted) return;
+
+    if (freshSlips.isEmpty) {
+      if (!context.mounted) return;
+      final navContext = context;
+      Navigator.of(navContext).pop();
+      NoSlipsFoundSheet.show(
+        navContext,
+        onPickImage: () async {
+          final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+          if (picked == null) return;
+          final slip = await SlipScannerBridge.instance.scanSingleImage(picked.path);
+          if (!navContext.mounted) return;
+          if (slip != null) {
+            SlipScanDialog.show(
+              navContext,
+              slips: [slip],
+              onTransactionsSaved: widget.onTransactionsSaved,
+            );
+          } else {
+            ScaffoldMessenger.of(navContext).showSnackBar(
+              SnackBar(
+                content: Text(
+                  navContext.tr('ไม่พบข้อมูลสลิปในรูปที่เลือกครับ', 'No slip found in selected image'),
+                ),
+              ),
+            );
+          }
+        },
+        onResetAndRescan: () {
+          SlipScanDateSheet.show(
+            navContext,
+            onTransactionsSaved: widget.onTransactionsSaved,
+          );
+        },
+      );
+      return;
+    }
+
     setState(() {
-      _slips = freshSlips.isNotEmpty ? freshSlips : SlipScannerBridge.instance.getMockSlips();
+      _slips = freshSlips;
       _currentIndex = 0;
       _scannedCount = 0;
       _isScanning = true;
@@ -361,20 +405,44 @@ class _SlipScanDialogState extends State<SlipScanDialog>
             ? ' [Ref:${slip.referenceNo!.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')}]'
             : '';
         final note = '[สลิป ${slip.bank.displayName}] $titleText$refTag';
-        final response = await _apiClient.post(
-          '/transactions',
-          body: {
-            'user_id': userId,
-            'amount': slip.amount,
-            'type': 'expense',
-            'note': note,
-            'transaction_date': slip.date.toIso8601String(),
+        final cleanRef = (slip.referenceNo != null && slip.referenceNo!.trim().isNotEmpty)
+            ? slip.referenceNo!.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
+            : null;
+        final bodyWithNormalized = {
+          'user_id': userId,
+          'amount': slip.amount,
+          'type': 'expense',
+          'note': note,
+          'bank': slip.bank.name,
+          if (cleanRef != null) 'reference_no': cleanRef,
+          'source': 'slip',
+          'transaction_date': slip.date.toIso8601String(),
+          'metadata': {
+            if (slip.recipient.isNotEmpty) 'recipient': slip.recipient,
+            'bank_display': slip.bank.displayName,
           },
-        );
+        };
+
+        var response = await _apiClient.post('/transactions', body: bodyWithNormalized);
+        // Fallback gracefully if database migration 003 has not been run yet
+        if (response.statusCode >= 400 && response.body.contains('column')) {
+          response = await _apiClient.post(
+            '/transactions',
+            body: {
+              'user_id': userId,
+              'amount': slip.amount,
+              'type': 'expense',
+              'note': note,
+              'transaction_date': slip.date.toIso8601String(),
+            },
+          );
+        }
 
         if (response.statusCode == 200 || response.statusCode == 201) {
           savedSuccessCount++;
           successfulSlips.add(slip);
+        } else {
+          debugPrint('Slip save failed: status=${response.statusCode}, body=${response.body}');
         }
       } catch (e) {
         debugPrint('Error saving slip transaction: $e');
@@ -389,26 +457,51 @@ class _SlipScanDialogState extends State<SlipScanDialog>
     setState(() => _isSaving = false);
     Navigator.of(context).pop();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppTheme.primaryColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              context.tr(
-                'บันทึกสลิปสำเร็จ $savedSuccessCount รายการเรียบร้อยครับ!',
-                'Successfully saved $savedSuccessCount slips!',
+    if (savedSuccessCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  context.tr(
+                    'ไม่สามารถบันทึกรายการได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่ครับ',
+                    'Could not save slips. Please check connection and try again.',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                context.tr(
+                  'บันทึกสลิปสำเร็จ $savedSuccessCount รายการเรียบร้อยครับ!',
+                  'Successfully saved $savedSuccessCount slips!',
+                ),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     widget.onTransactionsSaved?.call();
   }
@@ -484,8 +577,8 @@ class _SlipScanDialogState extends State<SlipScanDialog>
   Widget build(BuildContext context) {
     final palette = AppTheme.currentPalette;
     final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth = math.min(screenWidth * 0.72, 275.0);
-    const cardHeight = 290.0;
+    final cardWidth = math.min(screenWidth * 0.78, 295.0);
+    const cardHeight = 315.0;
     final bool isSummaryPage = _currentIndex == _slips.length;
     final currentSlip = _slips[_currentIndex.clamp(0, _slips.length - 1)];
     final gradientColors = isSummaryPage
@@ -496,17 +589,9 @@ class _SlipScanDialogState extends State<SlipScanDialog>
     return Center(
       child: Material(
         color: Colors.transparent,
-        child: AnimatedBuilder(
-          animation: anim,
-          builder: (context, child) {
-            return Transform.translate(
-              offset: Offset(0, anim.value),
-              child: child,
-            );
-          },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
               // แถบเครื่องมือด้านบน: ล้างประวัติ & สแกนใหม่, เลือกภาพเดี่ยว, ปุ่มปิด
               SizedBox(
                 width: cardWidth + 30,
@@ -576,6 +661,46 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                             ),
                           ),
                         ),
+                        const SizedBox(width: 8),
+                        Tooltip(
+                          message: context.tr('เลือกช่วงวันย้อนหลัง (สูงสุด 30 วัน)', 'Select date range (max 30 days)'),
+                          child: GestureDetector(
+                            onTap: _isScanning
+                                ? null
+                                : () {
+                                    final navContext = context;
+                                    Navigator.of(navContext).pop();
+                                    SlipScanDateSheet.show(
+                                      navContext,
+                                      onTransactionsSaved: widget.onTransactionsSaved,
+                                    );
+                                  },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.92),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(0xFFE4DAC7),
+                                  width: 1.2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.12),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.calendar_month_rounded,
+                                size: 16,
+                                color: Color(0xFF3F3624),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                     Tooltip(
@@ -630,7 +755,10 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                   itemBuilder: (context, index) {
                     final bool isSummary = index == _slips.length;
                     return AnimatedBuilder(
-                      animation: _pageController,
+                      animation: Listenable.merge([
+                        _pageController,
+                        ?_floatController,
+                      ]),
                       builder: (context, child) {
                         double diff = (_currentIndex - index).toDouble();
                         try {
@@ -643,22 +771,35 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                           diff = (_currentIndex - index).toDouble();
                         }
                         final dist = diff.abs().clamp(0.0, 1.0);
+                        // centerWeight: 1.0 เมื่ออยู่กึ่งกลางเต็มใบ, 0.0 เมื่อเป็นการ์ดข้างๆ
+                        final centerWeight = (1.0 - dist).clamp(0.0, 1.0);
+
                         // การ์ดที่อยู่ข้างๆ จะเล็กลง (scale: 0.84) และจางลง เพื่อให้การ์ดตรงกลางเด่นชัด
                         final scale = 1.0 - (dist * 0.16);
                         final opacity = 1.0 - (dist * 0.45);
                         final translateY = dist * 8.0;
+
+                        // การ์ดตรงกลาง: ลอยขึ้น-ลงอย่างมีชีวิตชีวา (Living Float) และเอียงเบาๆ อย่างเป็นธรรมชาติ
+                        // การ์ดข้างๆ (ซ้าย-ขวา): นิ่งสงบ มั่นคง สวยงาม
+                        final floatY = anim.value * centerWeight;
+                        final floatAngle = (_floatController != null
+                            ? math.sin(_floatController!.value * 2 * math.pi) * 0.012 * centerWeight
+                            : 0.0);
 
                         return Center(
                           child: SizedBox(
                             width: cardWidth,
                             height: cardHeight,
                             child: Transform.translate(
-                              offset: Offset(0, translateY),
-                              child: Transform.scale(
-                                scale: scale,
-                                child: Opacity(
-                                  opacity: opacity.clamp(0.45, 1.0),
-                                  child: child,
+                              offset: Offset(0, translateY + floatY),
+                              child: Transform.rotate(
+                                angle: floatAngle,
+                                child: Transform.scale(
+                                  scale: scale,
+                                  child: Opacity(
+                                    opacity: opacity.clamp(0.45, 1.0),
+                                    child: child,
+                                  ),
                                 ),
                               ),
                             ),
@@ -681,29 +822,63 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                 ),
               ),
 
-              // จุดบอกตำแหน่งสลิป (Dots Indicator)
+              // จุดหรือแถบบอกตำแหน่งสลิป (Progress Pill & Dots Indicator)
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(_slips.length + 1, (idx) {
-                  final isCurrent = idx == _currentIndex;
-                  final isSummaryDot = idx == _slips.length;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                    width: isCurrent ? (isSummaryDot ? 18 : 14) : (isSummaryDot ? 7 : 5),
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: isCurrent
-                          ? (isSummaryDot ? const Color(0xFFFBBF24) : Colors.white)
-                          : (isSummaryDot
-                              ? const Color(0xFFFBBF24).withValues(alpha: 0.45)
-                              : Colors.white.withValues(alpha: 0.3)),
-                      borderRadius: BorderRadius.circular(3),
+              if (_slips.length <= 10)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(_slips.length + 1, (idx) {
+                    final isCurrent = idx == _currentIndex;
+                    final isSummaryDot = idx == _slips.length;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                      width: isCurrent ? (isSummaryDot ? 18 : 14) : (isSummaryDot ? 7 : 5),
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: isCurrent
+                            ? (isSummaryDot ? const Color(0xFFFBBF24) : Colors.white)
+                            : (isSummaryDot
+                                ? const Color(0xFFFBBF24).withValues(alpha: 0.45)
+                                : Colors.white.withValues(alpha: 0.3)),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    );
+                  }),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.38),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.20),
+                      width: 1,
                     ),
-                  );
-                }),
-              ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isSummaryPage ? Icons.receipt_long_rounded : Icons.photo_library_outlined,
+                        size: 13,
+                        color: isSummaryPage ? const Color(0xFFFBBF24) : Colors.white70,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isSummaryPage
+                            ? context.tr('สรุปยอดรวม (${_slips.length} ใบ)', 'Summary Total (${_slips.length} slips)')
+                            : context.tr('ใบที่ ${_currentIndex + 1} / ${_slips.length}', 'Slip ${_currentIndex + 1} / ${_slips.length}'),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: isSummaryPage ? const Color(0xFFFDE68A) : Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 10),
 
               // 3. แถบควบคุมด้านล่าง: สถานะกำลังสแกน หรือ ปุ่มบันทึกสลิป 3D
@@ -871,8 +1046,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   // การ์ดใบสุดท้าย: สรุปยอดรวมทั้งหมด พร้อมปุ่มบันทึกทีเดียวจบ
@@ -1591,6 +1765,190 @@ class _SlipScanDialogState extends State<SlipScanDialog>
     );
   }
 
+  void _showFullImagePreview(BuildContext context, ParsedSlip slip) {
+    if (slip.imagePath == null) return;
+    final file = File(slip.imagePath!);
+    if (!file.existsSync()) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+              maxWidth: 400,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFDF6),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: const Color(0xFFEADBBE),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.28),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ส่วนหัว Header ธีมแอปสมุดโน้ตครีมไข่ พร้อมโลโก้ SaveFor ตามคำสั่งนาย
+                Container(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0xFFFFFDF6),
+                        Color(0xFFFAF4DC),
+                        Color(0xFFF5EAC6),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Row(
+                    children: [
+                      // โลโก้แอป SaveFor สุดน่ารัก (แทนที่ไอคอนเดิม)
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: const Color(0xFFEADBBE),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 5,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8.5),
+                          child: Image.asset(
+                            'assets/images/logo_blue.png',
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  context.tr('รูปภาพสลิปต้นฉบับ', 'Original Slip Image'),
+                                  style: const TextStyle(
+                                    color: Color(0xFF243F1A),
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEDF6E5),
+                                    borderRadius: BorderRadius.circular(5),
+                                    border: Border.all(
+                                      color: const Color(0xFFCEE3BA),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    slip.bank.displayName,
+                                    style: const TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF3B6B22),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'จากโฟลเดอร์: ${slip.albumName ?? "แกลเลอรี"}',
+                              style: const TextStyle(
+                                color: Color(0xFF6B8353),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // ปุ่มปิด X กลมมนสไตล์ครีมมินิมอล
+                      GestureDetector(
+                        onTap: () => Navigator.of(ctx).pop(),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.90),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFE4DAC7),
+                              width: 1.2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 16,
+                            color: Color(0xFF3F3624),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, thickness: 1, color: Color(0xFFEADBBE)),
+
+                // พื้นที่แสดงภาพสลิปต้นฉบับ ซูมเข้า-ออกได้ บนพื้นหลังมืดสบายตา
+                Flexible(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+                    child: Container(
+                      color: const Color(0xFF0F172A),
+                      width: double.infinity,
+                      child: InteractiveViewer(
+                        minScale: 0.8,
+                        maxScale: 4.0,
+                        child: Image.file(file),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // ตัวสลิปธนาคารแนวตั้ง สะอาดตา ไม่รก มินิมอล พร้อมแอนิเมชันเลือกและแตะสลับ
   Widget _buildCompactRectangularCard(
     BuildContext context,
@@ -1600,6 +1958,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
   }) {
     final gradientColors = _getBankGradient(slip.bank);
     final isSelected = slip.isSelected;
+    final hasImage = slip.imagePath != null && File(slip.imagePath!).existsSync();
 
     return GestureDetector(
       onTap: () {
@@ -1805,41 +2164,129 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                       ],
                     ),
 
-                    // Amount section (Clean & Big Hero)
-                    Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            context.tr('จำนวนเงิน', 'Amount'),
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white.withValues(alpha: 0.8),
+                    // Amount section + Slip Image Thumbnail Preview
+                    Row(
+                      mainAxisAlignment: hasImage ? MainAxisAlignment.spaceBetween : MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Column(
+                          crossAxisAlignment: hasImage ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  context.tr('จำนวนเงิน', 'Amount'),
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                  ),
+                                ),
+                                if (slip.albumName != null && slip.albumName!.isNotEmpty) ...[
+                                  const SizedBox(width: 5),
+                                  Container(
+                                    constraints: const BoxConstraints(maxWidth: 110),
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.22),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      '📷 ${slip.albumName}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              '-฿${slip.amount.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                letterSpacing: -0.6,
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.black26,
-                                    offset: Offset(0, 2),
-                                    blurRadius: 4,
+                            const SizedBox(height: 2),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                '-฿${slip.amount.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: hasImage ? 25 : 32,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: -0.6,
+                                  shadows: const [
+                                    Shadow(
+                                      color: Colors.black26,
+                                      offset: Offset(0, 2),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (hasImage)
+                          GestureDetector(
+                            onTap: () => _showFullImagePreview(context, slip),
+                            child: Tooltip(
+                              message: context.tr('แตะดูรูปสลิปต้นฉบับ', 'Tap to view original slip'),
+                              child: Stack(
+                                alignment: Alignment.bottomRight,
+                                children: [
+                                  Container(
+                                    width: 52,
+                                    height: 64,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: 0.85),
+                                        width: 1.5,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.3),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(6.5),
+                                      child: Image.file(
+                                        File(slip.imagePath!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) => const Icon(
+                                          Icons.broken_image,
+                                          size: 18,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.65),
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(5),
+                                        bottomRight: Radius.circular(6),
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.zoom_in_rounded,
+                                      size: 11,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
 
                     // Recipient / Custom Note (Editable on tap)
@@ -1951,24 +2398,34 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          '${slip.date.day.toString().padLeft(2, '0')}/${slip.date.month.toString().padLeft(2, '0')}/${slip.date.year} ${slip.date.hour.toString().padLeft(2, '0')}:${slip.date.minute.toString().padLeft(2, '0')} น.',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white.withValues(alpha: 0.85),
-                          ),
-                        ),
-                        if (slip.referenceNo != null && slip.referenceNo!.isNotEmpty)
-                          Text(
-                            'Ref: ${slip.referenceNo!.length > 10 ? '...${slip.referenceNo!.substring(slip.referenceNo!.length - 8)}' : slip.referenceNo!}',
+                        Flexible(
+                          child: Text(
+                            '${slip.date.day.toString().padLeft(2, '0')}/${slip.date.month.toString().padLeft(2, '0')}/${slip.date.year} ${slip.date.hour.toString().padLeft(2, '0')}:${slip.date.minute.toString().padLeft(2, '0')} น.',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 9.5,
-                              fontFamily: 'monospace',
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white.withValues(alpha: 0.75),
+                              color: Colors.white.withValues(alpha: 0.85),
                             ),
                           ),
+                        ),
+                        if (slip.referenceNo != null && slip.referenceNo!.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Ref: ${slip.referenceNo!.length > 10 ? '...${slip.referenceNo!.substring(slip.referenceNo!.length - 8)}' : slip.referenceNo!}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white.withValues(alpha: 0.75),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],

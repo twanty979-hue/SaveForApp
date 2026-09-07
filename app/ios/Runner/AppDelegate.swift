@@ -3,6 +3,22 @@ import UIKit
 import Photos
 import Vision
 
+extension CGImagePropertyOrientation {
+  init(_ uiOrientation: UIImage.Orientation) {
+    switch uiOrientation {
+    case .up: self = .up
+    case .upMirrored: self = .upMirrored
+    case .down: self = .down
+    case .downMirrored: self = .downMirrored
+    case .left: self = .left
+    case .leftMirrored: self = .leftMirrored
+    case .right: self = .right
+    case .rightMirrored: self = .rightMirrored
+    @unknown default: self = .up
+    }
+  }
+}
+
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   override func application(
@@ -43,8 +59,10 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
       let daysBack = args["daysBack"] as? Int ?? 30
       let limit = args["limit"] as? Int ?? 100
       let lastScanTimestamp = args["lastScanTimestamp"] as? Double ?? 0.0
+      let startTimestamp = (args["startTimestamp"] as? Double) ?? 0.0
+      let endTimestamp = (args["endTimestamp"] as? Double) ?? 0.0
       let albumName = args["albumName"] as? String
-      scanRecentSlips(daysBack: daysBack, limit: limit, lastScanTimestamp: lastScanTimestamp, albumName: albumName, result: result)
+      scanRecentSlips(daysBack: daysBack, limit: limit, lastScanTimestamp: lastScanTimestamp, startTimestamp: startTimestamp, endTimestamp: endTimestamp, albumName: albumName, result: result)
     case "scanSingleImage":
       guard let args = call.arguments as? [String: Any],
             let path = args["path"] as? String else {
@@ -111,19 +129,10 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
   }
 
   private static let bankRules: [BankAlbumRule] = [
-    BankAlbumRule(name: "K PLUS", keywords: ["k plus", "kplus", "k-plus"], bankTag: "K PLUS กสิกรไทย"),
-    BankAlbumRule(name: "SCB EASY", keywords: ["scb easy", "scbeasy", "scb"], bankTag: "SCB EASY ไทยพาณิชย์"),
-    BankAlbumRule(name: "Krungsri", keywords: ["krungsri", "kma", "bay"], bankTag: "Krungsri กรุงศรี"),
-    BankAlbumRule(name: "TrueMoney", keywords: ["truemoney", "true money", "ทรูมันนี่"], bankTag: "TrueMoney ทรูมันนี่"),
-    BankAlbumRule(name: "Krungthai NEXT", keywords: ["krungthai", "ktb", "เป๋าตัง", "next"], bankTag: "Krungthai กรุงไทย"),
-    BankAlbumRule(name: "ttb touch", keywords: ["ttb", "tmb", "ธนชาต"], bankTag: "ttb ทีทีบี"),
-    BankAlbumRule(name: "Bangkok Bank", keywords: ["bangkok bank", "bbl", "bualuang"], bankTag: "Bangkok Bank กรุงเทพ"),
-    BankAlbumRule(name: "MyMo", keywords: ["mymo", "gsb", "ออมสิน"], bankTag: "MyMo ออมสิน"),
-    BankAlbumRule(name: "UOB", keywords: ["uob", "ยูโอบี", "tmrw"], bankTag: "UOB ยูโอบี"),
-    BankAlbumRule(name: "BAAC", keywords: ["baac", "ธ.ก.ส.", "ธกส", "a-mobile"], bankTag: "BAAC ธ.ก.ส."),
-    BankAlbumRule(name: "CIMB", keywords: ["cimb", "octo"], bankTag: "CIMB ซีไอเอ็มบี"),
-    BankAlbumRule(name: "KKP", keywords: ["kkp", "dime", "เกียรตินาคิน"], bankTag: "KKP เกียรตินาคินภัทร"),
-    BankAlbumRule(name: "LHB", keywords: ["lhb", "lh bank", "แลนด์ แอนด์ เฮ้าส์"], bankTag: "LH Bank แลนด์แอนด์เฮ้าส์"),
+    BankAlbumRule(name: "K PLUS", keywords: ["k plus", "kplus", "k-plus", "kasikorn", "กสิกร"], bankTag: "K PLUS กสิกรไทย"),
+    BankAlbumRule(name: "SCB EASY", keywords: ["scb easy", "scbeasy", "scb", "แม่มณี", "ไทยพาณิชย์"], bankTag: "SCB EASY ไทยพาณิชย์"),
+    BankAlbumRule(name: "Krungsri", keywords: ["krungsri", "kma", "bay", "กรุงศรี"], bankTag: "Krungsri กรุงศรี"),
+    BankAlbumRule(name: "TrueMoney", keywords: ["truemoney", "true money", "ทรูมันนี่", "tmn"], bankTag: "TrueMoney ทรูมันนี่"),
   ]
 
   private func getAvailableBankAlbums(result: @escaping FlutterResult) {
@@ -158,14 +167,42 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
     }
   }
 
-  private func scanRecentSlips(daysBack: Int, limit: Int, lastScanTimestamp: Double, albumName: String?, result: @escaping FlutterResult) {
+  private static var isScanning = false
+  private static let scanLock = NSLock()
+
+  private func scanRecentSlips(daysBack: Int, limit: Int, lastScanTimestamp: Double, startTimestamp: Double, endTimestamp: Double, albumName: String?, result: @escaping FlutterResult) {
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       guard let self = self else { return }
+
+      SlipScannerPlugin.scanLock.lock()
+      if SlipScannerPlugin.isScanning {
+        SlipScannerPlugin.scanLock.unlock()
+        DispatchQueue.main.async {
+          result([])
+        }
+        return
+      }
+      SlipScannerPlugin.isScanning = true
+      SlipScannerPlugin.scanLock.unlock()
+
+      defer {
+        SlipScannerPlugin.scanLock.lock()
+        SlipScannerPlugin.isScanning = false
+        SlipScannerPlugin.scanLock.unlock()
+      }
 
       let fetchOptions = PHFetchOptions()
       var predicates: [NSPredicate] = []
 
-      if lastScanTimestamp > 0 {
+      // When startTimestamp is provided, filter precisely within date range
+      if startTimestamp > 0 {
+        let startDate = Date(timeIntervalSince1970: startTimestamp / 1000.0)
+        predicates.append(NSPredicate(format: "creationDate >= %@", startDate as NSDate))
+        if endTimestamp > 0 {
+          let endDate = Date(timeIntervalSince1970: endTimestamp / 1000.0)
+          predicates.append(NSPredicate(format: "creationDate <= %@", endDate as NSDate))
+        }
+      } else if lastScanTimestamp > 0 {
         let lastDate = Date(timeIntervalSince1970: lastScanTimestamp)
         predicates.append(NSPredicate(format: "creationDate > %@", lastDate as NSDate))
       } else if daysBack > 0 {
@@ -180,15 +217,16 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
 
       fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
 
-      // Search matching bank albums
+      // Search matching bank albums from both User Albums and Smart Albums
       var targetCollections: [(collection: PHAssetCollection, tag: String)] = []
       let userAlbums = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: nil)
+      let smartAlbums = PHAssetCollection.fetchAssetCollections(with: .smartAlbum, subtype: .any, options: nil)
 
       let specificTarget = (albumName != nil && !albumName!.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && albumName != "ALL_BANKS")
           ? albumName!.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
           : nil
 
-      userAlbums.enumerateObjects { collection, _, _ in
+      let checkCollection: (PHAssetCollection) -> Void = { collection in
         guard let title = collection.localizedTitle else { return }
         let lower = title.lowercased()
 
@@ -200,7 +238,7 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
             targetCollections.append((collection, matchedTag))
           }
         } else {
-          // Scan ALL matching bank albums (K PLUS, SCB EASY, Krungsri, TrueMoney, etc.)
+          // Scan matching bank albums (K PLUS, SCB EASY, Krungsri, TrueMoney, etc.)
           for rule in SlipScannerPlugin.bankRules {
             if rule.keywords.contains(where: { kw in lower == kw || lower.contains(kw) }) {
               targetCollections.append((collection, rule.bankTag))
@@ -210,24 +248,22 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
         }
       }
 
-      // Collect assets from all target bank albums
+      userAlbums.enumerateObjects { col, _, _ in checkCollection(col) }
+      smartAlbums.enumerateObjects { col, _, _ in checkCollection(col) }
+
+      // Collect assets ONLY from the 4 dedicated bank albums (K PLUS, SCB EASY, Krungsri, TrueMoney)
       var candidateAssets: [(asset: PHAsset, tag: String, albumTitle: String)] = []
+      var seenIds = Set<String>()
+
       for item in targetCollections {
         let resultAssets = PHAsset.fetchAssets(in: item.collection, options: fetchOptions)
-        resultAssets.enumerateObjects { asset, _, _ in
-          candidateAssets.append((asset: asset, tag: item.tag, albumTitle: item.collection.localizedTitle ?? item.tag))
-        }
-      }
-
-      // If no dedicated bank album was found, fallback to camera roll, or also include recent Camera Roll assets to capture banks without dedicated albums
-      let generalResult = PHAsset.fetchAssets(with: .image, options: fetchOptions)
-      var seenIds = Set(candidateAssets.map { $0.asset.localIdentifier })
-      let generalLimit = min(generalResult.count, max(limit, 80))
-      for i in 0..<generalLimit {
-        let asset = generalResult.object(at: i)
-        if !seenIds.contains(asset.localIdentifier) {
-          candidateAssets.append((asset: asset, tag: "", albumTitle: "คลังภาพ"))
-          seenIds.insert(asset.localIdentifier)
+        let count = min(resultAssets.count, 50)
+        for i in 0..<count {
+          let asset = resultAssets.object(at: i)
+          if !seenIds.contains(asset.localIdentifier) {
+            candidateAssets.append((asset: asset, tag: item.tag, albumTitle: item.collection.localizedTitle ?? item.tag))
+            seenIds.insert(asset.localIdentifier)
+          }
         }
       }
 
@@ -238,11 +274,13 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
         return dateA > dateB
       }
 
-      // Apply limit
-      let maxLimit = limit > 0 ? limit : 120
-      if candidateAssets.count > maxLimit {
-        candidateAssets = Array(candidateAssets.prefix(maxLimit))
+      // Safe limit cap (allow up to 100 candidates per scan)
+      let safeCap = min(max(limit, 30), 100)
+      if candidateAssets.count > safeCap {
+        candidateAssets = Array(candidateAssets.prefix(safeCap))
       }
+
+      print("[SlipScanner] Inspecting \(candidateAssets.count) candidate photos from 4 bank albums: \(targetCollections.map { $0.tag })...")
 
       var detectedSlips: [[String: Any]] = []
       let imageManager = PHImageManager.default()
@@ -252,41 +290,51 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
       requestOptions.deliveryMode = .highQualityFormat
       requestOptions.isNetworkAccessAllowed = true
 
+      let targetSize = CGSize(width: 1080, height: 1920)
+
       for item in candidateAssets {
-        let asset = item.asset
-        let tag = item.tag
-        let isFromDedicatedAlbum = !tag.isEmpty
+        autoreleasepool {
+          let asset = item.asset
+          let tag = item.tag
+          let isFromDedicatedAlbum = !tag.isEmpty
 
-        let targetSize = CGSize(width: 1242, height: 2208)
-        imageManager.requestImage(for: asset, targetSize: targetSize, contentMode: .aspectFit, options: requestOptions) { image, _ in
-          guard let image = image, let cgImage = image.cgImage else { return }
-          if let lines = self.recognizeText(from: cgImage) {
-            let fullText = lines.joined(separator: "\n")
+          imageManager.requestImage(for: asset, targetSize: targetSize, contentMode: .aspectFit, options: requestOptions) { image, _ in
+            guard let image = image else { return }
+            if let lines = self.recognizeText(from: image) {
+              let fullText = lines.joined(separator: "\n")
 
-            // Inside dedicated bank albums (K PLUS, SCB EASY, Krungsri, TrueMoney), all photos are receipts!
-            let isSlip = isFromDedicatedAlbum
-                ? (self.isLikelyBankSlip(text: fullText) || self.containsSlipCharacteristics(text: fullText, lines: lines))
-                : self.isLikelyBankSlip(text: fullText)
+              let isSlip = self.isLikelyBankSlip(text: fullText) || self.containsSlipCharacteristics(text: fullText, lines: lines)
 
-            if isSlip {
-              var slipMap: [String: Any] = [:]
-              slipMap["id"] = asset.localIdentifier
-              slipMap["creationDate"] = (asset.creationDate?.timeIntervalSince1970 ?? 0) * 1000.0
-              slipMap["lines"] = lines
+              if isSlip {
+                print("[SlipScanner] Detected slip in \(item.albumTitle)! lines: \(lines.count), sample: \(lines.prefix(2).joined(separator: " | "))")
+                var slipMap: [String: Any] = [:]
+                slipMap["id"] = asset.localIdentifier
+                slipMap["creationDate"] = (asset.creationDate?.timeIntervalSince1970 ?? 0) * 1000.0
+                slipMap["lines"] = lines
 
-              // Prepend bank tag if from a dedicated bank album so parser gets 100% bank accuracy
-              var enrichedText = fullText
-              if isFromDedicatedAlbum {
-                enrichedText = "\(tag)\n\(fullText)"
+                var enrichedText = fullText
+                if isFromDedicatedAlbum {
+                  enrichedText = "\(tag)\n\(fullText)"
+                }
+
+                slipMap["fullText"] = enrichedText
+                slipMap["albumName"] = item.albumTitle
+
+                if let data = image.jpegData(compressionQuality: 0.7) {
+                  let cleanId = asset.localIdentifier.replacingOccurrences(of: "[^a-zA-Z0-9]", with: "_", options: .regularExpression)
+                  let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("slip_\(cleanId).jpg")
+                  try? data.write(to: fileURL)
+                  slipMap["imagePath"] = fileURL.path
+                }
+
+                detectedSlips.append(slipMap)
               }
-
-              slipMap["fullText"] = enrichedText
-              slipMap["albumName"] = item.albumTitle
-              detectedSlips.append(slipMap)
             }
           }
         }
       }
+
+      print("[SlipScanner] Total slips successfully recognized: \(detectedSlips.count)")
 
       DispatchQueue.main.async {
         result(detectedSlips)
@@ -300,6 +348,7 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
       let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
       return trimmed.range(of: #"[0-9,]+\.[0-9]{2}"#, options: .regularExpression) != nil
     }
+
     let hasTransferKeywords = lower.contains("สำเร็จ") ||
                               lower.contains("โอน") ||
                               lower.contains("ชำระ") ||
@@ -308,54 +357,73 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
                               lower.contains("baht") ||
                               lower.contains("thb") ||
                               lower.contains("ref") ||
+                              lower.contains("อ้างอิง") ||
                               lower.contains("เลขที่") ||
                               lower.contains("วันที่") ||
                               lower.contains("qr") ||
-                              lower.contains("to") ||
-                              lower.contains("from") ||
                               lower.contains("จำนวนเงิน") ||
                               lower.contains("จํานวนเงิน") ||
                               lower.contains("ยอดเงิน") ||
                               lower.contains("ยอดชำระ") ||
+                              lower.contains("ยอดโอน") ||
                               lower.contains("truemoney")
-    return hasAmount || hasTransferKeywords
+
+    return hasAmount && hasTransferKeywords
   }
 
   private func scanSingleImage(path: String, result: @escaping FlutterResult) {
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       guard let self = self else { return }
-      guard let image = UIImage(contentsOfFile: path), let cgImage = image.cgImage else {
-        DispatchQueue.main.async {
-          result(FlutterError(code: "LOAD_FAILED", message: "Failed to load image from path", details: nil))
+      autoreleasepool {
+        guard let image = UIImage(contentsOfFile: path) else {
+          DispatchQueue.main.async {
+            result(FlutterError(code: "LOAD_FAILED", message: "Failed to load image from path", details: nil))
+          }
+          return
         }
-        return
-      }
 
-      if let lines = self.recognizeText(from: cgImage) {
-        let fullText = lines.joined(separator: "\n")
-        var slipMap: [String: Any] = [:]
-        slipMap["id"] = path
-        slipMap["creationDate"] = Date().timeIntervalSince1970 * 1000.0
-        slipMap["lines"] = lines
-        slipMap["fullText"] = fullText
-        slipMap["isSlip"] = self.isLikelyBankSlip(text: fullText)
-        DispatchQueue.main.async {
-          result(slipMap)
-        }
-      } else {
-        DispatchQueue.main.async {
-          result(nil)
+        if let lines = self.recognizeText(from: image) {
+          let fullText = lines.joined(separator: "\n")
+          let isSlip = self.isLikelyBankSlip(text: fullText) || self.containsSlipCharacteristics(text: fullText, lines: lines)
+          var slipMap: [String: Any] = [:]
+          slipMap["id"] = path
+          slipMap["creationDate"] = Date().timeIntervalSince1970 * 1000.0
+          slipMap["lines"] = lines
+          slipMap["fullText"] = fullText
+          slipMap["isSlip"] = isSlip
+          slipMap["imagePath"] = path
+          slipMap["albumName"] = "รูปภาพที่เลือก"
+          print("[SlipScanner] Single image scanned, lines: \(lines.count), isSlip: \(isSlip)")
+          DispatchQueue.main.async {
+            result(slipMap)
+          }
+        } else {
+          DispatchQueue.main.async {
+            result(nil)
+          }
         }
       }
     }
   }
 
-  private func recognizeText(from cgImage: CGImage) -> [String]? {
+  private func recognizeText(from image: UIImage) -> [String]? {
+    var cgImage = image.cgImage
+    if cgImage == nil, let ci = image.ciImage {
+      let ctx = CIContext()
+      cgImage = ctx.createCGImage(ci, from: ci.extent)
+    }
+    guard let validCgImage = cgImage else { return nil }
+
+    let orientation = CGImagePropertyOrientation(image.imageOrientation)
     var detectedLines: [String] = []
-    let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+    let requestHandler = VNImageRequestHandler(cgImage: validCgImage, orientation: orientation, options: [:])
 
     let request = VNRecognizeTextRequest { request, error in
-      guard error == nil, let observations = request.results as? [VNRecognizedTextObservation] else {
+      if let error = error {
+        print("[SlipScanner] Vision OCR error: \(error)")
+        return
+      }
+      guard let observations = request.results as? [VNRecognizedTextObservation] else {
         return
       }
       for observation in observations {
@@ -368,17 +436,31 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
     }
 
     request.recognitionLevel = .accurate
+    request.usesLanguageCorrection = false
+
     if #available(iOS 16.0, *) {
-      request.recognitionLanguages = ["th-TH", "en-US"]
+      request.automaticallyDetectsLanguage = true
+    }
+
+    if let supported = try? VNRecognizeTextRequest.supportedRecognitionLanguages(for: .accurate, revision: request.revision) {
+      var langs: [String] = []
+      for preferred in ["th-TH", "th", "en-US", "en"] {
+        if supported.contains(preferred) && !langs.contains(preferred) {
+          langs.append(preferred)
+        }
+      }
+      if !langs.isEmpty {
+        request.recognitionLanguages = langs
+      }
     } else {
       request.recognitionLanguages = ["en-US"]
     }
-    request.usesLanguageCorrection = false
 
     do {
       try requestHandler.perform([request])
       return detectedLines
     } catch {
+      print("[SlipScanner] Vision perform error: \(error)")
       return nil
     }
   }
@@ -386,10 +468,10 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
   private func isLikelyBankSlip(text: String) -> Bool {
     let lower = text.lowercased()
 
-    let hasKBank = lower.contains("กสิกรไทย") || lower.contains("kbank") || lower.contains("k plus") || lower.contains("kbiz")
-    let hasSCB = lower.contains("ไทยพาณิชย์") || lower.contains("scb") || lower.contains("easy")
+    let hasKBank = lower.contains("กสิกร") || lower.contains("kbank") || lower.contains("k plus") || lower.contains("kbiz") || lower.contains("kasikorn")
+    let hasSCB = lower.contains("ไทยพาณิชย์") || lower.contains("scb") || lower.contains("แม่มณี") || lower.contains("siam commercial") || (lower.contains("easy") && (lower.contains("โอน") || lower.contains("สำเร็จ")))
     let hasKrungsri = lower.contains("กรุงศรี") || lower.contains("krungsri") || lower.contains("kma") || lower.contains("bay")
-    let hasKTB = lower.contains("กรุงไทย") || lower.contains("krungthai") || lower.contains("ktb") || lower.contains("next") || lower.contains("เป๋าตัง")
+    let hasKTB = lower.contains("กรุงไทย") || lower.contains("krungthai") || lower.contains("ktb") || lower.contains("เป๋าตัง") || (lower.contains("next") && (lower.contains("โอน") || lower.contains("สำเร็จ")))
     let hasBBL = lower.contains("กรุงเทพ") || lower.contains("bangkok bank") || lower.contains("bualuang") || lower.contains("bbl")
     let hasTTB = lower.contains("ทหารไทย") || lower.contains("ttb") || lower.contains("tmb") || lower.contains("ธนชาต")
     let hasGSB = lower.contains("ออมสิน") || lower.contains("gsb") || lower.contains("mymo")
@@ -398,23 +480,68 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
     let hasCIMB = lower.contains("cimb") || lower.contains("octo")
     let hasKKP = lower.contains("kkp") || lower.contains("dime") || lower.contains("เกียรตินาคิน")
     let hasLHB = lower.contains("lh bank") || lower.contains("lhb") || lower.contains("แลนด์ แอนด์ เฮ้าส์")
-    let hasPromptPay = lower.contains("พร้อมเพย์") || lower.contains("promptpay")
-    let hasTrueMoney = lower.contains("truemoney") || lower.contains("ทรูมันนี่")
+    let hasPromptPay = lower.contains("พร้อมเพย์") || lower.contains("promptpay") || lower.contains("prompt pay")
+    let hasTrueMoney = lower.contains("truemoney") || lower.contains("ทรูมันนี่") || lower.contains("true money") || lower.contains("tmn")
+    let hasShopeePay = lower.contains("shopeepay") || lower.contains("shopee pay")
 
-    let hasBank = hasKBank || hasSCB || hasKrungsri || hasKTB || hasBBL || hasTTB || hasGSB || hasBAAC || hasUOB || hasCIMB || hasKKP || hasLHB || hasPromptPay || hasTrueMoney
+    let hasBank = hasKBank || hasSCB || hasKrungsri || hasKTB || hasBBL || hasTTB || hasGSB || hasBAAC || hasUOB || hasCIMB || hasKKP || hasLHB || hasPromptPay || hasTrueMoney || hasShopeePay
 
-    let hasSlipIndicators = lower.contains("โอนเงินสำเร็จ") ||
+    let hasSuccessAction = lower.contains("สำเร็จ") ||
+                           lower.contains("successful") ||
+                           lower.contains("success")
+
+    let hasTransferAction = lower.contains("โอนเงิน") ||
                             lower.contains("โอนสำเร็จ") ||
-                            lower.contains("successful") ||
-                            lower.contains("จำนวนเงิน") ||
-                            lower.contains("จํานวนเงิน") ||
-                            lower.contains("amount") ||
-                            lower.contains("รหัสอ้างอิง") ||
-                            lower.contains("ref") ||
-                            lower.contains("เลขที่รายการ") ||
-                            lower.contains("สแกนตรวจสอบสลิป") ||
-                            lower.contains("scan qr")
+                            lower.contains("ชำระเงิน") ||
+                            lower.contains("จ่ายเงิน") ||
+                            lower.contains("จ่ายบิล") ||
+                            lower.contains("เติมเงิน") ||
+                            lower.contains("รายการสำเร็จ") ||
+                            lower.contains("ทำรายการสำเร็จ") ||
+                            lower.contains("transfer") ||
+                            lower.contains("payment")
 
-    return (hasBank && hasSlipIndicators) || (hasSlipIndicators && (lower.contains("โอนเงิน") || lower.contains("โอนสำเร็จ") || lower.contains("สำเร็จ")))
+    let hasAmountKeywords = lower.contains("จำนวนเงิน") ||
+                            lower.contains("จํานวนเงิน") ||
+                            lower.contains("ยอดเงิน") ||
+                            lower.contains("ยอดโอน") ||
+                            lower.contains("ยอดชำระ") ||
+                            lower.contains("amount") ||
+                            lower.contains("บาท") ||
+                            lower.contains("baht") ||
+                            lower.contains("thb")
+
+    let hasRefKeywords = lower.contains("รหัสอ้างอิง") ||
+                         lower.contains("หมายเลขอ้างอิง") ||
+                         lower.contains("เลขที่รายการ") ||
+                         lower.contains("เลขที่อ้างอิง") ||
+                         lower.contains("อ้างอิง") ||
+                         lower.contains("ref") ||
+                         lower.contains("reference") ||
+                         lower.contains("trans id") ||
+                         lower.contains("transaction no")
+
+    let hasQrOrVerify = lower.contains("สแกนตรวจสอบ") ||
+                        lower.contains("ตรวจสอบสลิป") ||
+                        lower.contains("สแกน qr") ||
+                        lower.contains("scan qr") ||
+                        lower.contains("mini qr")
+
+    // Match 1: Bank name + success or transfer action
+    if hasBank && (hasSuccessAction || hasTransferAction || hasRefKeywords || hasQrOrVerify) {
+      return true
+    }
+
+    // Match 2: Success action + (Transfer action OR (Amount keywords AND Ref keywords))
+    if hasSuccessAction && (hasTransferAction || (hasAmountKeywords && hasRefKeywords)) {
+      return true
+    }
+
+    // Match 3: Explicit slip action keywords
+    if hasTransferAction && (hasAmountKeywords || hasRefKeywords || hasQrOrVerify) {
+      return true
+    }
+
+    return false
   }
 }

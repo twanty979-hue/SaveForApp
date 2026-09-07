@@ -91,6 +91,7 @@ class AppTheme {
   static ThemePalette get currentPalette =>
       paletteFor(AppSettings.themeStyle.value);
   static Color get primaryColor => currentPalette.primary;
+  static Color get strongColor => currentPalette.strong;
   static Color get secondaryColor => currentPalette.secondary;
   static Color get backgroundLight => currentPalette.backgroundLight;
   static Color get backgroundDark => currentPalette.backgroundDark;

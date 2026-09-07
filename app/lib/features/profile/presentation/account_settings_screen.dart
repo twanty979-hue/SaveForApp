@@ -11,6 +11,8 @@ import '../../../core/widgets/responsive_layout.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../auth/presentation/auth_screen.dart';
 import '../../transactions/presentation/slip_scan_dialog.dart';
+import '../../transactions/presentation/no_slips_found_sheet.dart';
+import '../../transactions/presentation/slip_scan_date_sheet.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -361,28 +363,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       return;
     }
 
-    setState(() => _isScanningSlips = true);
-    try {
-      var slips = await SlipScannerBridge.instance.scanRecentSlips(
-        daysBack: _slipLookbackDays,
-        limit: 120,
-        forceAll: true,
-        albumName: 'ALL_BANKS',
-      );
-      if (!mounted) return;
-      setState(() => _isScanningSlips = false);
-
-      if (slips.isEmpty) {
-        slips = SlipScannerBridge.instance.getMockSlips();
-      }
-      SlipScanDialog.show(context, slips: slips);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isScanningSlips = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('เกิดข้อผิดพลาดในการสแกน: $e')),
-      );
-    }
+    SlipScanDateSheet.show(
+      context,
+      onTransactionsSaved: () {
+        SlipScannerBridge.instance.refreshUnscannedCount();
+      },
+    );
   }
 
   Future<void> _pickAndScanSingleSlip() async {

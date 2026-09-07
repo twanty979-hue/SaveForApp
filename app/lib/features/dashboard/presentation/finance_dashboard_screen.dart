@@ -92,9 +92,12 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
     for (final transaction in _filteredTransactions) {
       final amount = (transaction['amount'] as num?)?.toDouble() ?? 0;
       final note = transaction['note']?.toString() ?? '';
+      final source = transaction['source']?.toString();
+      final dreamId = transaction['dream_id']?.toString();
+      final isSaving = source == 'dream_saving' || dreamId != null || note.startsWith('[ออม]');
       if (transaction['type'] == 'income') {
         income += amount;
-      } else if (note.startsWith('[ออม]')) {
+      } else if (isSaving) {
         saving += amount;
       } else if (transaction['type'] == 'expense') {
         expense += amount;
@@ -140,9 +143,12 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
       if (index < 0) continue;
       final amount = (transaction['amount'] as num?)?.toDouble() ?? 0;
       final note = transaction['note']?.toString() ?? '';
+      final source = transaction['source']?.toString();
+      final dreamId = transaction['dream_id']?.toString();
+      final isSaving = source == 'dream_saving' || dreamId != null || note.startsWith('[ออม]');
       if (transaction['type'] == 'income') {
         income[index] += amount;
-      } else if (note.startsWith('[ออม]')) {
+      } else if (isSaving) {
         saving[index] += amount;
       } else if (transaction['type'] == 'expense') {
         expense[index] += amount;
@@ -556,7 +562,9 @@ class _RecentTransactionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rawNote = transaction['note']?.toString() ?? 'รายการ';
-    final saving = rawNote.startsWith('[ออม]');
+    final source = transaction['source']?.toString();
+    final dreamId = transaction['dream_id']?.toString();
+    final saving = source == 'dream_saving' || dreamId != null || rawNote.startsWith('[ออม]');
     final income = transaction['type'] == 'income';
     final color = saving
         ? const Color(0xFF8B5CF6)
