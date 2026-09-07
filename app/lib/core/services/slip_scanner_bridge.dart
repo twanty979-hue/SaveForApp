@@ -174,8 +174,8 @@ class SlipScannerBridge {
             }
           }
 
-          // คัดกรองรายการที่เคยบันทึกไปแล้วออก (หาก forceAll เป็นจริง ให้แสดงทั้งหมดเพื่อทดสอบ)
-          if (forceAll || !savedKeys.contains(parsed.deduplicationKey)) {
+          // คัดกรองรายการที่เคยบันทึกไปแล้วออกอย่างเด็ดขาด (ห้ามอ่านสลิปซ้ำเด็ดขาด)
+          if (!_isSlipSaved(parsed, savedKeys)) {
             parsedList.add(parsed);
           } else {
             debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped (already saved: ${parsed.deduplicationKey})');
@@ -221,30 +221,64 @@ class SlipScannerBridge {
     }
   }
 
-  static const String _prefSlipHistoryReset = 'slip_history_was_reset';
-  bool _historyWasReset = false;
+  /// ตรวจสอบว่าสลิปนี้เคยถูกบันทึกเข้าระบบไปแล้วหรือไม่ (ตรวจสอบหลายชั้นเพื่อป้องกันสลิปซ้ำ 100%)
+  bool _isSlipSaved(ParsedSlip slip, Set<String> savedKeys) {
+    // 1. ตรวจจาก DeduplicationKey มาตรฐาน (Bank_RefNo หรือ Bank_Amount_Date)
+    if (savedKeys.contains(slip.deduplicationKey)) return true;
 
-  /// รีเซ็ตประวัติการสแกนทั้งหมด (ล้างทั้งแคชคีย์ และ timestamp เพื่อให้ตรวจจับสลิปที่มีอยู่ใหม่ได้ทั้งหมด)
-  Future<void> resetScanHistory() async {
-    _historyWasReset = true;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefSavedSlipKeys);
-    await prefs.remove(_prefLastScanTimestamp);
-    await prefs.setBool(_prefSlipHistoryReset, true);
+    // 2. ตรวจจาก Asset ID หรือ File Path ของรูปภาพ
+    if (savedKeys.contains(slip.id)) return true;
+    if (slip.imagePath != null && savedKeys.contains(slip.imagePath)) return true;
 
-    unscannedCount.value = 0;
-    await refreshUnscannedCount();
+    // 3. ตรวจจากเลขอ้างอิงสลิป (Reference Number) ไม่ว่าจะรูปแบบใด
+    final ref = slip.referenceNo?.trim();
+    if (ref != null && ref.isNotEmpty) {
+      final cleanRef = ref.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+      if (cleanRef.isNotEmpty) {
+        if (savedKeys.contains(cleanRef) ||
+            savedKeys.contains('ref_$cleanRef') ||
+            savedKeys.contains('${slip.bank.name}_$cleanRef')) {
+          return true;
+        }
+      }
+    }
+
+    // 4. ตรวจจากยอดเงิน + วันที่ + เวลา (Fallback เมื่อไม่มี Ref No)
+    final date = slip.date;
+    final timeKey =
+        '${slip.bank.name}_${slip.amount.toStringAsFixed(2)}_${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}_${date.hour}${date.minute}';
+    if (savedKeys.contains(timeKey)) return true;
+
+    return false;
   }
 
-  /// บันทึกคีย์สลิปที่ยืนยันแล้วลง SharedPreferences เพื่อไม่ให้อ่านซ้ำ
+  /// บันทึกคีย์สลิปที่ยืนยันแล้วลง SharedPreferences เพื่อไม่ให้อ่านซ้ำอย่างเด็ดขาด
   Future<void> markSlipsAsSaved(List<ParsedSlip> slips) async {
     try {
-      _historyWasReset = false;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_prefSlipHistoryReset);
       final savedKeys = prefs.getStringList(_prefSavedSlipKeys)?.toSet() ?? <String>{};
       for (var s in slips) {
         savedKeys.add(s.deduplicationKey);
+        savedKeys.add(s.id);
+        if (s.imagePath != null) savedKeys.add(s.imagePath!);
+
+        final ref = s.referenceNo?.trim();
+        if (ref != null && ref.isNotEmpty) {
+          final cleanRef = ref.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+          if (cleanRef.isNotEmpty) {
+            savedKeys.add('${s.bank.name}_$cleanRef');
+            savedKeys.add('ref_$cleanRef');
+            savedKeys.add(cleanRef);
+          }
+        }
+
+        final date = s.date;
+        final timeKey =
+            '${s.bank.name}_${s.amount.toStringAsFixed(2)}_${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}_${date.hour}${date.minute}';
+        savedKeys.add(timeKey);
+        final dayKey =
+            '${s.bank.name}_${s.amount.toStringAsFixed(2)}_${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}';
+        savedKeys.add(dayKey);
       }
       await prefs.setStringList(_prefSavedSlipKeys, savedKeys.toList());
       // อัปเดต timestamp ล่าสุดหลังจากบันทึกแล้ว
@@ -261,12 +295,9 @@ class SlipScannerBridge {
     required dynamic apiClient,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    if (_historyWasReset || (prefs.getBool(_prefSlipHistoryReset) ?? false)) {
-      return 0;
-    }
     try {
       final response = await apiClient.get(
-        '/transactions?user_id=eq.$userId&select=note,amount,transaction_date',
+        '/transactions?user_id=eq.$userId&select=id,note,amount,transaction_date,bank,reference_no,source',
       );
       if (response.statusCode != 200) return 0;
       final dynamic data = jsonDecode(response.body);
@@ -282,9 +313,8 @@ class SlipScannerBridge {
         final bank = (bankStr != null && bankStr.isNotEmpty)
             ? BankType.values.cast<BankType?>().firstWhere((b) => b?.name == bankStr, orElse: () => null)
             : BankType.detectFromText(note);
-        if (bank == null) continue;
 
-        // 1. ตรวจหา Ref number จากคอลัมน์ reference_no หรือจาก note เช่น [Ref:01424518294958102]
+        // 1. ตรวจหา Ref number จากคอลัมน์ reference_no หรือจาก note
         String? refNo = row['reference_no']?.toString();
         if (refNo == null || refNo.isEmpty) {
           final refMatch = RegExp(r'\[Ref:([a-zA-Z0-9]+)\]').firstMatch(note);
@@ -293,22 +323,26 @@ class SlipScannerBridge {
           }
         }
         if (refNo != null && refNo.isNotEmpty) {
-          final key = '${bank.name}_$refNo';
-          if (savedKeys.add(key)) {
-            restored++;
+          final cleanRef = refNo.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+          if (cleanRef.isNotEmpty) {
+            if (bank != null && savedKeys.add('${bank.name}_$cleanRef')) restored++;
+            savedKeys.add('ref_$cleanRef');
+            savedKeys.add(cleanRef);
           }
-          continue;
         }
 
-        // 2. Fallback: กรณีสลิปรุ่นเก่าที่ไม่มี [Ref:...] ให้ดึงจาก ยอดเงินและวันเวลา
-        final amount = (row['amount'] as num?)?.toDouble() ?? 0.0;
-        final dateStr = row['transaction_date']?.toString();
-        final date = dateStr != null ? DateTime.tryParse(dateStr) : null;
-        if (date != null) {
-          final key =
-              '${bank.name}_${amount.toStringAsFixed(2)}_${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}_${date.hour}${date.minute}';
-          if (savedKeys.add(key)) {
-            restored++;
+        // 2. ดึงจากยอดเงินและวันเวลา
+        if (bank != null) {
+          final amount = (row['amount'] as num?)?.toDouble() ?? 0.0;
+          final dateStr = row['transaction_date']?.toString();
+          final date = dateStr != null ? DateTime.tryParse(dateStr)?.toLocal() : null;
+          if (date != null) {
+            final timeKey =
+                '${bank.name}_${amount.toStringAsFixed(2)}_${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}_${date.hour}${date.minute}';
+            if (savedKeys.add(timeKey)) restored++;
+            final dayKey =
+                '${bank.name}_${amount.toStringAsFixed(2)}_${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}';
+            savedKeys.add(dayKey);
           }
         }
       }
@@ -341,12 +375,9 @@ class SlipScannerBridge {
         return 0;
       }
 
-      final isReset = _historyWasReset || (prefs.getBool(_prefSlipHistoryReset) ?? false);
-      final lastScan = isReset ? 0.0 : (prefs.getDouble(_prefLastScanTimestamp) ?? 0.0);
-      final daysBack = isReset ? 0 : 30;
-
+      final lastScan = prefs.getDouble(_prefLastScanTimestamp) ?? 0.0;
       final dynamic result = await _channel.invokeMethod('scanRecentSlips', {
-        'daysBack': daysBack,
+        'daysBack': 30,
         'limit': 50,
         'lastScanTimestamp': lastScan,
         'albumName': 'ALL_BANKS',
@@ -375,7 +406,7 @@ class SlipScannerBridge {
           fallbackDate: fallbackDate,
         );
 
-        if (parsed != null && !savedKeys.contains(parsed.deduplicationKey)) {
+        if (parsed != null && !_isSlipSaved(parsed, savedKeys)) {
           count++;
         }
       }

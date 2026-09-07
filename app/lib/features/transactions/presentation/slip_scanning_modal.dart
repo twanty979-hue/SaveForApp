@@ -217,11 +217,7 @@ class _SlipScanningModalState extends State<SlipScanningModal>
     }
   }
 
-  Future<void> _resetAndRescan() async {
-    await SlipScannerBridge.instance.resetScanHistory();
-    if (!mounted) return;
-    _startScanningProcess();
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -290,26 +286,7 @@ class _SlipScanningModalState extends State<SlipScanningModal>
                   ),
                   Row(
                     children: [
-                      // ปุ่มล้างประวัติเพื่อทดสอบอ่านใหม่
-                      Tooltip(
-                        message: context.tr(
-                          'ล้างประวัติเพื่อทดสอบอ่านใหม่',
-                          'Reset scan history to test again',
-                        ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: _phase == ScanPhase.scanning ? null : _resetAndRescan,
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: Icon(
-                              Icons.restart_alt_rounded,
-                              size: 20,
-                              color: primary,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
+
                       InkWell(
                         borderRadius: BorderRadius.circular(20),
                         onTap: () => Navigator.of(context).pop(),
@@ -538,25 +515,7 @@ class _SlipScanningModalState extends State<SlipScanningModal>
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // ปุ่มล้างประวัติเพื่อทดสอบใหม่
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _resetAndRescan,
-                      icon: const Icon(Icons.restart_alt_rounded, size: 18),
-                      label: Text(
-                        context.tr('ล้างประวัติ & สแกนใหม่', 'Reset & Scan Again'),
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                      ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        elevation: 0,
-                      ),
-                    ),
-                  ),
+
 
                   const SizedBox(height: 8),
                   // ปุ่มเลือกภาพทดสอบเอง

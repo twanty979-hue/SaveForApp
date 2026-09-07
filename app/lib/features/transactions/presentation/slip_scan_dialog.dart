@@ -203,81 +203,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
     });
   }
 
-  Future<void> _resetAndRescan() async {
-    HapticFeedback.mediumImpact();
-    await SlipScannerBridge.instance.resetScanHistory();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppTheme.primaryColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        content: Text(
-          context.tr('ล้างประวัติการอ่านสลิปแล้ว กำลังสแกนใหม่...', 'History cleared! Re-scanning...'),
-        ),
-        duration: const Duration(milliseconds: 1400),
-      ),
-    );
-    final prefs = await SharedPreferences.getInstance();
-    final savedDays = prefs.getInt('pref_slip_scan_selected_days_back') ?? 30;
-    final freshSlips = await SlipScannerBridge.instance.scanRecentSlips(
-      daysBack: savedDays.clamp(1, 30),
-      limit: 50,
-      forceAll: true,
-      albumName: 'ALL_BANKS',
-    );
-    if (!mounted) return;
 
-    if (freshSlips.isEmpty) {
-      if (!context.mounted) return;
-      final navContext = context;
-      Navigator.of(navContext).pop();
-      NoSlipsFoundSheet.show(
-        navContext,
-        onPickImage: () async {
-          final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-          if (picked == null) return;
-          final slip = await SlipScannerBridge.instance.scanSingleImage(picked.path);
-          if (!navContext.mounted) return;
-          if (slip != null) {
-            SlipScanDialog.show(
-              navContext,
-              slips: [slip],
-              onTransactionsSaved: widget.onTransactionsSaved,
-            );
-          } else {
-            ScaffoldMessenger.of(navContext).showSnackBar(
-              SnackBar(
-                content: Text(
-                  navContext.tr('ไม่พบข้อมูลสลิปในรูปที่เลือกครับ', 'No slip found in selected image'),
-                ),
-              ),
-            );
-          }
-        },
-        onResetAndRescan: () {
-          SlipScanDateSheet.show(
-            navContext,
-            onTransactionsSaved: widget.onTransactionsSaved,
-          );
-        },
-      );
-      return;
-    }
-
-    setState(() {
-      _slips = freshSlips;
-      _currentIndex = 0;
-      _scannedCount = 0;
-      _isScanning = true;
-    });
-    try {
-      if (_pageController.hasClients && _pageController.positions.length == 1) {
-        _pageController.jumpToPage(0);
-      }
-    } catch (_) {}
-    _startScanningSequence();
-  }
 
   Future<void> _pickSingleSlip() async {
     HapticFeedback.lightImpact();
@@ -600,37 +526,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                   children: [
                     Row(
                       children: [
-                        Tooltip(
-                          message: context.tr('ล้างประวัติ & สแกนใหม่', 'Reset & Re-scan'),
-                          child: GestureDetector(
-                            onTap: _isScanning ? null : _resetAndRescan,
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.92),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: const Color(0xFFE4DAC7),
-                                  width: 1.2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.12),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.restart_alt_rounded,
-                                size: 17,
-                                color: Color(0xFF3F3624),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
+
                         Tooltip(
                           message: context.tr('เลือกรูปสลิปจากเครื่อง', 'Pick slip from photos'),
                           child: GestureDetector(

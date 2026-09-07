@@ -758,24 +758,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                             );
                           },
                         ),
-                        if (_notificationsEnabled)
-                          _SettingsTile(
-                            icon: Icons.key_rounded,
-                            title: context.tr(
-                              'FCM Device Token (สำหรับทดสอบยิง)',
-                              'FCM Device Token (For Testing)',
-                            ),
-                            subtitle: context.tr(
-                              'แตะเพื่อดูหรือคัดลอกรหัสโทเคนของเครื่องนี้',
-                              'Tap to view or copy device token',
-                            ),
-                            trailing: Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              size: 14,
-                              color: context.secondaryTextColor,
-                            ),
-                            onTap: _showFcmTokenDialog,
-                          ),
+
                         _SettingsTile(
                           icon: Icons.help_outline_rounded,
                           title: context.tr(

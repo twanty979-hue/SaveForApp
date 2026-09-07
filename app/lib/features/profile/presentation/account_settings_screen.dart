@@ -633,30 +633,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                             if (!_isScanningSlips) _pickAndScanSingleSlip();
                           },
                         ),
-                        _SettingsTile(
-                          icon: Icons.restart_alt_rounded,
-                          title: context.tr('ล้างประวัติการอ่านสลิป', 'Reset Slip History'),
-                          subtitle: context.tr(
-                            'ล้างแคชสลิปเดิมเพื่อให้สแกนทดสอบซ้ำได้',
-                            'Clear cached slip keys to re-test scanning',
-                          ),
-                          trailing: const Icon(Icons.refresh_rounded, size: 20, color: Color(0xFF94A3B8)),
-                          onTap: () async {
-                            await SlipScannerBridge.instance.resetScanHistory();
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                backgroundColor: AppTheme.primaryColor,
-                                content: Text(
-                                  context.tr(
-                                    'ล้างประวัติการอ่านสลิปแล้ว พร้อมทดสอบสแกนใหม่ได้ทันที',
-                                    'Slip history cleared! Ready to re-scan.',
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+
 
                         const SizedBox(height: 22),
                         _SectionLabel(
