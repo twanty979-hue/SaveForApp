@@ -8,9 +8,7 @@ import '../../../core/services/slip_parser_service.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/bank_logo_icon.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../auth/domain/auth_session.dart';
-import 'no_slips_found_sheet.dart';
 import 'slip_scan_date_sheet.dart';
 
 class SlipScanDialog extends StatefulWidget {
@@ -342,7 +340,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
           'bank': slip.bank.name,
           if (cleanRef != null) 'reference_no': cleanRef,
           'source': 'slip',
-          'transaction_date': slip.date.toIso8601String(),
+          'transaction_date': slip.date.toUtc().toIso8601String(),
           'metadata': {
             if (slip.recipient.isNotEmpty) 'recipient': slip.recipient,
             'bank_display': slip.bank.displayName,
@@ -359,7 +357,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
               'amount': slip.amount,
               'type': 'expense',
               'note': note,
-              'transaction_date': slip.date.toIso8601String(),
+              'transaction_date': slip.date.toUtc().toIso8601String(),
             },
           );
         }

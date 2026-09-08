@@ -581,7 +581,7 @@ class SlipParserService {
         }
         final hour = int.tryParse(match.group(3) ?? '') ?? 12;
         final minute = int.tryParse(match.group(4) ?? '') ?? 0;
-        return DateTime(year, entry.value, day, hour, minute);
+        return _buildThaiSlipDateTime(year, entry.value, day, hour, minute);
       }
     }
 
@@ -609,7 +609,7 @@ class SlipParserService {
         if (year < 100) year += 2000;
         final hour = int.tryParse(engMatch.group(4) ?? '') ?? 12;
         final minute = int.tryParse(engMatch.group(5) ?? '') ?? 0;
-        return DateTime(year, month, day, hour, minute);
+        return _buildThaiSlipDateTime(year, month, day, hour, minute);
       }
     }
 
@@ -623,10 +623,18 @@ class SlipParserService {
       if (year > 2400) year -= 543;
       final hour = int.tryParse(slashMatch.group(4) ?? '') ?? 12;
       final minute = int.tryParse(slashMatch.group(5) ?? '') ?? 0;
-      return DateTime(year, month, day, hour, minute);
+      return _buildThaiSlipDateTime(year, month, day, hour, minute);
     }
 
     return null;
+  }
+
+  DateTime _buildThaiSlipDateTime(int year, int month, int day, int hour, int minute) {
+    // เวลาบนสลิปธนาคารไทยเป็นเวลาประเทศไทย (ICT / UTC+7) เสมอ
+    // แปลงเป็น UTC ที่แน่นอน (ลบ 7 ชม.) แล้วคืนค่ากลับเป็น Local time
+    // เพื่อให้ .toUtc() คืนค่าเวลาสากลที่แท้จริง ไม่เกิดปัญหาข้ามวันเมื่อส่งขึ้นเซิร์ฟเวอร์
+    final utc = DateTime.utc(year, month, day, hour, minute).subtract(const Duration(hours: 7));
+    return utc.toLocal();
   }
 
   String? _extractReferenceNo(List<String> lines, String fullText) {

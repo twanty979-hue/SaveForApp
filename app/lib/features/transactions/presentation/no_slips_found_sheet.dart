@@ -3,18 +3,15 @@ import '../../../core/theme/app_theme.dart';
 
 class NoSlipsFoundSheet extends StatelessWidget {
   final VoidCallback onPickImage;
-  final VoidCallback? onResetAndRescan;
 
   const NoSlipsFoundSheet({
     super.key,
     required this.onPickImage,
-    this.onResetAndRescan,
   });
 
   static Future<void> show(
     BuildContext context, {
     required VoidCallback onPickImage,
-    VoidCallback? onResetAndRescan,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -22,7 +19,6 @@ class NoSlipsFoundSheet extends StatelessWidget {
       isScrollControlled: true,
       builder: (_) => NoSlipsFoundSheet(
         onPickImage: onPickImage,
-        onResetAndRescan: onResetAndRescan,
       ),
     );
   }

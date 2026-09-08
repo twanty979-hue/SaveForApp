@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,8 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
-import '../../../core/network/api_client.dart';
-import '../../auth/domain/auth_session.dart';
 import 'slip_scan_dialog.dart';
 import 'no_slips_found_sheet.dart';
 
@@ -67,7 +64,7 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
   bool _isCalendarExpanded = true;
   late int _calendarYear;
   late int _calendarMonth;
-  final ApiClient _apiClient = ApiClient();
+
 
   final List<int> _presetDays = [1, 3, 7, 15, 30];
 

@@ -515,7 +515,6 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        final now = DateTime.now();
 
         // ซิงก์ประวัติสลิปจากเซิร์ฟเวอร์แบบเบื้องหลัง (รองรับกรณีย้ายเครื่อง/ลบแอพ)
         if (_activeUserId.isNotEmpty) {
@@ -525,42 +524,20 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           );
         }
 
-        // Pre-calculate monthly accumulated sums
-        final Map<String, double> accumulatedMap = {};
-        for (var tx in data) {
-          final dateStr = tx['transaction_date'] ?? '';
-          final date = DateTime.tryParse(dateStr);
-          if (date != null &&
-              date.year == now.year &&
-              date.month == now.month) {
-            final txAmount =
-                num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
-            final txFixedExpenseId = tx['fixed_expense_id']?.toString();
-            final txIncomeSourceId = tx['income_source_id']?.toString();
+        // ติดตามยอดสะสมแบบทีละรายการตามลำดับเวลา (Running Total Step-by-Step)
+        // เพื่อให้การ์ดแสดงยอดบวกเพิ่มขึ้นเรื่อยๆ ตามลำดับ ไม่เท่ากันหมดทุกการ์ด
+        final Map<String, double> monthlyExpenseRunningTotal = {};
+        final Map<String, double> monthlyIncomeRunningTotal = {};
+        final Map<String, double> categoryRunningTotal = {};
+        final Map<String, double> categoryNameRunningTotal = {};
+        final Map<String, double> dreamRunningTotal = {};
 
-            if (txFixedExpenseId != null) {
-              accumulatedMap['expense_id_$txFixedExpenseId'] =
-                  (accumulatedMap['expense_id_$txFixedExpenseId'] ?? 0.0) +
-                  txAmount;
-            } else if (txIncomeSourceId != null) {
-              accumulatedMap['income_id_$txIncomeSourceId'] =
-                  (accumulatedMap['income_id_$txIncomeSourceId'] ?? 0.0) +
-                  txAmount;
-            }
-
-            final noteText = tx['note']?.toString() ?? '';
-            final cleanNote = noteText
-                .replaceAll(RegExp(r'\[สลิป\s+[^\]]+\]'), '')
-                .replaceAll(RegExp(r'\[Ref:[^\]]+\]'), '')
-                .replaceAll('[รายจ่ายประจำ]', '')
-                .replaceAll('[รายรับประจำ]', '')
-                .replaceAll('[ออม] หยอดกระปุก:', '')
-                .trim()
-                .toLowerCase();
-            accumulatedMap[cleanNote] =
-                (accumulatedMap[cleanNote] ?? 0.0) + txAmount;
-          }
-        }
+        // เรียงลำดับรายการตามเวลา (เก่าไปใหม่) เพื่อคำนวณ running total ให้ถูกต้อง
+        data.sort((a, b) {
+          final dateA = DateTime.tryParse(a['transaction_date']?.toString() ?? '') ?? DateTime(1970);
+          final dateB = DateTime.tryParse(b['transaction_date']?.toString() ?? '') ?? DateTime(1970);
+          return dateA.compareTo(dateB);
+        });
 
         setState(() {
           // Keep intro message
@@ -586,17 +563,6 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               final dateStr = tx['transaction_date']?.toString() ?? '';
               final timestamp = DateTime.tryParse(dateStr) ?? DateTime.now();
               final type = tx['type']?.toString() ?? 'expense';
-
-              // Apply date filter if active
-              if (_effectiveDateFilter.value != null) {
-                final filter = _effectiveDateFilter.value!;
-                final txLocalDate = timestamp.toLocal();
-                if (txLocalDate.year != filter.year ||
-                    txLocalDate.month != filter.month ||
-                    txLocalDate.day != filter.day) {
-                  continue; // Skip items that don't match the active date filter
-                }
-              }
 
               String displayName = name;
               String category = 'รายจ่าย';
@@ -689,7 +655,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 }
               }
 
-              // Fallback
+              // Fallback ไปยัง "ค่าใช้จ่ายรายเดือน" ถ้ายังไม่เจองบเฉพาะ และเป็นรายจ่าย
               if (matchedSugg == null && msgType == 'expense') {
                 for (var sugg in _rawSuggestions) {
                   final suggName = sugg['name']
@@ -721,22 +687,61 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 }
               }
 
+              final bool isGenericMonthlyBudget = matchedSugg != null &&
+                  matchedSugg['name']?.toString().trim() == 'ค่าใช้จ่ายรายเดือน';
               final String? matchedId = matchedSugg?['id']?.toString();
+              final monthKey = '${timestamp.year}_${timestamp.month}';
               double totalAccumulated = amount;
-              if (matchedId != null) {
-                if (msgType == 'expense') {
-                  totalAccumulated =
-                      accumulatedMap['expense_id_$matchedId'] ??
-                      accumulatedMap[cleanName] ??
-                      amount;
-                } else if (msgType == 'income') {
-                  totalAccumulated =
-                      accumulatedMap['income_id_$matchedId'] ??
-                      accumulatedMap[cleanName] ??
-                      amount;
+
+              if (msgType == 'expense') {
+                // อัปเดต running total ของรายจ่ายรวมทั้งเดือน
+                monthlyExpenseRunningTotal[monthKey] =
+                    (monthlyExpenseRunningTotal[monthKey] ?? 0.0) + amount;
+
+                if (matchedId != null && !isGenericMonthlyBudget) {
+                  categoryRunningTotal['${monthKey}_$matchedId'] =
+                      (categoryRunningTotal['${monthKey}_$matchedId'] ?? 0.0) + amount;
                 }
-              } else {
-                totalAccumulated = accumulatedMap[cleanName] ?? amount;
+                categoryNameRunningTotal['${monthKey}_$cleanName'] =
+                    (categoryNameRunningTotal['${monthKey}_$cleanName'] ?? 0.0) + amount;
+
+                if (isGenericMonthlyBudget) {
+                  // เทียบกับงบรวมค่าใช้จ่ายรายเดือน -> แสดงยอดใช้จ่ายรวมสะสมจนถึงรายการนี้
+                  totalAccumulated = monthlyExpenseRunningTotal[monthKey] ?? amount;
+                } else if (matchedId != null) {
+                  totalAccumulated =
+                      categoryRunningTotal['${monthKey}_$matchedId'] ??
+                      categoryNameRunningTotal['${monthKey}_$cleanName'] ??
+                      amount;
+                } else {
+                  totalAccumulated = categoryNameRunningTotal['${monthKey}_$cleanName'] ?? amount;
+                }
+              } else if (msgType == 'income') {
+                monthlyIncomeRunningTotal[monthKey] =
+                    (monthlyIncomeRunningTotal[monthKey] ?? 0.0) + amount;
+                if (matchedId != null) {
+                  categoryRunningTotal['${monthKey}_$matchedId'] =
+                      (categoryRunningTotal['${monthKey}_$matchedId'] ?? 0.0) + amount;
+                  totalAccumulated = categoryRunningTotal['${monthKey}_$matchedId'] ?? amount;
+                } else {
+                  totalAccumulated = monthlyIncomeRunningTotal[monthKey] ?? amount;
+                }
+              } else if (msgType == 'dream') {
+                final dreamKey = dreamId ?? matchedId ?? cleanName;
+                dreamRunningTotal[dreamKey] =
+                    (dreamRunningTotal[dreamKey] ?? 0.0) + amount;
+                totalAccumulated = dreamRunningTotal[dreamKey] ?? amount;
+              }
+
+              // Apply date filter if active (คัดกรองการแสดงผลหลังอัปเดต running total แล้ว)
+              if (_effectiveDateFilter.value != null) {
+                final filter = _effectiveDateFilter.value!;
+                final txLocalDate = timestamp.toLocal();
+                if (txLocalDate.year != filter.year ||
+                    txLocalDate.month != filter.month ||
+                    txLocalDate.day != filter.day) {
+                  continue; // Skip items that don't match the active date filter
+                }
               }
 
               _messages.add(
@@ -1211,6 +1216,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 final List<dynamic> txList = jsonDecode(txResponseForSum.body);
                 final now = DateTime.now();
                 final String? matchedId = matchedSuggestion?['id']?.toString();
+                final bool isGenericMonthlyBudget = matchedSuggestion != null &&
+                    matchedSuggestion['name']?.toString().trim() == 'ค่าใช้จ่ายรายเดือน';
 
                 for (var tx in txList) {
                   final dateStr = tx['transaction_date'] ?? '';
@@ -1219,43 +1226,51 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   final txAmount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
                   final txFixedExpenseId = tx['fixed_expense_id']?.toString();
                   final txIncomeSourceId = tx['income_source_id']?.toString();
+                  final txType = tx['type']?.toString() ?? 'expense';
 
                   if (date != null &&
                       date.year == now.year &&
                       date.month == now.month) {
-                    bool isTxMatch = false;
-                    if (matchedId != null) {
-                      if (msgType == 'expense' &&
-                          txFixedExpenseId == matchedId) {
-                        isTxMatch = true;
-                      } else if (msgType == 'income' &&
-                          txIncomeSourceId == matchedId) {
-                        isTxMatch = true;
+                    if (isGenericMonthlyBudget && msgType == 'expense') {
+                      if (txType == 'expense') {
+                        totalAccumulated += txAmount;
                       }
-                    }
-                    if (!isTxMatch) {
-                      final cleanNote = noteText
-                          .replaceAll('[รายจ่ายประจำ]', '')
-                          .replaceAll('[รายรับประจำ]', '')
-                          .replaceAll('[ออม] หยอดกระปุก:', '')
-                          .trim()
-                          .toLowerCase();
-                      final cleanName = name.trim().toLowerCase();
-                      if (cleanNote == cleanName ||
-                          (cleanNote.isNotEmpty &&
-                              cleanName.isNotEmpty &&
-                              (cleanNote.contains(cleanName) ||
-                                  cleanName.contains(cleanNote)))) {
-                        isTxMatch = true;
+                    } else {
+                      bool isTxMatch = false;
+                      if (matchedId != null) {
+                        if (msgType == 'expense' &&
+                            txFixedExpenseId == matchedId) {
+                          isTxMatch = true;
+                        } else if (msgType == 'income' &&
+                            txIncomeSourceId == matchedId) {
+                          isTxMatch = true;
+                        }
                       }
-                    }
-                    if (isTxMatch) {
-                      totalAccumulated += txAmount;
+                      if (!isTxMatch) {
+                        final cleanNote = noteText
+                            .replaceAll(RegExp(r'\[สลิป\s+[^\]]+\]'), '')
+                            .replaceAll(RegExp(r'\[Ref:[^\]]+\]'), '')
+                            .replaceAll('[รายจ่ายประจำ]', '')
+                            .replaceAll('[รายรับประจำ]', '')
+                            .replaceAll('[ออม] หยอดกระปุก:', '')
+                            .trim()
+                            .toLowerCase();
+                        final cleanName = name.trim().toLowerCase();
+                        if (cleanNote == cleanName) {
+                          isTxMatch = true;
+                        }
+                      }
+                      if (isTxMatch) {
+                        totalAccumulated += txAmount;
+                      }
                     }
                   }
                 }
               }
             } catch (e) {
+              totalAccumulated = amount;
+            }
+            if (totalAccumulated <= 0.0) {
               totalAccumulated = amount;
             }
 
