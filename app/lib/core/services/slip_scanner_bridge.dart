@@ -4,9 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'slip_parser_service.dart';
+export 'slip_parser_service.dart';
 
 class SlipScannerBridge {
   SlipScannerBridge._() {
+    SlipParserService.loadLearnedOwnData();
     refreshUnscannedCount();
   }
   static final SlipScannerBridge instance = SlipScannerBridge._();
@@ -111,13 +113,15 @@ class SlipScannerBridge {
     if (!isSupported) return [];
 
     try {
+      await SlipParserService.loadLearnedOwnData();
       final prefs = await SharedPreferences.getInstance();
       final lastScan = forceAll ? 0.0 : (prefs.getDouble(_prefLastScanTimestamp) ?? 0.0);
 
       // คำนวณวันย้อนหลัง (จำกัดไม่ให้เกิน 30 วันตามเงื่อนไขผู้ใช้)
       int effectiveDaysBack = daysBack.clamp(1, 30);
-      DateTime? effectiveStartDate = startDate;
-      if (effectiveStartDate != null) {
+      final DateTime effectiveStartDate;
+      if (startDate != null) {
+        effectiveStartDate = startDate;
         final diff = DateTime.now().difference(effectiveStartDate).inDays + 1;
         effectiveDaysBack = diff.clamp(1, 30);
       } else {
@@ -166,12 +170,10 @@ class SlipScannerBridge {
 
         if (parsed != null) {
           // ตรวจสอบว่าวันที่ของสลิปต้องไม่อยู่ก่อน startDate
-          if (effectiveStartDate != null) {
-            final cutoff = DateTime(effectiveStartDate.year, effectiveStartDate.month, effectiveStartDate.day);
-            if (parsed.date.isBefore(cutoff)) {
-              debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped: date ${parsed.date} is before cutoff $cutoff');
-              continue;
-            }
+          final cutoff = DateTime(effectiveStartDate.year, effectiveStartDate.month, effectiveStartDate.day);
+          if (parsed.date.isBefore(cutoff)) {
+            debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped: date ${parsed.date} is before cutoff $cutoff');
+            continue;
           }
 
           // คัดกรองรายการที่เคยบันทึกไปแล้วออกอย่างเด็ดขาด (ห้ามอ่านสลิปซ้ำเด็ดขาด)
@@ -196,6 +198,7 @@ class SlipScannerBridge {
     if (!isSupported) return null;
 
     try {
+      await SlipParserService.loadLearnedOwnData();
       final dynamic result = await _channel.invokeMethod('scanSingleImage', {
         'path': filePath,
       });
@@ -218,6 +221,26 @@ class SlipScannerBridge {
     } catch (e) {
       debugPrint('Error scanning single slip: $e');
       return null;
+    }
+  }
+
+  /// ดึงที่อยู่ไฟล์รูปภาพสลิปจากระบบ Native (รองรับการค้นจาก path, assetId หรือ cleanId)
+  Future<String?> getSlipImagePath({
+    String? path,
+    String? assetId,
+    String? cleanId,
+  }) async {
+    if (!isSupported) return path;
+    try {
+      final res = await _channel.invokeMethod<String>('getSlipImage', {
+        if (path != null) 'path': path,
+        if (assetId != null) 'assetId': assetId,
+        if (cleanId != null) 'cleanId': cleanId,
+      });
+      return res ?? path;
+    } catch (e) {
+      debugPrint('Error getting slip image from native: $e');
+      return path;
     }
   }
 
@@ -289,10 +312,73 @@ class SlipScannerBridge {
     }
   }
 
+  /// ปลดล็อคคีย์สลิปเมื่อผู้ใช้ลบรายการธุรกรรมออก เพื่อให้สามารถสแกนสลิปรูปเดิมใหม่ได้
+  Future<void> unmarkSlipSaved({
+    String? referenceNo,
+    String? assetId,
+    String? imagePath,
+    BankType? bank,
+    double? amount,
+    DateTime? date,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedKeys = prefs.getStringList(_prefSavedSlipKeys)?.toSet();
+      if (savedKeys == null || savedKeys.isEmpty) return;
+
+      if (assetId != null && assetId.isNotEmpty) {
+        savedKeys.remove(assetId);
+      }
+      if (imagePath != null && imagePath.isNotEmpty) {
+        savedKeys.remove(imagePath);
+      }
+
+      final ref = referenceNo?.trim();
+      if (ref != null && ref.isNotEmpty) {
+        final cleanRef = ref.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+        if (cleanRef.isNotEmpty) {
+          savedKeys.remove(cleanRef);
+          savedKeys.remove('ref_$cleanRef');
+          if (bank != null) {
+            savedKeys.remove('${bank.name}_$cleanRef');
+          }
+          savedKeys.removeWhere((k) => k.contains(cleanRef));
+        }
+      }
+
+      if (bank != null && amount != null && date != null) {
+        final timeKey =
+            '${bank.name}_${amount.toStringAsFixed(2)}_${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}_${date.hour}${date.minute}';
+        savedKeys.remove(timeKey);
+        final dayKey =
+            '${bank.name}_${amount.toStringAsFixed(2)}_${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}';
+        savedKeys.remove(dayKey);
+      }
+
+      await prefs.setStringList(_prefSavedSlipKeys, savedKeys.toList());
+      await refreshUnscannedCount();
+    } catch (e) {
+      debugPrint('Error unmarking slip dedup keys: $e');
+    }
+  }
+
+  /// ล้างแคชประวัติสลิปทั้งหมด เพื่อให้สามารถเริ่มสแกนใหม่อีกครั้งได้
+  Future<void> clearAllSavedSlipKeys() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefSavedSlipKeys);
+      await prefs.remove(_prefLastScanTimestamp);
+      await refreshUnscannedCount();
+    } catch (e) {
+      debugPrint('Error clearing all saved slip keys: $e');
+    }
+  }
+
   /// ซิงก์ประวัติสลิปที่เคยบันทึกไว้จากเซิร์ฟเวอร์ (รองรับกรณีย้ายเครื่อง หรือลบแอพแล้วโหลดใหม่)
   Future<int> syncSavedSlipsFromServer({
     required String userId,
     required dynamic apiClient,
+    bool overwrite = false,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     try {
@@ -303,7 +389,9 @@ class SlipScannerBridge {
       final dynamic data = jsonDecode(response.body);
       if (data is! List) return 0;
 
-      final savedKeys = prefs.getStringList(_prefSavedSlipKeys)?.toSet() ?? <String>{};
+      final savedKeys = overwrite
+          ? <String>{}
+          : (prefs.getStringList(_prefSavedSlipKeys)?.toSet() ?? <String>{});
       int restored = 0;
 
       for (var row in data) {
@@ -347,7 +435,7 @@ class SlipScannerBridge {
         }
       }
 
-      if (restored > 0) {
+      if (overwrite || restored > 0) {
         await prefs.setStringList(_prefSavedSlipKeys, savedKeys.toList());
         await refreshUnscannedCount();
       }

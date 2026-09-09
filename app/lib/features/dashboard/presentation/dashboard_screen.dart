@@ -21,6 +21,20 @@ import '../../../core/services/slip_scanner_bridge.dart';
 import '../../transactions/presentation/slip_scan_dialog.dart';
 import '../../transactions/presentation/slip_scan_date_sheet.dart';
 
+bool _isTransferTx(dynamic tx) {
+  if (tx is! Map) return false;
+  final type = tx['type']?.toString();
+  final source = tx['source']?.toString();
+  final note = tx['note']?.toString() ?? '';
+  final metadata = tx['metadata'] is Map ? tx['metadata'] as Map : null;
+  final transferType = metadata?['transfer_type']?.toString();
+  return type == 'transfer' ||
+      source == 'transfer' ||
+      transferType == 'own_account' ||
+      note.startsWith('[ย้ายเงิน') ||
+      note.contains('[ย้ายเงิน');
+}
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -193,7 +207,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         double monthSum = 0.0;
 
         for (var tx in data) {
-          if (tx['type'] == 'expense') {
+          if (tx['type'] == 'expense' && !_isTransferTx(tx)) {
             final dateStr = tx['transaction_date'] ?? '';
             final date = DateTime.tryParse(dateStr)?.toLocal();
             if (date == null) continue;
@@ -1744,7 +1758,8 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
       return date != null &&
           date.year == _currentYear &&
           date.month == _currentMonth &&
-          tx['type'] == 'expense';
+          tx['type'] == 'expense' &&
+          !_isTransferTx(tx);
     }).toList();
 
     double monthlyTotal = monthlyExpenses.fold(0.0, (sum, item) {
@@ -1958,7 +1973,8 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                                 txDate.year == date.year &&
                                 txDate.month == date.month &&
                                 txDate.day == date.day &&
-                                tx['type'] == 'expense') {
+                                tx['type'] == 'expense' &&
+                                !_isTransferTx(tx)) {
                               spent += (tx['amount'] as num).toDouble();
                             }
                           }

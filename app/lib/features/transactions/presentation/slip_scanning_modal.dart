@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'package:app/core/localization/app_material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../core/services/slip_parser_service.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/bank_logo_icon.dart';

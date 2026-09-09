@@ -70,6 +70,12 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
         return
       }
       scanSingleImage(path: path, result: result)
+    case "getSlipImage":
+      let args = call.arguments as? [String: Any] ?? [:]
+      let path = args["path"] as? String
+      let assetId = args["assetId"] as? String
+      let cleanId = args["cleanId"] as? String
+      getSlipImage(path: path, assetId: assetId, cleanId: cleanId, result: result)
     case "isSimulator":
       #if targetEnvironment(simulator)
       result(true)
@@ -322,8 +328,11 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
 
                 if let data = image.jpegData(compressionQuality: 0.7) {
                   let cleanId = asset.localIdentifier.replacingOccurrences(of: "[^a-zA-Z0-9]", with: "_", options: .regularExpression)
-                  let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("slip_\(cleanId).jpg")
+                  let slipsFolder = self.getDocumentsSlipsDirectory()
+                  let fileURL = slipsFolder.appendingPathComponent("slip_\(cleanId).jpg")
                   try? data.write(to: fileURL)
+                  let tmpURL = FileManager.default.temporaryDirectory.appendingPathComponent("slip_\(cleanId).jpg")
+                  try? data.write(to: tmpURL)
                   slipMap["imagePath"] = fileURL.path
                 }
 
@@ -382,6 +391,7 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
           return
         }
 
+          
         if let lines = self.recognizeText(from: image) {
           let fullText = lines.joined(separator: "\n")
           let isSlip = self.isLikelyBankSlip(text: fullText) || self.containsSlipCharacteristics(text: fullText, lines: lines)
@@ -391,7 +401,15 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
           slipMap["lines"] = lines
           slipMap["fullText"] = fullText
           slipMap["isSlip"] = isSlip
-          slipMap["imagePath"] = path
+          var resolvedPath = path
+          if let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+            let cleanName = (path as NSString).lastPathComponent
+            let slipsFolder = self.getDocumentsSlipsDirectory()
+            let destURL = slipsFolder.appendingPathComponent("slip_\(cleanName)")
+            try? data.write(to: destURL)
+            resolvedPath = destURL.path
+          }
+          slipMap["imagePath"] = resolvedPath
           slipMap["albumName"] = "รูปภาพที่เลือก"
           print("[SlipScanner] Single image scanned, lines: \(lines.count), isSlip: \(isSlip)")
           DispatchQueue.main.async {
@@ -543,5 +561,89 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
     }
 
     return false
+  }
+
+  private func getDocumentsSlipsDirectory() -> URL {
+    let fileManager = FileManager.default
+    let docs = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first ?? fileManager.temporaryDirectory
+    let slipsFolder = docs.appendingPathComponent("slips", isDirectory: true)
+    if !fileManager.fileExists(atPath: slipsFolder.path) {
+      try? fileManager.createDirectory(at: slipsFolder, withIntermediateDirectories: true, attributes: nil)
+    }
+    return slipsFolder
+  }
+
+  private func getSlipImage(path: String?, assetId: String?, cleanId: String?, result: @escaping FlutterResult) {
+    let fileManager = FileManager.default
+    let slipsFolder = getDocumentsSlipsDirectory()
+
+    // 1. Check if provided path exists
+    if let path = path, !path.isEmpty, fileManager.fileExists(atPath: path) {
+      result(path)
+      return
+    }
+
+    // 2. Check if filename exists in slips directory
+    if let path = path, !path.isEmpty {
+      let filename = (path as NSString).lastPathComponent
+      let inSlips = slipsFolder.appendingPathComponent(filename)
+      if fileManager.fileExists(atPath: inSlips.path) {
+        result(inSlips.path)
+        return
+      }
+      let inTmp = fileManager.temporaryDirectory.appendingPathComponent(filename)
+      if fileManager.fileExists(atPath: inTmp.path) {
+        result(inTmp.path)
+        return
+      }
+    }
+
+    // 3. Check by cleanId
+    let effectiveCleanId = cleanId ?? (assetId?.replacingOccurrences(of: "[^a-zA-Z0-9]", with: "_", options: .regularExpression))
+    if let effectiveCleanId = effectiveCleanId, !effectiveCleanId.isEmpty {
+      let inSlips = slipsFolder.appendingPathComponent("slip_\(effectiveCleanId).jpg")
+      if fileManager.fileExists(atPath: inSlips.path) {
+        result(inSlips.path)
+        return
+      }
+      let inTmp = fileManager.temporaryDirectory.appendingPathComponent("slip_\(effectiveCleanId).jpg")
+      if fileManager.fileExists(atPath: inTmp.path) {
+        result(inTmp.path)
+        return
+      }
+    }
+
+    // 4. Fetch directly from Photos Library if assetId is provided
+    if let assetId = assetId, !assetId.isEmpty {
+      let assets = PHAsset.fetchAssets(withLocalIdentifiers: [assetId], options: nil)
+      if let asset = assets.firstObject {
+        let options = PHImageRequestOptions()
+        options.isSynchronous = false
+        options.deliveryMode = .highQualityFormat
+        options.isNetworkAccessAllowed = true
+
+        PHImageManager.default().requestImage(
+          for: asset,
+          targetSize: PHImageManagerMaximumSize,
+          contentMode: .aspectFit,
+          options: options
+        ) { [weak self] image, _ in
+          guard let self = self, let image = image, let data = image.jpegData(compressionQuality: 0.8) else {
+            DispatchQueue.main.async { result(nil) }
+            return
+          }
+          let cid = asset.localIdentifier.replacingOccurrences(of: "[^a-zA-Z0-9]", with: "_", options: .regularExpression)
+          let folder = self.getDocumentsSlipsDirectory()
+          let dest = folder.appendingPathComponent("slip_\(cid).jpg")
+          try? data.write(to: dest)
+          DispatchQueue.main.async {
+            result(dest.path)
+          }
+        }
+        return
+      }
+    }
+
+    result(nil)
   }
 }

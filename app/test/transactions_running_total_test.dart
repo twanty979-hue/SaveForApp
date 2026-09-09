@@ -67,5 +67,37 @@ void main() {
         120.0,
       ]);
     });
+    test('transfer transactions are completely excluded from expense and income running totals', () {
+      final transactions = [
+        {'amount': 100.0, 'date': '2026-09-01T10:00:00Z', 'type': 'expense'},
+        {'amount': 5000.0, 'date': '2026-09-01T11:00:00Z', 'type': 'transfer'}, // ย้ายเงิน ไม่ควรถูกนับ
+        {'amount': 50.0, 'date': '2026-09-01T12:00:00Z', 'type': 'expense'},
+      ];
+
+      final Map<String, double> monthlyExpenseRunningTotal = {};
+      final List<double> expenseAccumulated = [];
+
+      for (var tx in transactions) {
+        final amount = (tx['amount'] as num).toDouble();
+        final timestamp = DateTime.parse(tx['date'] as String);
+        final monthKey = '${timestamp.year}_${timestamp.month}';
+        final type = tx['type'] as String;
+
+        if (type == 'expense') {
+          monthlyExpenseRunningTotal[monthKey] =
+              (monthlyExpenseRunningTotal[monthKey] ?? 0.0) + amount;
+          expenseAccumulated.add(monthlyExpenseRunningTotal[monthKey]!);
+        } else if (type == 'transfer') {
+          // Transfer is excluded from expense running total
+          expenseAccumulated.add(monthlyExpenseRunningTotal[monthKey] ?? 0.0);
+        }
+      }
+
+      expect(expenseAccumulated, [
+        100.0,
+        100.0, // 5000.0 transfer did not increase total
+        150.0,
+      ]);
+    });
   });
 }

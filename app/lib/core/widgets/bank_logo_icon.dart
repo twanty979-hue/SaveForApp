@@ -331,3 +331,62 @@ class BankLogoIcon extends StatelessWidget {
     }
   }
 }
+
+/// วิดเจ็ตแสดงไอคอนธนาคารคู่ (ต้นทาง ➔ ปลายทาง) สำหรับรายการย้ายเงินระหว่างบัญชี
+class DualBankLogoIcon extends StatelessWidget {
+  final BankType fromBank;
+  final BankType toBank;
+  final double size;
+  final bool showShadow;
+  final Color? arrowColor;
+
+  const DualBankLogoIcon({
+    super.key,
+    required this.fromBank,
+    required this.toBank,
+    this.size = 36,
+    this.showShadow = true,
+    this.arrowColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveArrowColor = arrowColor ??
+        (Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF94A3B8)
+            : const Color(0xFF64748B));
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        BankLogoIcon(
+          bank: fromBank,
+          size: size,
+          showShadow: showShadow,
+        ),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: size * 0.15),
+          child: Container(
+            padding: EdgeInsets.all(size * 0.1),
+            decoration: BoxDecoration(
+              color: effectiveArrowColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.arrow_forward_rounded,
+              size: (size * 0.38).clamp(10.0, 20.0),
+              color: effectiveArrowColor,
+            ),
+          ),
+        ),
+        BankLogoIcon(
+          bank: toBank,
+          size: size,
+          showShadow: showShadow,
+        ),
+      ],
+    );
+  }
+}
+

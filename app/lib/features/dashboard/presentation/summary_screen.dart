@@ -72,6 +72,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
     }
   }
 
+  bool _isTransferTx(dynamic tx) {
+    if (tx is! Map) return false;
+    final type = tx['type']?.toString();
+    final source = tx['source']?.toString();
+    final note = tx['note']?.toString() ?? '';
+    final metadata = tx['metadata'] is Map ? tx['metadata'] as Map : null;
+    final transferType = metadata?['transfer_type']?.toString();
+    return type == 'transfer' ||
+        source == 'transfer' ||
+        transferType == 'own_account' ||
+        note.startsWith('[ย้ายเงิน') ||
+        note.contains('[ย้ายเงิน');
+  }
+
   // คำนวณยอดเงินตามประเภทและช่วงเวลาที่เลือก
   Map<String, double> _calculateMetrics() {
     double totalIncome = 0.0;
@@ -111,7 +125,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
       if (isInRange) {
         final amt = (tx['amount'] as num).toDouble();
-        if (tx['type'] == 'expense') {
+        if (_isTransferTx(tx)) {
+          // ไม่นับรายการย้ายเงินเข้าในรายจ่ายหรือรายรับ
+        } else if (tx['type'] == 'expense') {
           totalExpense += amt;
         } else if (tx['type'] == 'income') {
           totalIncome += amt;
@@ -578,7 +594,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                               txDate.year == dayDate.year &&
                               txDate.month == dayDate.month &&
                               txDate.day == dayDate.day &&
-                              tx['type'] == 'expense') {
+                              tx['type'] == 'expense' &&
+                              !_isTransferTx(tx)) {
                             spent += (tx['amount'] as num).toDouble();
                           }
                         }

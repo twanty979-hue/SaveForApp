@@ -1,7 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app/core/services/slip_parser_service.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    SlipParserService.learnedOwnNames.clear();
+    SlipParserService.learnedOwnAccounts.clear();
+  });
+
   group('SlipParserService Tests', () {
     test('parses standalone integer amounts like 864 and 10 from real iOS OCR screenshots', () {
       final slip864 = SlipParserService.instance.parse(
@@ -161,5 +168,364 @@ truemoney
       final diff5 = now.difference(start5DaysAgo).inDays + 1;
       expect(diff5.clamp(1, 30), equals(6));
     });
+
+    test('detects destination bank and self-transfer correctly', () {
+      const fullText = '''
+โอนเงินสำเร็จ
+08 ก.ย. 2569 10:30 น.
+จาก
+นาย พงศ์บดินทร์ ศรีทอง
+กสิกรไทย
+ไปยัง
+นาย พงศ์บดินทร์ ศรีทอง
+ธนาคารไทยพาณิชย์
+จำนวนเงิน
+1,200.00 บาท
+ค่าธรรมเนียม 0.00 บาท
+รหัสอ้างอิง: 2026090877889900
+''';
+      final lines = fullText.split('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'self_transfer_test',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.amount, equals(1200.00));
+      expect(slip.bank, equals(BankType.kbank));
+      expect(slip.destinationBank, equals(BankType.scb));
+      expect(slip.isTransfer, isTrue);
+      expect(slip.displayTitle, contains('ย้ายเงิน'));
+      expect(slip.finalFormattedNoteTitle, contains('ย้ายเงิน'));
+    });
+
+    test('detects SCB self-transfer with bank label before sender and recipient', () {
+      const fullText = '''
+โอนเงินสำเร็จ
+08 ก.ย. 2569 - 12:00
+จาก
+ไทยพาณิชย์
+นาย วรธน น.
+xxx-xxx-1234
+ไปยัง
+กสิกรไทย
+นาย วรธน น.
+xxx-xxx-5678
+จำนวนเงิน
+1,000.00
+รหัสอ้างอิง
+202609087VLrKX6lomPKNangw
+''';
+      final lines = fullText.split('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'scb_transfer_test',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.amount, equals(1000.00));
+      expect(slip.bank, equals(BankType.scb));
+      expect(slip.destinationBank, equals(BankType.kbank));
+      expect(slip.isTransfer, isTrue);
+      expect(slip.recipient, equals('นาย วรธน น.'));
+      expect(slip.displayTitle, contains('ย้ายเงิน'));
+    });
+
+    test('detects K PLUS self-transfer without "จาก" keyword and with promptpay destination', () {
+      const fullText = '''
+โอนเงินสำเร็จ
+08 ก.ย. 69 19:52 น.
+นาย วรธน น.
+ธ.กสิกรไทย
+xxx-x-x1234-x
+ไปยัง
+พร้อมเพย์
+นาย วรธน น.
+xxx-xxxxxxx
+จำนวนเงิน
+5,000.00 บาท
+ค่าธรรมเนียม
+0.00 บาท
+รหัสอ้างอิง: 016251195204BPP07692
+''';
+      final lines = fullText.split('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'kplus_transfer_test',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.amount, equals(5000.00));
+      expect(slip.bank, equals(BankType.kbank));
+      expect(slip.isTransfer, isTrue);
+      expect(slip.recipient, equals('นาย วรธน น.'));
+      expect(slip.displayTitle, contains('ย้ายเงิน'));
+    });
+
+    test('detects Vorathon to Nicha as expense, NOT self-transfer', () {
+      const fullText = '''
+โอนเงินสำเร็จ
+08 ก.ย. 69 19:52 น.
+นาย วรธน น.
+ธ.กสิกรไทย
+xxx-x-x1234-x
+น.ส. นิชา ก.
+ธ.ไทยพาณิชย์
+xxx-x-x5678-x
+จำนวนเงิน
+500.00 บาท
+ค่าธรรมเนียม
+0.00 บาท
+รหัสอ้างอิง: 016251195204BPP07692
+''';
+      final lines = fullText.split('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'nicha_expense_test',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.amount, equals(500.00));
+      expect(slip.bank, equals(BankType.kbank));
+      expect(slip.destinationBank, equals(BankType.scb));
+      expect(slip.isTransfer, isFalse);
+      expect(slip.recipient, equals('น.ส. นิชา ก.'));
+      expect(slip.displayTitle, equals('น.ส. นิชา ก.'));
+    });
+
+    test('detects K PLUS 5000 THB PromptPay self-transfer with Prompt label and full surname', () {
+      final lines = [
+        'โอนเงินสำเร็จ',
+        '8 ก.ย. 69 19:52 น.',
+        'K+',
+        'นาย วรธน น.',
+        'ธ.กสิกรไทย',
+        'xxx-x-x8380-x',
+        'Prompt',
+        'Pay',
+        'นาย วรธน นำทอง',
+        'รหัสพร้อมเพย์',
+        'x-xxxx-xxxx5-70-4',
+        'เลขที่รายการ:',
+        '016251195204BPP07692',
+        'จำนวน:',
+        '5,000.00 บาท',
+        'ค่าธรรมเนียม:',
+        '0.00 บาท',
+      ];
+      final fullText = lines.join('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'kplus_promptpay_5000',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.amount, equals(5000.00));
+      expect(slip.bank, equals(BankType.kbank));
+      expect(slip.recipient, equals('นาย วรธน นำทอง'));
+      expect(slip.isTransfer, isTrue);
+      expect(slip.displayTitle, contains('ย้ายเงิน'));
+    });
+
+    test('detects K PLUS 100 THB PromptPay self-transfer with Prompt label and partial surname', () {
+      final lines = [
+        'โอนเงินสำเร็จ',
+        '8 ก.ย. 69 19:49 น.',
+        'K+',
+        'นาย วรธน น.',
+        'ธ.กสิกรไทย',
+        'xxx-x-x8380-x',
+        'Prompt',
+        'Pay',
+        'วรธน นำทอง',
+        '006-xxxxxxxx-9822',
+        'เลขที่รายการ:',
+        '016251194926BPP12778',
+        'จำนวน:',
+        '100.00 บาท',
+        'ค่าธรรมเนียม:',
+        '0.00 บาท',
+      ];
+      final fullText = lines.join('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'kplus_promptpay_100',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.amount, equals(100.00));
+      expect(slip.bank, equals(BankType.kbank));
+      expect(slip.recipient, equals('วรธน นำทอง'));
+      expect(slip.isTransfer, isTrue);
+      expect(slip.displayTitle, contains('ย้ายเงิน'));
+    });
+
+    test('detects bilingual Thai-to-English self-transfer (นาย วรธน -> VORATHON NAMTHONG)', () {
+      final lines = [
+        'โอนเงินสำเร็จ',
+        'นาย วรธน น.',
+        'ธ.กสิกรไทย',
+        'VORATHON NAMTHONG',
+        'ธ.ไทยพาณิชย์',
+        'จำนวนเงิน',
+        '2500.00 บาท',
+      ];
+      final fullText = lines.join('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'bilingual_transfer',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.amount, equals(2500.00));
+      expect(slip.isTransfer, isTrue);
+      expect(slip.sender, equals('นาย วรธน น.'));
+      expect(slip.recipient, equals('VORATHON NAMTHONG'));
+      expect(slip.destinationBank, equals(BankType.scb));
+    });
+
+    test('Vorathon to Nicha is ALWAYS expense even if Vorathon is in learnedOwnNames', () {
+      SlipParserService.learnedOwnNames.add('วรธน');
+      SlipParserService.learnedOwnNames.add('นาย วรธน นำทอง');
+
+      final lines = [
+        'โอนเงินสำเร็จ',
+        'นาย วรธน น.',
+        'ธ.กสิกรไทย',
+        'xxx-x-x1234-x',
+        'น.ส. นิชา ก.',
+        'ธ.ไทยพาณิชย์',
+        'xxx-x-x5678-x',
+        '500.00 บาท',
+      ];
+      final fullText = lines.join('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'vorathon_to_nicha_learned',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.amount, equals(500.00));
+      expect(slip.isTransfer, isFalse, reason: 'Different people must NEVER be classified as self-transfer');
+      expect(slip.recipient, equals('น.ส. นิชา ก.'));
+    });
+
+    test('auto-learns own account number and recognizes future slips without sender as transfer', () {
+      SlipParserService.learnedOwnAccounts.add('9822');
+
+      final lines = [
+        'โอนเงินสำเร็จ',
+        '08 ก.ย. 69',
+        'ไปยัง',
+        '006-xxxxxxxx-9822',
+        'จำนวนเงิน 1,200.00 บาท',
+      ];
+      final fullText = lines.join('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'learned_account_transfer',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.isTransfer, isTrue);
+      expect(slip.amount, equals(1200.00));
+    });
+
+    test('self-healing forgetOwnAccount removes learned account accurately', () async {
+      SlipParserService.learnedOwnNames.add('นิชา ก.');
+      expect(SlipParserService.learnedOwnNames.contains('นิชา ก.'), isTrue);
+
+      await SlipParserService.forgetOwnAccount(name: 'นิชา ก.');
+      expect(SlipParserService.learnedOwnNames.contains('นิชา ก.'), isFalse);
+    });
+
+    test('SaaS generic bilingual matching works for any user (นาย สมชาย -> MR. SOMCHAI SUKJAI)', () {
+      final lines = [
+        'โอนเงินสำเร็จ',
+        'นาย สมชาย สุขใจ',
+        'ธ.กสิกรไทย',
+        'MR. SOMCHAI SUKJAI',
+        'ธ.ไทยพาณิชย์',
+        'จำนวนเงิน',
+        '3000.00 บาท',
+      ];
+      final fullText = lines.join('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'somchai_bilingual_transfer',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.amount, equals(3000.00));
+      expect(slip.isTransfer, isTrue, reason: 'Generic phonetic matcher must recognize Somchai ⇄ SOMCHAI');
+      expect(slip.recipient, equals('MR. SOMCHAI SUKJAI'));
+    });
+
+    test('SaaS generic bilingual matching works for Kittiphong (กิตติพงษ์ -> KITTIPHONG)', () {
+      final lines = [
+        'โอนเงินสำเร็จ',
+        'กิตติพงษ์',
+        'ธ.กสิกรไทย',
+        'KITTIPHONG',
+        'ธ.กรุงไทย',
+        '1000.00 บาท',
+      ];
+      final fullText = lines.join('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'kittiphong_transfer',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.isTransfer, isTrue, reason: 'Generic phonetic matcher must recognize กิตติพงษ์ ⇄ KITTIPHONG');
+    });
+
+    test('SaaS expense detection: Somchai to Areeya is an EXPENSE, never a transfer', () {
+      final lines = [
+        'โอนเงินสำเร็จ',
+        'นาย สมชาย สุขใจ',
+        'ธ.กสิกรไทย',
+        'นางสาว อารียา ใจดี',
+        'ธ.ไทยพาณิชย์',
+        '400.00 บาท',
+      ];
+      final fullText = lines.join('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'somchai_to_areeya',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.isTransfer, isFalse);
+      expect(slip.recipient, equals('นางสาว อารียา ใจดี'));
+    });
+
+    test('SaaS multi-tenant data isolation partitions accounts per user', () async {
+      // User A learns account 7788
+      await SlipParserService.learnOwnAccount(accountNumber: '7788', userId: 'user_somchai');
+      expect(SlipParserService.learnedOwnAccounts.contains('7788'), isTrue);
+
+      // User B loads their own data (should not have 7788)
+      await SlipParserService.loadLearnedOwnData('user_kittiphong');
+      expect(SlipParserService.learnedOwnAccounts.contains('7788'), isFalse,
+          reason: 'User B must not see User A learned account in SaaS multi-tenant setup');
+
+      // User A reloads their own data
+      await SlipParserService.loadLearnedOwnData('user_somchai');
+      expect(SlipParserService.learnedOwnAccounts.contains('7788'), isTrue);
+    });
   });
 }
+

@@ -10,10 +10,27 @@ import '../../auth/domain/auth_session.dart';
 import 'dashboard_overview_card.dart';
 import 'monthly_comparison_card.dart';
 
+bool isTransferTransaction(dynamic tx) {
+  if (tx is! Map) return false;
+  final type = tx['type']?.toString();
+  final source = tx['source']?.toString();
+  final note = tx['note']?.toString() ?? '';
+  final metadata = tx['metadata'] is Map ? tx['metadata'] as Map : null;
+  final transferType = metadata?['transfer_type']?.toString();
+  return type == 'transfer' ||
+      source == 'transfer' ||
+      transferType == 'own_account' ||
+      note.startsWith('[ย้ายเงิน') ||
+      note.contains('[ย้ายเงิน');
+}
+
 class FinanceDashboardScreen extends StatefulWidget {
   final VoidCallback? onRefreshHeader;
 
   const FinanceDashboardScreen({super.key, this.onRefreshHeader});
+
+  static bool isTransfer(dynamic tx) => isTransferTransaction(tx);
+  static bool isTransferTransaction(dynamic tx) => isTransferTransaction(tx);
 
   @override
   State<FinanceDashboardScreen> createState() => _FinanceDashboardScreenState();
@@ -90,6 +107,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
     var expense = 0.0;
     var saving = 0.0;
     for (final transaction in _filteredTransactions) {
+      if (isTransferTransaction(transaction)) continue;
       final amount = (transaction['amount'] as num?)?.toDouble() ?? 0;
       final note = transaction['note']?.toString() ?? '';
       final source = transaction['source']?.toString();
@@ -111,7 +129,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     for (final transaction in _transactions) {
-      if (transaction['type'] == 'income') continue;
+      if (transaction['type'] == 'income' || isTransferTransaction(transaction)) continue;
       final date = _dateOf(transaction);
       if (date == null) continue;
       final day = DateTime(date.year, date.month, date.day);
@@ -135,6 +153,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
     final saving = List<double>.filled(months.length, 0);
 
     for (final transaction in _transactions) {
+      if (isTransferTransaction(transaction)) continue;
       final date = _dateOf(transaction);
       if (date == null) continue;
       final index = months.indexWhere(
@@ -564,15 +583,20 @@ class _RecentTransactionRow extends StatelessWidget {
     final rawNote = transaction['note']?.toString() ?? 'รายการ';
     final source = transaction['source']?.toString();
     final dreamId = transaction['dream_id']?.toString();
-    final saving = source == 'dream_saving' || dreamId != null || rawNote.startsWith('[ออม]');
-    final income = transaction['type'] == 'income';
-    final color = saving
+    final isTransfer = FinanceDashboardScreen.isTransferTransaction(transaction);
+    final saving = !isTransfer && (source == 'dream_saving' || dreamId != null || rawNote.startsWith('[ออม]'));
+    final income = !isTransfer && transaction['type'] == 'income';
+    final color = isTransfer
+        ? const Color(0xFF6366F1)
+        : saving
         ? const Color(0xFF8B5CF6)
         : income
         ? const Color(0xFF16A085)
         : const Color(0xFFEF6677);
     final note = rawNote
         .replaceAll(RegExp(r'\[สลิป\s+[^\]]+\]'), '')
+        .replaceAll(RegExp(r'\[ย้ายเงิน\s+[^\]]+\]'), '')
+        .replaceAll('[ย้ายเงิน]', '')
         .replaceAll(RegExp(r'\[Ref:[^\]]+\]'), '')
         .replaceAll('[รายจ่ายประจำ]', '')
         .replaceAll('[รายรับประจำ]', '')
@@ -600,7 +624,9 @@ class _RecentTransactionRow extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              saving
+              isTransfer
+                  ? Icons.swap_horiz_rounded
+                  : saving
                   ? Icons.auto_awesome_rounded
                   : income
                   ? Icons.north_east_rounded
@@ -615,7 +641,7 @@ class _RecentTransactionRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  note.isEmpty ? 'รายการ' : note,
+                  note.isEmpty ? (isTransfer ? 'ย้ายเงินระหว่างบัญชี' : 'รายการ') : note,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -634,7 +660,9 @@ class _RecentTransactionRow extends StatelessWidget {
             ),
           ),
           Text(
-            '${income ? '+' : '-'}฿${amount.toStringAsFixed(0)}',
+            isTransfer
+                ? '฿${amount.toStringAsFixed(0)}'
+                : '${income ? '+' : '-'}฿${amount.toStringAsFixed(0)}',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,

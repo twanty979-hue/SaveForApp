@@ -31,7 +31,7 @@ class SlipScanDateSheet extends StatefulWidget {
 
     if (!context.mounted) return;
 
-    showModalBottomSheet<void>(
+    final result = await showModalBottomSheet<List<ParsedSlip>?>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -40,6 +40,42 @@ class SlipScanDateSheet extends StatefulWidget {
         initialDaysBack: savedDays.clamp(1, 30),
       ),
     );
+
+    if (!context.mounted) return;
+    if (result == null) return;
+
+    if (result.isNotEmpty) {
+      SlipScanDialog.show(
+        context,
+        slips: result,
+        onTransactionsSaved: onTransactionsSaved,
+      );
+    } else {
+      NoSlipsFoundSheet.show(
+        context,
+        onPickImage: () async {
+          final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+          if (picked == null || !context.mounted) return;
+          final slip = await SlipScannerBridge.instance.scanSingleImage(picked.path);
+          if (!context.mounted) return;
+          if (slip != null) {
+            SlipScanDialog.show(
+              context,
+              slips: [slip],
+              onTransactionsSaved: onTransactionsSaved,
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  context.tr('ไม่พบข้อมูลสลิปในรูปที่เลือกครับ', 'No slip found in selected image'),
+                ),
+              ),
+            );
+          }
+        },
+      );
+    }
   }
 
   @override
@@ -229,46 +265,49 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
       if (!mounted) return;
       setState(() => _isScanning = false);
 
-      nav.pop(); // ปิด BottomSheet
-
-      if (slips.isNotEmpty) {
-        SlipScanDialog.show(
-          context,
-          slips: slips,
-          onTransactionsSaved: widget.onTransactionsSaved,
-        );
-      } else {
-        NoSlipsFoundSheet.show(
-          context,
-          onPickImage: () async {
-            final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-            if (picked == null || !mounted) return;
-            final slip = await SlipScannerBridge.instance.scanSingleImage(picked.path);
-            if (!mounted) return;
-            if (slip != null) {
-              SlipScanDialog.show(
-                context,
-                slips: [slip],
-                onTransactionsSaved: widget.onTransactionsSaved,
-              );
-            } else {
-              messenger.showSnackBar(
-                SnackBar(
-                  content: Text(
-                    context.tr('ไม่พบข้อมูลสลิปในรูปที่เลือกครับ', 'No slip found in selected image'),
-                  ),
-                ),
-              );
-            }
-          },
-        );
-      }
+      nav.pop(slips); // ปิด BottomSheet และส่งผลลัพธ์กลับไปยัง show() อย่างปลอดภัย
     } catch (e) {
       if (!mounted) return;
       setState(() => _isScanning = false);
       messenger.showSnackBar(
         SnackBar(content: Text('เกิดข้อผิดพลาดในการสแกน: $e')),
       );
+    }
+  }
+
+  Future<void> _resetAndRescan() async {
+    final isThai = Localizations.localeOf(context).languageCode == 'th';
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isThai ? 'สแกนสลิปใหม่ทั้งหมด' : 'Re-scan All Slips'),
+        content: Text(
+          isThai
+              ? 'ระบบจะล้างประวัติการจำสลิปเดิม เพื่อค้นหาและสแกนสลิปทั้งหมดในช่วงวันที่เลือกใหม่อีกครั้งครับ'
+              : 'Reset slip memory and re-scan all slips in the selected date range?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(isThai ? 'ยกเลิก' : 'Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isThai ? 'เริ่มสแกนใหม่' : 'Re-scan'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await SlipScannerBridge.instance.clearAllSavedSlipKeys();
+      if (!mounted) return;
+      _startScan();
     }
   }
 
@@ -416,6 +455,18 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
                   ),
                 ),
 
+                IconButton(
+                  tooltip: isThai ? 'รีเซ็ตและสแกนใหม่ทั้งหมด' : 'Reset and re-scan all',
+                  onPressed: _isScanning ? null : _resetAndRescan,
+                  icon: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.restart_alt_rounded, size: 18, color: Color(0xFF64748B)),
+                  ),
+                ),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: Container(

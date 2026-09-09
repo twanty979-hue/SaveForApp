@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/services/slip_parser_service.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/bank_logo_icon.dart';
@@ -324,47 +323,89 @@ class _SlipScanDialogState extends State<SlipScanDialog>
 
     for (final slip in selected) {
       try {
+        final isTransfer = slip.isTransfer;
         final titleText = slip.finalFormattedNoteTitle;
         final refTag = (slip.referenceNo != null && slip.referenceNo!.trim().isNotEmpty)
             ? ' [Ref:${slip.referenceNo!.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')}]'
             : '';
-        final note = '[สลิป ${slip.bank.displayName}] $titleText$refTag';
+        final note = isTransfer
+            ? '[ย้ายเงิน] $titleText$refTag'
+            : '[สลิป ${slip.bank.displayName}] $titleText$refTag';
         final cleanRef = (slip.referenceNo != null && slip.referenceNo!.trim().isNotEmpty)
             ? slip.referenceNo!.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
             : null;
         final bodyWithNormalized = {
           'user_id': userId,
           'amount': slip.amount,
-          'type': 'expense',
+          'type': isTransfer ? 'transfer' : 'expense',
           'note': note,
           'bank': slip.bank.name,
+          if (isTransfer && slip.destinationBank != null) 'destination_bank': slip.destinationBank!.name,
           if (cleanRef != null) 'reference_no': cleanRef,
-          'source': 'slip',
+          'source': isTransfer ? 'transfer' : 'slip',
           'transaction_date': slip.date.toUtc().toIso8601String(),
           'metadata': {
             if (slip.recipient.isNotEmpty) 'recipient': slip.recipient,
             'bank_display': slip.bank.displayName,
+            if (isTransfer && slip.destinationBank != null) 'destination_bank_display': slip.destinationBank!.displayName,
+            if (isTransfer) 'transfer_type': 'own_account',
+            if (slip.imagePath != null && slip.imagePath!.isNotEmpty) 'image_path': slip.imagePath,
+            'asset_id': slip.id,
+            if (slip.albumName != null && slip.albumName!.isNotEmpty) 'album_name': slip.albumName,
           },
         };
 
         var response = await _apiClient.post('/transactions', body: bodyWithNormalized);
-        // Fallback gracefully if database migration 003 has not been run yet
-        if (response.statusCode >= 400 && response.body.contains('column')) {
-          response = await _apiClient.post(
-            '/transactions',
-            body: {
-              'user_id': userId,
-              'amount': slip.amount,
-              'type': 'expense',
-              'note': note,
-              'transaction_date': slip.date.toUtc().toIso8601String(),
-            },
-          );
+        // Fallback gracefully if database constraint or schema does not accept 'transfer' type
+        if (response.statusCode >= 400) {
+          debugPrint('Slip save initial attempt failed (${response.statusCode}): ${response.body}');
+          final fallbackBody = Map<String, dynamic>.from(bodyWithNormalized);
+          // If check constraint failed on type = 'transfer', save with type = 'expense' and source = 'transfer'
+          if (isTransfer) {
+            fallbackBody['type'] = 'expense';
+            fallbackBody['source'] = 'transfer';
+            fallbackBody['note'] = note.startsWith('[ย้ายเงิน') ? note : '[ย้ายเงิน] $note';
+            response = await _apiClient.post('/transactions', body: fallbackBody);
+          }
+          if (response.statusCode >= 400 && response.body.contains('column')) {
+            fallbackBody.remove('destination_bank');
+            response = await _apiClient.post('/transactions', body: fallbackBody);
+            if (response.statusCode >= 400 && response.body.contains('column')) {
+              response = await _apiClient.post(
+                '/transactions',
+                body: {
+                  'user_id': userId,
+                  'amount': slip.amount,
+                  'type': isTransfer ? 'expense' : 'expense',
+                  'note': isTransfer && !note.startsWith('[ย้ายเงิน') ? '[ย้ายเงิน] $note' : note,
+                  'transaction_date': slip.date.toUtc().toIso8601String(),
+                },
+              );
+            }
+          }
         }
 
         if (response.statusCode == 200 || response.statusCode == 201) {
           savedSuccessCount++;
           successfulSlips.add(slip);
+          if (isTransfer) {
+            SlipParserService.learnOwnAccount(
+              name: slip.recipient,
+              accountNumber: slip.recipientAccount,
+            );
+            if (slip.sender != null && slip.sender!.isNotEmpty) {
+              SlipParserService.learnOwnAccount(
+                name: slip.sender,
+                accountNumber: slip.senderAccount,
+              );
+            }
+          } else {
+            // Self-healing: หากผู้ใช้บันทึกเป็นรายจ่าย ป้องกันไม่ให้ระบบเข้าใจผิดว่าเป็นบัญชีตนเองในอนาคต
+            SlipParserService.forgetOwnAccount(
+              name: slip.recipient,
+              accountNumber: slip.recipientAccount,
+            );
+          }
         } else {
           debugPrint('Slip save failed: status=${response.statusCode}, body=${response.body}');
         }
@@ -1287,10 +1328,97 @@ class _SlipScanDialogState extends State<SlipScanDialog>
     );
   }
 
+  void _showDestinationBankPicker(BuildContext context, ParsedSlip slip) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'เลือกธนาคารปลายทางที่ย้ายเงินไป',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: BankType.values.map((bank) {
+                    final isSel = slip.destinationBank == bank;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          slip.destinationBank = bank;
+                        });
+                        Navigator.pop(ctx);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSel ? const Color(0xFFEEF2FF) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSel ? const Color(0xFF6366F1) : const Color(0xFFE2E8F0),
+                            width: isSel ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            BankLogoIcon(bank: bank, size: 20, showShadow: false),
+                            const SizedBox(width: 6),
+                            Text(
+                              bank.displayName.split(' ').first,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
+                                color: isSel ? const Color(0xFF4F46E5) : const Color(0xFF334155),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   void _showEditSlipNoteDialog(ParsedSlip slip) {
     final textController = TextEditingController(text: slip.customNote ?? '');
     bool includeRecipient = slip.includeRecipientInNote;
+    bool isTransfer = slip.isTransfer;
+    BankType? destinationBank = slip.destinationBank ??
+        (slip.bank == BankType.kbank ? BankType.scb : BankType.kbank);
 
     final quickChips = [
       {'label': 'ค่าข้าว', 'icon': Icons.restaurant_rounded},
@@ -1341,11 +1469,18 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                     // Bank Header & Identity
                     Row(
                       children: [
-                        BankLogoIcon(
-                          bank: slip.bank,
-                          size: 34,
-                          showShadow: true,
-                        ),
+                        isTransfer && destinationBank != null
+                            ? DualBankLogoIcon(
+                                fromBank: slip.bank,
+                                toBank: destinationBank!,
+                                size: 30,
+                                showShadow: true,
+                              )
+                            : BankLogoIcon(
+                                bank: slip.bank,
+                                size: 34,
+                                showShadow: true,
+                              ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -1355,7 +1490,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                                 children: [
                                   Flexible(
                                     child: Text(
-                                      slip.bank.displayName,
+                                      isTransfer ? 'ย้ายเงินระหว่างบัญชี' : slip.bank.displayName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
@@ -1372,15 +1507,15 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                                       vertical: 2,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFE0F2FE),
+                                      color: isTransfer ? const Color(0xFFEEF2FF) : const Color(0xFFE0F2FE),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
-                                    child: const Text(
-                                      'สลิปธนาคาร',
+                                    child: Text(
+                                      isTransfer ? 'ย้ายเงิน' : 'สลิปธนาคาร',
                                       style: TextStyle(
                                         fontSize: 9.5,
                                         fontWeight: FontWeight.w700,
-                                        color: Color(0xFF0284C7),
+                                        color: isTransfer ? const Color(0xFF4F46E5) : const Color(0xFF0284C7),
                                       ),
                                     ),
                                   ),
@@ -1401,18 +1536,196 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                           ),
                         ),
                         Text(
-                          '-฿${slip.amount.toStringAsFixed(2)}',
-                          style: const TextStyle(
+                          isTransfer ? '฿${slip.amount.toStringAsFixed(2)}' : '-฿${slip.amount.toStringAsFixed(2)}',
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w900,
-                            color: Color(0xFFEF4444),
+                            color: isTransfer ? const Color(0xFF6366F1) : const Color(0xFFEF4444),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 14),
                     const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
+
+                    // Toggle: รายจ่ายปกติ vs ย้ายเงินระหว่างบัญชี
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () {
+                                setModalState(() {
+                                  isTransfer = false;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(9),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: !isTransfer ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(9),
+                                  boxShadow: !isTransfer
+                                      ? [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.06),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 1),
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.receipt_long_rounded,
+                                      size: 15,
+                                      color: !isTransfer ? const Color(0xFFEF4444) : const Color(0xFF64748B),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Flexible(
+                                      child: Text(
+                                        'รายจ่าย',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: !isTransfer ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () {
+                                setModalState(() {
+                                  isTransfer = true;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(9),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isTransfer ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(9),
+                                  boxShadow: isTransfer
+                                      ? [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.06),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 1),
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.swap_horiz_rounded,
+                                      size: 16,
+                                      color: isTransfer ? const Color(0xFF6366F1) : const Color(0xFF64748B),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Flexible(
+                                      child: Text(
+                                        'ย้ายเงิน',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: isTransfer ? const Color(0xFF6366F1) : const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (isTransfer) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEEF2FF),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFC7D2FE)),
+                        ),
+                        child: Row(
+                          children: [
+                            BankLogoIcon(bank: slip.bank, size: 20, showShadow: false),
+                            const SizedBox(width: 6),
+                            Text(
+                              slip.bank.displayName.split(' ').first,
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF3730A3)),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8),
+                              child: Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF6366F1)),
+                            ),
+                            const Text('ไปยัง: ', style: TextStyle(fontSize: 11.5, color: Color(0xFF4F46E5), fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<BankType>(
+                                  value: destinationBank,
+                                  isDense: true,
+                                  isExpanded: true,
+                                  icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF4F46E5)),
+                                  items: BankType.values.map((b) {
+                                    return DropdownMenuItem<BankType>(
+                                      value: b,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          BankLogoIcon(bank: b, size: 18, showShadow: false),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text(
+                                              b.displayName.split(' ').first,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setModalState(() {
+                                        destinationBank = val;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 12),
 
                     // Field Title
                     const Text(
@@ -1511,8 +1824,8 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
                                 color: isSelected
-                                    ? AppTheme.primaryColor
-                                    : const Color(0xFFE2E8F0),
+                                  ? AppTheme.primaryColor
+                                  : const Color(0xFFE2E8F0),
                               ),
                             ),
                             child: Row(
@@ -1596,6 +1909,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                                 setState(() {
                                   slip.customNote = null;
                                   slip.includeRecipientInNote = true;
+                                  slip.isTransfer = false;
                                 });
                                 Navigator.of(context).pop();
                               },
@@ -1626,6 +1940,10 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                               setState(() {
                                 slip.customNote = text.isNotEmpty ? text : null;
                                 slip.includeRecipientInNote = includeRecipient;
+                                slip.isTransfer = isTransfer;
+                                if (isTransfer) {
+                                  slip.destinationBank = destinationBank;
+                                }
                               });
                               Navigator.of(context).pop();
                             },
@@ -1978,11 +2296,18 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                             color: Colors.white.withValues(alpha: 0.22),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: BankLogoIcon(
-                            bank: slip.bank,
-                            size: 22,
-                            showShadow: false,
-                          ),
+                          child: slip.isTransfer && slip.destinationBank != null
+                              ? DualBankLogoIcon(
+                                  fromBank: slip.bank,
+                                  toBank: slip.destinationBank!,
+                                  size: 19,
+                                  showShadow: false,
+                                )
+                              : BankLogoIcon(
+                                  bank: slip.bank,
+                                  size: 22,
+                                  showShadow: false,
+                                ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -1990,7 +2315,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                slip.bank.displayName,
+                                slip.isTransfer ? 'ย้ายเงิน' : slip.bank.displayName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -2002,7 +2327,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                               Row(
                                 children: [
                                   Text(
-                                    'โอนเงินสำเร็จ ✓',
+                                    slip.isTransfer ? 'ย้ายเงินระหว่างบัญชี ➔' : 'โอนเงินสำเร็จ ✓',
                                     style: TextStyle(
                                       fontSize: 9.5,
                                       fontWeight: FontWeight.w600,
@@ -2071,7 +2396,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  context.tr('จำนวนเงิน', 'Amount'),
+                                  slip.isTransfer ? context.tr('ยอดที่ย้าย', 'Transfer Amount') : context.tr('จำนวนเงิน', 'Amount'),
                                   style: TextStyle(
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w600,
@@ -2105,7 +2430,9 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                             FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
-                                '-฿${slip.amount.toStringAsFixed(2)}',
+                                slip.isTransfer
+                                    ? '฿${slip.amount.toStringAsFixed(2)}'
+                                    : '-฿${slip.amount.toStringAsFixed(2)}',
                                 style: TextStyle(
                                   fontSize: hasImage ? 25 : 32,
                                   fontWeight: FontWeight.w900,
@@ -2182,6 +2509,135 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                           ),
                       ],
                     ),
+
+                    // Quick Toggle: ค่าใช้จ่าย vs ย้ายเงิน
+                    Container(
+                      margin: const EdgeInsets.only(top: 8, bottom: 6),
+                      padding: const EdgeInsets.all(2.5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                if (slip.isTransfer) {
+                                  setState(() {
+                                    slip.isTransfer = false;
+                                  });
+                                }
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                padding: const EdgeInsets.symmetric(vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: !slip.isTransfer ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: !slip.isTransfer
+                                      ? [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 4)]
+                                      : null,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '💸 ค่าใช้จ่าย',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: !slip.isTransfer ? FontWeight.w800 : FontWeight.w600,
+                                      color: !slip.isTransfer ? const Color(0xFFEF4444) : Colors.white70,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                if (!slip.isTransfer) {
+                                  setState(() {
+                                    slip.isTransfer = true;
+                                    slip.destinationBank ??= (slip.bank == BankType.kbank ? BankType.scb : BankType.kbank);
+                                  });
+                                }
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                padding: const EdgeInsets.symmetric(vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: slip.isTransfer ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: slip.isTransfer
+                                      ? [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 4)]
+                                      : null,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '⇄ ย้ายเงิน',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: slip.isTransfer ? FontWeight.w800 : FontWeight.w600,
+                                      color: slip.isTransfer ? const Color(0xFF4F46E5) : Colors.white70,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (slip.isTransfer) ...[
+                      GestureDetector(
+                        onTap: () => _showDestinationBankPicker(context, slip),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1),
+                          ),
+                          child: Row(
+                            children: [
+                              BankLogoIcon(bank: slip.bank, size: 18, showShadow: false),
+                              const SizedBox(width: 4),
+                              Text(
+                                slip.bank.displayName.split(' ').first,
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 6),
+                                child: Icon(Icons.arrow_forward_rounded, size: 13, color: Colors.white70),
+                              ),
+                              if (slip.destinationBank != null) ...[
+                                BankLogoIcon(bank: slip.destinationBank!, size: 18, showShadow: false),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    slip.destinationBank!.displayName.split(' ').first,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
+                                ),
+                              ] else ...[
+                                const Expanded(
+                                  child: Text(
+                                    'เลือกธนาคารปลายทาง',
+                                    style: TextStyle(fontSize: 11, color: Colors.white70),
+                                  ),
+                                ),
+                              ],
+                              const Icon(Icons.expand_more_rounded, size: 16, color: Colors.white70),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
 
                     // Recipient / Custom Note (Editable on tap)
                     GestureDetector(

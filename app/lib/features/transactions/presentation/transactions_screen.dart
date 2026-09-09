@@ -1,11 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:app/core/localization/app_material.dart';
 import 'package:flutter/rendering.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/services/slip_parser_service.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/bank_logo_icon.dart';
@@ -111,6 +112,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
   }
 
   Future<void> _initData() async {
+    SlipParserService.loadLearnedOwnData();
     _addIntroMessage();
     await _loadQuickSuggestions();
     await _loadPastTransactions(forceScrollToBottom: true);
@@ -504,9 +506,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     final bool wasNearBottom = _scrollController.hasClients &&
         (_scrollController.position.maxScrollExtent - _scrollController.offset).abs() < 150;
 
-    setState(() {
-      _isLoading = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     try {
       final response = await _apiClient.get(
@@ -539,6 +543,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           return dateA.compareTo(dateB);
         });
 
+        if (!mounted) return;
         setState(() {
           // Keep intro message
           final introMsg = _messages.isNotEmpty
@@ -568,9 +573,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               String category = 'รายจ่าย';
               String msgType = 'expense';
               BankType? detectedBank;
+              BankType? detectedDestinationBank;
 
               final source = tx['source']?.toString();
               final bankStr = tx['bank']?.toString();
+              final destinationBankStr = tx['destination_bank']?.toString();
               final dreamId = tx['dream_id']?.toString();
               final fixedId = tx['fixed_expense_id']?.toString();
               final incomeId = tx['income_source_id']?.toString();
@@ -581,11 +588,44 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   orElse: () => null,
                 );
               }
+              if (destinationBankStr != null && destinationBankStr.isNotEmpty) {
+                detectedDestinationBank = BankType.values.cast<BankType?>().firstWhere(
+                  (b) => b?.name == destinationBankStr,
+                  orElse: () => null,
+                );
+              }
+              if (detectedDestinationBank == null && tx['metadata'] is Map) {
+                final toBankStr = tx['metadata']['to_bank']?.toString() ??
+                    tx['metadata']['destination_bank']?.toString();
+                if (toBankStr != null && toBankStr.isNotEmpty) {
+                  detectedDestinationBank = BankType.values.cast<BankType?>().firstWhere(
+                    (b) => b?.name == toBankStr,
+                    orElse: () => null,
+                  );
+                }
+              }
               if (detectedBank == null && (name.startsWith('[สลิป') || name.contains('[สลิป'))) {
                 detectedBank = BankType.detectFromText(name);
               }
 
-              if (detectedBank != null || source == 'slip' || name.startsWith('[สลิป') || name.contains('[สลิป')) {
+              final bool isTransfer = type == 'transfer' ||
+                  source == 'transfer' ||
+                  name.startsWith('[ย้ายเงิน') ||
+                  name.contains('[ย้ายเงิน') ||
+                  (tx['metadata'] is Map && tx['metadata']['transfer_type'] == 'own_account');
+
+              if (isTransfer) {
+                category = 'ย้ายเงิน';
+                msgType = 'transfer';
+                displayName = name
+                    .replaceAll(RegExp(r'\[ย้ายเงิน\s+[^\]]+\]'), '')
+                    .replaceAll('[ย้ายเงิน]', '')
+                    .replaceAll(RegExp(r'\[Ref:[^\]]+\]'), '')
+                    .trim();
+                if (displayName.isEmpty) {
+                  displayName = 'ย้ายเงินระหว่างบัญชี';
+                }
+              } else if (detectedBank != null || source == 'slip' || name.startsWith('[สลิป') || name.contains('[สลิป')) {
                 final closeBracket = name.indexOf(']');
                 if (closeBracket != -1) {
                   displayName = name.substring(closeBracket + 1).trim();
@@ -752,6 +792,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ),
               );
               final bool isSlipTx = name.startsWith('[สลิป') || name.contains('[สลิป');
+              final txMetadata = tx['metadata'] is Map ? (tx['metadata'] as Map<String, dynamic>) : null;
+              final rawImagePath = txMetadata?['image_path']?.toString() ?? tx['image_path']?.toString();
+              final assetId = txMetadata?['asset_id']?.toString();
+              final recipientName = txMetadata?['recipient']?.toString();
+
               _messages.add(
                 Message(
                   text: '',
@@ -761,26 +806,40 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     'id': tx['id'],
                     'rawNote': name,
                     'isSlip': isSlipTx,
+                    'isTransfer': isTransfer,
                     'bank': bankStr ?? detectedBank?.name,
+                    'destination_bank': destinationBankStr ?? detectedDestinationBank?.name,
                     'reference_no': tx['reference_no'],
-                    'source': source ?? (detectedBank != null ? 'slip' : 'manual'),
+                    'image_path': rawImagePath,
+                    'asset_id': assetId,
+                    'recipient': recipientName,
+                    'metadata': txMetadata,
+                    'source': source ?? (isTransfer ? 'transfer' : (detectedBank != null ? 'slip' : 'manual')),
                     'dream_id': dreamId,
                     'transaction_date': dateStr,
                     'name': displayName,
                     'amount': amount,
                     'category': category,
-                    'hasBudget': hasBudget,
+                    'hasBudget': isTransfer ? false : hasBudget,
                     'budget': budget,
                     'totalAccumulated': totalAccumulated,
                     'msgType': msgType,
                     'bankType': detectedBank,
-                    'icon': detectedBank != null
-                        ? BankLogoIcon(
-                            bank: detectedBank,
-                            size: 44,
+                    'destinationBankType': detectedDestinationBank,
+                    'icon': isTransfer && detectedBank != null && detectedDestinationBank != null
+                        ? DualBankLogoIcon(
+                            fromBank: detectedBank,
+                            toBank: detectedDestinationBank,
+                            size: 38,
                             showShadow: true,
                           )
-                        : null,
+                        : (detectedBank != null
+                            ? BankLogoIcon(
+                                bank: detectedBank,
+                                size: 44,
+                                showShadow: true,
+                              )
+                            : null),
                   },
                 ),
               );
@@ -809,9 +868,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     } catch (e, stackTrace) {
       debugPrint('Error loading past transactions: $e\n$stackTrace');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -842,6 +903,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     SlipScanDateSheet.show(
       context,
       onTransactionsSaved: () {
+        if (!mounted) return;
         _loadPastTransactions(forceScrollToBottom: true);
         widget.onTransactionSaved?.call();
         SlipScannerBridge.instance.refreshUnscannedCount();
@@ -1388,10 +1450,24 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     final String rawNote = card['rawNote']?.toString() ?? currentDisplayName;
     final double currentAmount = (card['amount'] as num?)?.toDouble() ?? 0.0;
     final BankType? bank = card['bankType'] as BankType?;
+    final BankType? destBank = card['destinationBankType'] as BankType?;
+    final bool isTransfer = card['isTransfer'] == true || card['category'] == 'ย้ายเงิน';
     final bool isSlip = (card['isSlip'] == true) ||
         rawNote.startsWith('[สลิป') ||
-        rawNote.contains('[สลิป');
+        rawNote.contains('[สลิป') ||
+        card['source'] == 'slip' ||
+        card['reference_no'] != null ||
+        card['image_path'] != null;
     String? txId = card['id']?.toString();
+    String? currentImagePath = card['image_path']?.toString();
+    final String? assetId = card['asset_id']?.toString();
+    final String? refNo = card['reference_no']?.toString() ??
+        RegExp(r'\[Ref:([^\]]+)\]').firstMatch(rawNote)?.group(1);
+    final String? recipient = card['recipient']?.toString() ??
+        (card['metadata'] is Map ? card['metadata']['recipient']?.toString() : null);
+    final String? txDateStr = card['transaction_date']?.toString();
+    final DateTime? txDate = txDateStr != null ? DateTime.tryParse(txDateStr)?.toLocal() : null;
+    bool hasTriedResolving = false;
 
     final titleController = TextEditingController(text: currentDisplayName);
     final amountController = TextEditingController(
@@ -1419,32 +1495,52 @@ class _TransactionsScreenState extends State<TransactionsScreen>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (modalContext, setModalState) {
+            if (!hasTriedResolving && (currentImagePath == null || !File(currentImagePath!).existsSync())) {
+              hasTriedResolving = true;
+              SlipScannerBridge.instance.getSlipImagePath(
+                path: currentImagePath,
+                assetId: assetId,
+                cleanId: refNo,
+              ).then((resolved) {
+                if (resolved != null && File(resolved).existsSync() && modalContext.mounted) {
+                  setModalState(() {
+                    currentImagePath = resolved;
+                    card['image_path'] = resolved;
+                  });
+                }
+              });
+            }
+
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(modalContext).viewInsets.bottom,
               ),
               child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(modalContext).size.height * 0.88,
+                ),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Handle bar
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4.5,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(10),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Handle bar
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4.5,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 14),
+                      const SizedBox(height: 14),
 
                     // Header row
                     Row(
@@ -1536,6 +1632,21 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                               if (confirm == true) {
                                 try {
                                   await _apiClient.delete('/transactions?id=eq.$currentId');
+                                  await SlipScannerBridge.instance.unmarkSlipSaved(
+                                    referenceNo: refNo,
+                                    assetId: assetId,
+                                    imagePath: currentImagePath,
+                                    bank: bank,
+                                    amount: currentAmount,
+                                    date: txDate,
+                                  );
+                                  if (_activeUserId.isNotEmpty) {
+                                    SlipScannerBridge.instance.syncSavedSlipsFromServer(
+                                      userId: _activeUserId,
+                                      apiClient: _apiClient,
+                                      overwrite: true,
+                                    );
+                                  }
                                   if (ctx.mounted) {
                                     Navigator.pop(ctx);
                                   }
@@ -1589,6 +1700,296 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                     const SizedBox(height: 14),
                     const Divider(height: 1, color: Color(0xFFF1F5F9)),
                     const SizedBox(height: 14),
+
+                    // Slip Preview Card (แสดงรูปสลิปและรายละเอียดสลิป)
+                    if (isSlip || (currentImagePath != null && currentImagePath!.isNotEmpty) || refNo != null) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (currentImagePath != null && File(currentImagePath!).existsSync())
+                              GestureDetector(
+                                onTap: () => _showFullSlipImagePreview(
+                                  modalContext,
+                                  currentImagePath!,
+                                  bank: bank,
+                                  destBank: destBank,
+                                  refNo: refNo,
+                                  recipient: recipient,
+                                  amount: currentAmount,
+                                  date: txDate,
+                                  isTransfer: isTransfer,
+                                ),
+                                child: Stack(
+                                  alignment: Alignment.bottomRight,
+                                  children: [
+                                    Container(
+                                      width: 66,
+                                      height: 90,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.08),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(9),
+                                        child: Image.file(
+                                          File(currentImagePath!),
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => Container(
+                                            color: const Color(0xFFE2E8F0),
+                                            child: const Icon(Icons.broken_image, color: Colors.grey),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.all(3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.65),
+                                        borderRadius: const BorderRadius.only(
+                                          topLeft: Radius.circular(6),
+                                          bottomRight: Radius.circular(9),
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.zoom_in_rounded,
+                                        size: 13,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              Container(
+                                width: 66,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    if (bank != null)
+                                      BankLogoIcon(bank: bank, size: 28, showShadow: false)
+                                    else
+                                      const Icon(Icons.receipt_long_rounded, size: 28, color: Color(0xFF64748B)),
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      'สลิป',
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        isTransfer ? 'สลิปย้ายเงิน' : 'สลิปธนาคาร',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                      if (bank != null) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFE0F2FE),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            bank.displayName,
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF0369A1),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  if (refNo != null && refNo.isNotEmpty) ...[
+                                    const SizedBox(height: 3),
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            'Ref: $refNo',
+                                            style: const TextStyle(
+                                              fontSize: 10.5,
+                                              fontFamily: 'monospace',
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF64748B),
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                  if (recipient != null && recipient.isNotEmpty) ...[
+                                    const SizedBox(height: 2.5),
+                                    Text(
+                                      'ผู้รับ: $recipient',
+                                      style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF475569),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      if (currentImagePath != null && File(currentImagePath!).existsSync())
+                                        InkWell(
+                                          onTap: () => _showFullSlipImagePreview(
+                                            modalContext,
+                                            currentImagePath!,
+                                            bank: bank,
+                                            destBank: destBank,
+                                            refNo: refNo,
+                                            recipient: recipient,
+                                            amount: currentAmount,
+                                            date: txDate,
+                                            isTransfer: isTransfer,
+                                          ),
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.zoom_in_rounded,
+                                                  size: 13,
+                                                  color: AppTheme.primaryColor,
+                                                ),
+                                                const SizedBox(width: 3.5),
+                                                Text(
+                                                  'ดูสลิปเต็มใบ',
+                                                  style: TextStyle(
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: AppTheme.primaryColor,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      InkWell(
+                                        onTap: () async {
+                                          final picker = ImagePicker();
+                                          final picked = await picker.pickImage(source: ImageSource.gallery);
+                                          if (picked != null) {
+                                            setModalState(() {
+                                              currentImagePath = picked.path;
+                                              card['image_path'] = picked.path;
+                                            });
+                                            if (txId != null && txId.isNotEmpty) {
+                                              final newMeta = Map<String, dynamic>.from(
+                                                card['metadata'] is Map ? card['metadata'] as Map : {},
+                                              );
+                                              newMeta['image_path'] = picked.path;
+                                              card['metadata'] = newMeta;
+                                              try {
+                                                await _apiClient.patch('/transactions?id=eq.$txId', body: {
+                                                  'metadata': newMeta,
+                                                });
+                                              } catch (e) {
+                                                debugPrint('Error updating transaction slip image: $e');
+                                              }
+                                            }
+                                          }
+                                        },
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                currentImagePath != null && File(currentImagePath!).existsSync()
+                                                    ? Icons.sync_rounded
+                                                    : Icons.add_photo_alternate_rounded,
+                                                size: 13,
+                                                color: const Color(0xFF475569),
+                                              ),
+                                              const SizedBox(width: 3.5),
+                                              Text(
+                                                currentImagePath != null && File(currentImagePath!).existsSync()
+                                                    ? 'เปลี่ยนรูป'
+                                                    : 'แนบรูปสลิป',
+                                                style: const TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF475569),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     // Label: ชื่อรายการ
                     const Text(
@@ -2002,8 +2403,148 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   ],
                 ),
               ),
-            );
-          },
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+  void _showFullSlipImagePreview(
+    BuildContext context,
+    String imagePath, {
+    BankType? bank,
+    BankType? destBank,
+    String? refNo,
+    String? recipient,
+    double? amount,
+    DateTime? date,
+    bool isTransfer = false,
+  }) {
+    final file = File(imagePath);
+    if (!file.existsSync()) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.86,
+              maxWidth: 420,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.15),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ส่วนหัว Header
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1E293B),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(21)),
+                  ),
+                  child: Row(
+                    children: [
+                      if (bank != null)
+                        BankLogoIcon(bank: bank, size: 30, showShadow: false)
+                      else
+                        const Icon(
+                          Icons.receipt_long_rounded,
+                          size: 24,
+                          color: Colors.white70,
+                        ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isTransfer
+                                  ? 'สลิปย้ายเงิน'
+                                  : (bank != null ? 'สลิป ${bank.displayName}' : 'รูปภาพสลิป'),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (refNo != null && refNo.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Ref: $refNo',
+                                style: const TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 10.5,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.of(ctx).pop(),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, thickness: 1, color: Color(0xFF334155)),
+
+                // ส่วนรูปภาพสลิป InteractiveViewer ซูมได้
+                Flexible(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(21)),
+                    child: Container(
+                      color: const Color(0xFF0F172A),
+                      width: double.infinity,
+                      child: InteractiveViewer(
+                        minScale: 0.8,
+                        maxScale: 4.5,
+                        child: Image.file(
+                          file,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
@@ -2050,6 +2591,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           if (card['bank'] != null) 'bank': card['bank'],
           if (card['reference_no'] != null) 'reference_no': card['reference_no'],
           if (card['source'] != null) 'source': card['source'],
+          if (card['metadata'] != null) 'metadata': card['metadata'],
         };
         var patchResp = await _apiClient.patch(
           '/transactions?id=eq.$currentTxId',
@@ -2162,6 +2704,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           (card['totalAccumulated'] as num?)?.toDouble() ?? amount;
 
       final BankType? bank = card['bankType'] as BankType?;
+      final BankType? destinationBank = card['destinationBankType'] as BankType?;
 
       Color categoryColor = const Color(0xFF10B981);
       Color headerBgColor = const Color(0xFFE6F4F1);
@@ -2262,6 +2805,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                   headerBgColor,
                   hasBudget,
                   bank: bank,
+                  destinationBank: destinationBank,
                   onEdit: () => _showEditTransactionModal(card),
                 ),
                 Padding(
@@ -2349,40 +2893,74 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '${totalAccumulated.toStringAsFixed(0)} / ${budget.toStringAsFixed(0)} บาท',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: context.secondaryTextColor,
-                              fontWeight: FontWeight.w500,
+                      if (msgType == 'transfer') ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                              width: 0.8,
                             ),
                           ),
-                          Text(
-                            '${(progress * 100).toStringAsFixed(0)}%',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: categoryColor,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.swap_horiz_rounded, size: 15, color: Color(0xFF6366F1)),
+                              SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'ย้ายเงินระหว่างบัญชี',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF6366F1),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          backgroundColor: const Color(0xFFF1F5F9),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            hasBudget ? categoryColor : const Color(0xFFEF4444),
-                          ),
-                          minHeight: 4,
                         ),
-                      ),
+                      ] else ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${totalAccumulated.toStringAsFixed(0)} / ${budget.toStringAsFixed(0)} บาท',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: context.secondaryTextColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              '${(progress * 100).toStringAsFixed(0)}%',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: categoryColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              hasBudget ? categoryColor : const Color(0xFFEF4444),
+                            ),
+                            minHeight: 4,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -2873,6 +3451,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
   Color _typeColor(String type) {
     switch (type) {
+      case 'transfer':
+        return const Color(0xFF6366F1);
       case 'income':
         return const Color(0xFF10B981);
       case 'dream':
@@ -2884,6 +3464,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
   String _successMessage(String type) {
     switch (type) {
+      case 'transfer':
+        return 'บันทึกการย้ายเงินระหว่างบัญชีเรียบร้อยแล้ว';
       case 'income':
         return 'บันทึกยอดรายรับเข้าระบบสำเร็จเรียบร้อยแล้ว';
       case 'dream':
@@ -2902,17 +3484,23 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     Color headerBgColor,
     bool hasBudget, {
     BankType? bank,
+    BankType? destinationBank,
     VoidCallback? onEdit,
   }) {
-    final isExpense = msgType == 'expense' || category == 'รายจ่าย';
-    final isDream = msgType == 'dream' || category == 'เงินออม';
-    final title = bank != null
-        ? 'สลิป ${bank.displayName}'
-        : (isExpense
-            ? context.tr('บันทึกรายจ่าย', 'EXPENSE RECORD')
-            : (isDream
-                ? context.tr('หยอดเป้าหมาย', 'SAVINGS GOAL')
-                : context.tr('รายการใหม่', 'NEW ENTRY')));
+    final isTransfer = msgType == 'transfer' || category == 'ย้ายเงิน';
+    final isExpense = !isTransfer && (msgType == 'expense' || category == 'รายจ่าย');
+    final isDream = !isTransfer && (msgType == 'dream' || category == 'เงินออม');
+    final title = isTransfer
+        ? 'ย้ายเงินระหว่างบัญชี'
+        : (bank != null
+            ? (destinationBank != null
+                ? 'โอนออก (${bank.displayName} ➔ ${destinationBank.displayName})'
+                : 'สลิป ${bank.displayName}')
+            : (isExpense
+                ? context.tr('บันทึกรายจ่าย', 'EXPENSE RECORD')
+                : (isDream
+                    ? context.tr('หยอดเป้าหมาย', 'SAVINGS GOAL')
+                    : context.tr('รายการใหม่', 'NEW ENTRY'))));
 
     final editButton = onEdit != null
         ? Positioned(
