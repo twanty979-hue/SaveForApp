@@ -678,18 +678,22 @@ class _AuthScreenState extends State<AuthScreen> {
                                           strokeWidth: 2.5,
                                         ),
                                       )
-                                    : const Row(
+                                    : Row(
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
-                                        children: [
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: const [
                                           GoogleLogo(size: 22),
                                           SizedBox(width: 10),
-                                          Text(
-                                            'เข้าสู่ระบบด้วย Google',
-                                            style: TextStyle(
-                                              color: Color(0xFF0F172A),
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w700,
+                                          Flexible(
+                                            child: Text(
+                                              'เข้าสู่ระบบด้วย Google',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: Color(0xFF0F172A),
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                             ),
                                           ),
                                         ],

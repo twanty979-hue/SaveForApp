@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -96,7 +97,9 @@ class NotificationService {
       await _sendToken(enabled: AppSettings.notificationsEnabled);
     });
 
-    if (AppSettings.notificationsEnabled) await registerDevice();
+    if (AppSettings.notificationsEnabled) {
+      unawaited(registerDevice());
+    }
   }
 
   String? get currentToken => _token;

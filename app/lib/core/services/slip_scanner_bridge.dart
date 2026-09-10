@@ -421,7 +421,8 @@ class SlipScannerBridge {
 
         // 2. ดึงจากยอดเงินและวันเวลา
         if (bank != null) {
-          final amount = (row['amount'] as num?)?.toDouble() ?? 0.0;
+          final amount =
+              num.tryParse(row['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
           final dateStr = row['transaction_date']?.toString();
           final date = dateStr != null ? DateTime.tryParse(dateStr)?.toLocal() : null;
           if (date != null) {

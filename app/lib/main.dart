@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:app/core/localization/app_material.dart';
@@ -13,6 +14,7 @@ import 'features/auth/presentation/auth_screen.dart';
 import 'features/auth/presentation/app_lock_wrapper.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
 import 'features/marketing/presentation/web_landing_screen.dart';
+import 'features/splash/presentation/splash_screen.dart';
 
 // ตรวจสอบและล็อกอินผู้ใช้ตั้งแต่เปิดแอปทันทีเพื่อป้องกันบราวเซอร์สับสนพอร์ตเราท์เตอร์ (#access_token)
 Future<void> _checkInitialTokens() async {
@@ -84,27 +86,26 @@ void main() async {
   if (kIsWeb) {
     usePathUrlStrategy();
   }
-  try {
-    await dotenv.load(fileName: ".env");
-  } catch (e) {
-    // กรณีหาไฟล์ไม่เจอ
-  }
 
-  // 1. เรียกคืนเซสชันล็อกอินเดิม
-  await AuthSession.init();
-  await AppSettings.init();
+  // 1. โหลดการตั้งค่าและเซสชันพร้อมกันแบบขนาน (Parallel) รวดเร็วระดับมิลลิวินาที
+  await Future.wait([
+    dotenv.load(fileName: ".env").catchError((_) {}),
+    AuthSession.init(),
+    AppSettings.init(),
+  ]);
 
-  // 2. ดักจับคิวรีส่งกลับจาก OAuth / Magic Link ทันทีก่อน MaterialApp จะประมวลผลเส้นทางชนบั๊กจอขาว
+  // 2. ดักจับคิวรีส่งกลับจาก OAuth / Magic Link ทันทีก่อน MaterialApp จะประมวลผลเส้นทางชนบั๊กจอขาว (เฉพาะเว็บ)
   if (kIsWeb) {
     await _checkInitialTokens();
   }
 
-  // 3. เริ่มต้นระบบแจ้งเตือน
-  try {
-    await NotificationService.instance.initialize();
-  } catch (e) {
-    debugPrint('Notification init error: $e');
-  }
+  // 3. เริ่มต้นระบบแจ้งเตือนในเบื้องหลัง (Background Asynchronous) ไม่บล็อกการขึ้นหน้าจอแรก
+  // ป้องกันอาการจอขาวค้าง (White Screen) ตอนเปิดแอปขึ้นมาทันที
+  unawaited(
+    NotificationService.instance.initialize().catchError((e) {
+      debugPrint('Notification init error: $e');
+    }),
+  );
 
   runApp(const MyApp());
 }
@@ -135,12 +136,8 @@ class MyApp extends StatelessWidget {
             initialRoute: kIsWeb
                 ? (Uri.base.path.isEmpty ? '/' : Uri.base.path)
                 : null,
-            // หน้าเริ่มต้นหลักและ URL สาธารณะของเว็บ
-            home: kIsWeb
-                ? null
-                : (AuthSession.isLoggedIn
-                      ? const DashboardScreen()
-                      : const AuthScreen()),
+            // หน้าเริ่มต้นหลัก: บนมือถือแสดง SplashScreen ที่กลมกลืนกับ Launch Screen ก่อนเฟดเข้าหน้าหลัก
+            home: kIsWeb ? null : const SplashScreen(),
             onGenerateRoute: (settings) {
               if (!kIsWeb) return null;
               switch (settings.name) {

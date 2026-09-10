@@ -108,7 +108,8 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
     var saving = 0.0;
     for (final transaction in _filteredTransactions) {
       if (isTransferTransaction(transaction)) continue;
-      final amount = (transaction['amount'] as num?)?.toDouble() ?? 0;
+      final amount =
+          num.tryParse(transaction['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
       final note = transaction['note']?.toString() ?? '';
       final source = transaction['source']?.toString();
       final dreamId = transaction['dream_id']?.toString();
@@ -136,7 +137,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
       final difference = today.difference(day).inDays;
       if (difference >= 0 && difference < 7) {
         result[6 - difference] +=
-            (transaction['amount'] as num?)?.toDouble() ?? 0;
+            num.tryParse(transaction['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
       }
     }
     return result;
@@ -160,7 +161,8 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
         (month) => month.year == date.year && month.month == date.month,
       );
       if (index < 0) continue;
-      final amount = (transaction['amount'] as num?)?.toDouble() ?? 0;
+      final amount =
+          num.tryParse(transaction['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
       final note = transaction['note']?.toString() ?? '';
       final source = transaction['source']?.toString();
       final dreamId = transaction['dream_id']?.toString();
@@ -356,7 +358,11 @@ class _DashboardHeader extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+              },
               child: const SizedBox(
                 width: 40,
                 height: 40,
@@ -558,7 +564,7 @@ class _RecentTransactions extends StatelessWidget {
       ),
       child: Column(
         children: List.generate(visible.length, (index) {
-          final transaction = visible[index] as Map<String, dynamic>;
+          final transaction = Map<String, dynamic>.from(visible[index] as Map);
           return _RecentTransactionRow(
             transaction: transaction,
             showDivider: index < visible.length - 1,
@@ -605,7 +611,8 @@ class _RecentTransactionRow extends StatelessWidget {
     final date = DateTime.tryParse(
       transaction['transaction_date']?.toString() ?? '',
     )?.toLocal();
-    final amount = (transaction['amount'] as num?)?.toDouble() ?? 0;
+    final amount =
+        num.tryParse(transaction['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

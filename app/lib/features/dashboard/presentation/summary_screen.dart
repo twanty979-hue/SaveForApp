@@ -96,12 +96,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
     // 1. คำนวณเงินออมสะสมจากคลังความฝัน (ไม่ขึ้นกับฟิลเตอร์เวลาของรายรับรายจ่าย)
     for (var dream in _dreams) {
-      totalSavings += (dream['current_amount'] as num).toDouble();
+      totalSavings += num.tryParse(dream['current_amount']?.toString() ?? '')?.toDouble() ?? 0.0;
     }
 
     // 2. คำนวณรายรับ (จากแหล่งรายรับและรายการเงินฝาก)
     for (var source in _incomeSources) {
-      totalIncome += (source['amount'] as num).toDouble();
+      totalIncome += num.tryParse(source['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
     }
 
     // 3. กรองธุรกรรมตามเซกเมนต์ช่วงเวลา
@@ -124,7 +124,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
 
       if (isInRange) {
-        final amt = (tx['amount'] as num).toDouble();
+        final amt = num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
         if (_isTransferTx(tx)) {
           // ไม่นับรายการย้ายเงินเข้าในรายจ่ายหรือรายรับ
         } else if (tx['type'] == 'expense') {
@@ -596,7 +596,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                               txDate.day == dayDate.day &&
                               tx['type'] == 'expense' &&
                               !_isTransferTx(tx)) {
-                            spent += (tx['amount'] as num).toDouble();
+                            spent += num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
                           }
                         }
 

@@ -211,7 +211,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final dateStr = tx['transaction_date'] ?? '';
             final date = DateTime.tryParse(dateStr)?.toLocal();
             if (date == null) continue;
-            final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+            final amount =
+                num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
             if (date.year == now.year && date.month == now.month) {
               monthSum += amount;
             }
@@ -946,7 +947,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (response.statusCode == 200) {
         final List<dynamic> profiles = jsonDecode(response.body);
         if (profiles.isNotEmpty) {
-          final profile = profiles.first as Map<String, dynamic>;
+          final profile = Map<String, dynamic>.from(profiles.first as Map);
           final hasCompleted =
               profile['has_completed_tutorial'] as bool? ?? false;
 
@@ -985,13 +986,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Map<String, dynamic>? monthlyExpense;
         for (var item in expenses) {
           if (item['name']?.toString().trim() == 'ค่าใช้จ่ายรายเดือน') {
-            monthlyExpense = item;
+            monthlyExpense = item is Map ? Map<String, dynamic>.from(item) : null;
             break;
           }
         }
 
         final double amount = monthlyExpense != null
-            ? (monthlyExpense['amount'] as num?)?.toDouble() ?? 0.0
+            ? (num.tryParse(monthlyExpense['amount']?.toString() ?? '')?.toDouble() ?? 0.0)
             : 0.0;
 
         if (monthlyExpense == null || amount <= 0.0) {
@@ -1763,7 +1764,7 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
     }).toList();
 
     double monthlyTotal = monthlyExpenses.fold(0.0, (sum, item) {
-      return sum + (item['amount'] as num).toDouble();
+      return sum + (num.tryParse(item['amount']?.toString() ?? '')?.toDouble() ?? 0.0);
     });
     final accent = Theme.of(context).colorScheme.primary;
 
@@ -1975,7 +1976,7 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                                 txDate.day == date.day &&
                                 tx['type'] == 'expense' &&
                                 !_isTransferTx(tx)) {
-                              spent += (tx['amount'] as num).toDouble();
+                              spent += num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
                             }
                           }
 
@@ -2088,7 +2089,7 @@ class _CalendarBottomSheetState extends State<_CalendarBottomSheet> {
                           itemCount: monthlyExpenses.length,
                           itemBuilder: (context, index) {
                             final tx = monthlyExpenses[index];
-                            final amount = (tx['amount'] as num).toDouble();
+                            final amount = num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
                             return Card(
                               elevation: 0,
                               color: const Color(0xFFF8FAFC),

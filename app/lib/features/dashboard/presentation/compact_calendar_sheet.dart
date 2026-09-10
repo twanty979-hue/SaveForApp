@@ -136,9 +136,10 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
     );
     final amountController = TextEditingController(
       text: isEdit
-          ? (editingTransaction['amount'] as num?)?.toDouble().toStringAsFixed(
-              0,
-            )
+          ? (num.tryParse(editingTransaction['amount']?.toString() ?? '')
+                  ?.toDouble()
+                  .toStringAsFixed(0) ??
+              '')
           : '',
     );
 
@@ -271,7 +272,7 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                                   );
                                   await _loadTransactions();
                                 } catch (_) {}
-                                if (sheetContext.mounted) {
+                                if (sheetContext.mounted && Navigator.canPop(sheetContext)) {
                                   Navigator.pop(sheetContext);
                                 }
                               }
@@ -442,7 +443,7 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
                                   }
                                 } catch (_) {}
 
-                                if (sheetContext.mounted) {
+                                if (sheetContext.mounted && Navigator.canPop(sheetContext)) {
                                   Navigator.pop(sheetContext);
                                 }
                               },
@@ -598,7 +599,11 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
         IconButton(
           visualDensity: VisualDensity.compact,
           tooltip: 'ปิด',
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+          },
           icon: const Icon(Icons.close_rounded, size: 19),
         ),
       ],
@@ -770,7 +775,7 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
       itemCount: transactions.length,
       separatorBuilder: (_, _) => const SizedBox(height: 6),
       itemBuilder: (context, index) {
-        final tx = transactions[index] as Map<String, dynamic>;
+        final tx = Map<String, dynamic>.from(transactions[index] as Map);
         return InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: () => _showTransactionFormModal(editingTransaction: tx),
@@ -875,7 +880,8 @@ class _TransactionRow extends StatelessWidget {
         .replaceAll('[รายรับประจำ]', '')
         .replaceAll('[ออม] หยอดกระปุก:', '')
         .trim();
-    final amount = (transaction['amount'] as num?)?.toDouble() ?? 0;
+    final amount =
+        num.tryParse(transaction['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

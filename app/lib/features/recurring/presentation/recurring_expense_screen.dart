@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-import 'package:intl/intl.dart';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
@@ -143,7 +141,8 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
           date.month == now.month &&
           tx['type'] == 'expense' &&
           isMatch) {
-        total += (tx['amount'] as num?)?.toDouble() ?? 0.0;
+        total +=
+            num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
       }
     }
     return total;
@@ -178,7 +177,11 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
           actionsPadding: const EdgeInsets.only(right: 16, bottom: 16),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+              },
               child: const Text(
                 'ยกเลิก',
                 style: TextStyle(
@@ -196,7 +199,9 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                 elevation: 0,
               ),
               onPressed: () {
-                Navigator.pop(context);
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
                 _deleteExpense(id);
               },
               child: const Text(
@@ -217,10 +222,12 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
     try {
       final response = await _apiClient.delete('/recurring/expenses?id=eq.$id');
       if (response.statusCode == 200 || response.statusCode == 204) {
-        _fetchData();
+        if (mounted) {
+          _fetchData();
+        }
       }
     } catch (e) {
-      // จัดการข้อผิดพลาดเงียบ
+      debugPrint('[RecurringExpense] Error deleting expense: $e');
     }
   }
 
@@ -1140,10 +1147,10 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
     double totalExpensePaid = 0.0;
 
     for (var exp in _fixedExpenses) {
-      final amt = (exp['amount'] as num).toDouble();
+      final amt = num.tryParse(exp['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
       totalExpenseExpected += amt;
-      final id = exp['id'] as String? ?? '';
-      final name = exp['name'] as String? ?? '';
+      final id = exp['id']?.toString() ?? '';
+      final name = exp['name']?.toString() ?? '';
       final paidAmt = _getPaidAmountThisMonth(id, name);
       totalExpensePaid += paidAmt;
     }
@@ -1290,26 +1297,26 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                           itemCount: _fixedExpenses.length,
                           itemBuilder: (context, index) {
-                            final expense = _fixedExpenses[index];
-                            final id = expense['id'] ?? '';
-                            final name = expense['name'] ?? '';
-                            final amount = (expense['amount'] as num)
-                                .toDouble();
-                            final category = expense['category'] ?? 'ทั่วไป';
-                            final dueDay = expense['due_day'] ?? 1;
+                            final rawExpense = _fixedExpenses[index];
+                            final expense = rawExpense is Map
+                                ? Map<String, dynamic>.from(rawExpense)
+                                : <String, dynamic>{};
+                            final id = expense['id']?.toString() ?? '';
+                            final name = expense['name']?.toString() ?? '';
+                            final amount = num.tryParse(expense['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+                            final category = expense['category']?.toString() ?? 'ทั่วไป';
+                            final dueDay = int.tryParse(expense['due_day']?.toString() ?? '') ?? 1;
                             final paidAmt = _getPaidAmountThisMonth(id, name);
                             final hasPaid = paidAmt > 0;
 
-                            if (expense is Map<String, dynamic>) {
+                            if (expense.isNotEmpty) {
                               return _buildExpenseListCard(
                                 expense: expense,
-                                id: id.toString(),
-                                name: name.toString(),
+                                id: id,
+                                name: name,
                                 amount: amount,
-                                category: category.toString(),
-                                dueDay: dueDay is int
-                                    ? dueDay
-                                    : int.tryParse(dueDay.toString()) ?? 1,
+                                category: category,
+                                dueDay: dueDay,
                                 paidAmount: paidAmt,
                               );
                             }

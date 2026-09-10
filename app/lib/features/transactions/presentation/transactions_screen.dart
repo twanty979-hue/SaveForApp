@@ -69,7 +69,7 @@ class TransactionsScreen extends StatefulWidget {
 
 class _TransactionsScreenState extends State<TransactionsScreen>
     with WidgetsBindingObserver {
-  final List<Message> _messages = [];
+  List<Message> _messages = [];
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
@@ -544,22 +544,20 @@ class _TransactionsScreenState extends State<TransactionsScreen>
         });
 
         if (!mounted) return;
-        setState(() {
-          // Keep intro message
-          final introMsg = _messages.isNotEmpty
-              ? _messages.first
-              : Message(
-                  text: context.tr(
-                    'พิมพ์เพื่อบันทึกได้เลยครับ เช่น "ข้าว 50"',
-                    'Type to record, e.g., "Food 50"',
-                  ),
-                  isUser: false,
-                  timestamp: DateTime.now(),
-                );
-          _messages.clear();
-          _messages.add(introMsg);
+        // Build new messages list locally to avoid intermediate layout glitches
+        final introMsg = _messages.isNotEmpty
+            ? _messages.first
+            : Message(
+                text: context.tr(
+                  'พิมพ์เพื่อบันทึกได้เลยครับ เช่น "ข้าว 50"',
+                  'Type to record, e.g., "Food 50"',
+                ),
+                isUser: false,
+                timestamp: DateTime.now(),
+              );
+        final List<Message> newMessages = [introMsg];
 
-          for (var tx in data) {
+        for (var tx in data) {
             try {
               final name = tx['note']?.toString() ?? '';
               final amount =
@@ -784,7 +782,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 }
               }
 
-              _messages.add(
+              newMessages.add(
                 Message(
                   text: '$displayName ${amount.toStringAsFixed(0)}',
                   isUser: true,
@@ -792,12 +790,12 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ),
               );
               final bool isSlipTx = name.startsWith('[สลิป') || name.contains('[สลิป');
-              final txMetadata = tx['metadata'] is Map ? (tx['metadata'] as Map<String, dynamic>) : null;
+              final txMetadata = tx['metadata'] is Map ? Map<String, dynamic>.from(tx['metadata'] as Map) : null;
               final rawImagePath = txMetadata?['image_path']?.toString() ?? tx['image_path']?.toString();
               final assetId = txMetadata?['asset_id']?.toString();
               final recipientName = txMetadata?['recipient']?.toString();
 
-              _messages.add(
+              newMessages.add(
                 Message(
                   text: '',
                   isUser: false,
@@ -847,6 +845,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
               debugPrint('Error parsing transaction item: $innerEx');
             }
           }
+
+        if (!mounted) return;
+        setState(() {
+          _messages = newMessages;
         });
         if (forceScrollToBottom || (!preserveScroll && wasNearBottom)) {
           _scrollToBottom(force: forceScrollToBottom);
@@ -876,22 +878,39 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     }
   }
 
+  void _unfocusKeyboard() {
+    if (_focusNode.hasFocus) {
+      _focusNode.unfocus();
+    }
+    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   void _scrollToBottom({bool force = false}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _scrollController.hasClients) {
-        if (!force) {
-          final max = _scrollController.position.maxScrollExtent;
-          final current = _scrollController.offset;
-          if ((max - current) > 150) {
-            // User has scrolled up to review or edit history; don't auto-scroll down
-            return;
-          }
+    void scrollAction() {
+      if (!mounted || !_scrollController.hasClients) return;
+      if (!force) {
+        final max = _scrollController.position.maxScrollExtent;
+        final current = _scrollController.offset;
+        if ((max - current) > 150) {
+          // User has scrolled up to review or edit history; don't auto-scroll down
+          return;
         }
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+      }
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+      );
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      scrollAction();
+      // Ensure layout and image/card rendering settles (especially after keyboard dismisses)
+      Future.delayed(const Duration(milliseconds: 80), scrollAction);
+      if (force) {
+        Future.delayed(const Duration(milliseconds: 200), scrollAction);
+        Future.delayed(const Duration(milliseconds: 350), scrollAction);
       }
     });
   }
@@ -1022,433 +1041,385 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
 
-    setState(() {
-      _messages.add(
-        Message(text: text, isUser: true, timestamp: DateTime.now()),
-      );
-    });
     _inputController.clear();
-    _scrollToBottom();
-
-    final thinkingMessage = Message(
-      text: 'กำลังบันทึกข้อมูล . . .',
-      isUser: false,
-      timestamp: DateTime.now(),
-      isThinking: true,
-    );
-
-    Future.delayed(const Duration(milliseconds: 200), () {
-      setState(() {
-        _messages.add(thinkingMessage);
-      });
-      _scrollToBottom();
+    // Do not dismiss keyboard on send so user can type subsequent entries seamlessly
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
     });
 
-    Future.delayed(const Duration(milliseconds: 1000), () async {
-      final parsedItems = _parseInput(text);
+    final parsedItems = _parseInput(text);
 
+    if (parsedItems.isEmpty) {
       setState(() {
-        _messages.remove(thinkingMessage);
+        _messages.add(
+          Message(text: text, isUser: true, timestamp: DateTime.now()),
+        );
+        _messages.add(
+          Message(
+            text:
+                'ไม่พบข้อมูลที่ระบุ กรุณาระบุในรูปแบบ [รายการ] [จำนวนเงิน] เช่น "ข้าวผัด 60" หรือ "+เงินเดือน 20000"',
+            isUser: false,
+            timestamp: DateTime.now(),
+            isError: true,
+          ),
+        );
       });
+      _scrollToBottom(force: true);
+      _playAiReplySound();
+      return;
+    }
 
-      if (parsedItems.isEmpty) {
-        setState(() {
-          _messages.add(
-            Message(
-              text:
-                  'ไม่พบข้อมูลที่ระบุ กรุณาระบุในรูปแบบ [รายการ] [จำนวนเงิน] เช่น "ข้าวผัด 60" หรือ "+เงินเดือน 20000"',
-              isUser: false,
-              timestamp: DateTime.now(),
-              isError: true,
-            ),
-          );
-        });
-        _scrollToBottom();
-        _playAiReplySound();
-        return;
+    // 1. ตอบสนองทันที 0ms (Optimistic UI):
+    // สรุปข้อมูลการ์ดและคำตอบ AI แสดงขึ้นหน้าจอทันที ไม่ต้องรอเน็ตเวิร์ก
+    final now = DateTime.now();
+    final List<Message> optimisticMessages = [
+      Message(text: text, isUser: true, timestamp: now),
+    ];
+    final List<Map<String, dynamic>> itemsToSync = [];
+
+    for (var item in parsedItems) {
+      final name = item['name']?.toString() ?? '';
+      final note = item['note']?.toString() ?? '';
+      final amount =
+          num.tryParse(item['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+      final type = item['type']?.toString() ?? 'expense';
+      final category = item['category']?.toString() ?? 'รายจ่าย';
+      final msgType = item['msgType']?.toString() ?? 'expense';
+
+      Map<String, dynamic>? matchedSuggestion;
+      for (var sugg in _rawSuggestions) {
+        final suggName =
+            (sugg['bot_type'] == 'dream' ? sugg['title'] : sugg['name'])
+                ?.toString()
+                .toLowerCase();
+        if (suggName == name.toLowerCase() && sugg['bot_type'] == msgType) {
+          matchedSuggestion = sugg;
+          break;
+        }
       }
 
-      var savedAnyTransaction = false;
-      for (var item in parsedItems) {
-        final name = item['name'] as String;
-        final note = item['note'] as String;
-        final amount = item['amount'] as double;
-        final type = item['type'] as String;
-        final category = item['category'] as String;
-        final msgType = item['msgType'] as String; // expense, income, dream
+      // Fallback ไปยัง "ค่าใช้จ่ายรายเดือน" ถ้ายังไม่เจอ และเป็นรายจ่าย
+      if (matchedSuggestion == null && msgType == 'expense') {
+        for (var sugg in _rawSuggestions) {
+          final suggName = sugg['name']?.toString().trim().toLowerCase();
+          if (suggName == 'ค่าใช้จ่ายรายเดือน' &&
+              sugg['bot_type'] == 'expense') {
+            matchedSuggestion = sugg;
+            break;
+          }
+        }
+      }
 
-        try {
-          String? fixedExpenseId;
-          String? incomeSourceId;
-          String finalNote = note;
+      double budget = 0.0;
+      bool hasBudget = false;
+      if (matchedSuggestion != null) {
+        hasBudget = true;
+        if (msgType == 'expense' || msgType == 'income') {
+          budget =
+              num.tryParse(matchedSuggestion['amount']?.toString() ?? '')
+                  ?.toDouble() ??
+              0.0;
+        } else if (msgType == 'dream') {
+          budget =
+              num.tryParse(matchedSuggestion['target_amount']?.toString() ?? '')
+                  ?.toDouble() ??
+              0.0;
+        }
+      }
 
-          Map<String, dynamic>? matchedSuggestion;
+      // คำนวณ totalAccumulated สะสมของเดือนปัจจุบันทันทีในหน่วยความจำ (0ms)
+      double totalAccumulated = amount;
+      final cleanName = name.trim().toLowerCase();
+      final String? matchedId = matchedSuggestion?['id']?.toString();
+      final bool isGenericMonthlyBudget = matchedSuggestion != null &&
+          matchedSuggestion['name']?.toString().trim() == 'ค่าใช้จ่ายรายเดือน';
+
+      for (final m in _messages) {
+        final card = m.cardData;
+        if (card == null) continue;
+        final date =
+            DateTime.tryParse(card['transaction_date']?.toString() ?? '') ??
+            m.timestamp;
+        if (date.year != now.year || date.month != now.month) continue;
+
+        final cardAmount =
+            num.tryParse(card['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+        final cardMsgType = card['msgType']?.toString() ?? 'expense';
+        final cardName = card['name']?.toString().trim().toLowerCase() ?? '';
+
+        if (msgType == 'expense' && cardMsgType == 'expense') {
+          if (isGenericMonthlyBudget) {
+            totalAccumulated += cardAmount;
+          } else {
+            final cardFixedId =
+                card['fixed_expense_id']?.toString() ?? card['id']?.toString();
+            if ((matchedId != null && cardFixedId == matchedId) ||
+                cardName == cleanName) {
+              totalAccumulated += cardAmount;
+            }
+          }
+        } else if (msgType == 'income' && cardMsgType == 'income') {
+          final cardIncomeId = card['income_source_id']?.toString();
+          if ((matchedId != null && cardIncomeId == matchedId) ||
+              cardName == cleanName) {
+            totalAccumulated += cardAmount;
+          }
+        }
+      }
+
+      final String replyText = hasBudget
+          ? _successMessage(msgType)
+          : 'ไม่พบแผนงบประมาณที่ตรงกับรายการนี้ ยอดเงินถูกบันทึกสำเร็จแล้ว';
+
+      final matchedBank = BankType.detectFromText(name);
+      final tempId =
+          'temp_${DateTime.now().millisecondsSinceEpoch}_${math.Random().nextInt(9999)}';
+
+      final transactionDateStr = () {
+        if (_effectiveDateFilter.value != null) {
+          final filter = _effectiveDateFilter.value!;
+          final merged = DateTime(
+            filter.year,
+            filter.month,
+            filter.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          return merged.toUtc().toIso8601String();
+        }
+        return now.toUtc().toIso8601String();
+      }();
+
+      final cardData = <String, dynamic>{
+        'id': tempId,
+        'rawNote': note,
+        'isSlip': false,
+        'bank': matchedBank?.name,
+        'source': msgType == 'dream'
+            ? 'dream_saving'
+            : (msgType == 'expense' ? 'recurring_expense' : 'recurring_income'),
+        'transaction_date': transactionDateStr,
+        'name': name,
+        'type': type,
+        'amount': amount,
+        'category': category,
+        'hasBudget': hasBudget,
+        'budget': budget,
+        'totalAccumulated': totalAccumulated,
+        'msgType': msgType,
+        'bankType': matchedBank,
+        'icon': matchedBank != null
+            ? BankLogoIcon(
+                bank: matchedBank,
+                size: 44,
+                showShadow: true,
+              )
+            : _getIconForTransaction(
+                name,
+                category,
+                msgType,
+                matchedSuggestion,
+              ),
+      };
+
+      optimisticMessages.add(
+        Message(text: replyText, isUser: false, timestamp: now),
+      );
+      optimisticMessages.add(
+        Message(text: '', isUser: false, timestamp: now, cardData: cardData),
+      );
+
+      itemsToSync.add({
+        'item': item,
+        'cardData': cardData,
+        'matchedSuggestion': matchedSuggestion,
+      });
+    }
+
+    // อัปเดตขึ้นหน้าจอทันที 0ms!
+    setState(() {
+      _messages.addAll(optimisticMessages);
+    });
+    _scrollToBottom(force: true);
+    _playAiReplySound();
+    _loadQuickSuggestions();
+
+    // 2. ทำงานเบื้องหลัง (Background Sync) ส่งขึ้นเซิร์ฟเวอร์เงียบๆ
+    _syncOptimisticTransactionsInBackground(itemsToSync);
+  }
+
+  Future<void> _syncOptimisticTransactionsInBackground(
+    List<Map<String, dynamic>> syncItems,
+  ) async {
+    var savedAny = false;
+    for (final syncItem in syncItems) {
+      final item = syncItem['item'] as Map<String, dynamic>;
+      final cardData = syncItem['cardData'] as Map<String, dynamic>;
+      var matchedSuggestion =
+          syncItem['matchedSuggestion'] as Map<String, dynamic>?;
+
+      final name = item['name']?.toString() ?? '';
+      final note = item['note']?.toString() ?? '';
+      final amount =
+          num.tryParse(item['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+      final type = item['type']?.toString() ?? 'expense';
+      final msgType = item['msgType']?.toString() ?? 'expense';
+
+      try {
+        String? fixedExpenseId;
+        String? incomeSourceId;
+        String finalNote = note;
+
+        // Fallback ไปยัง "ค่าใช้จ่ายรายเดือน" ถ้ายังไม่เจอ และเป็นรายจ่าย
+        if (matchedSuggestion == null && msgType == 'expense') {
           for (var sugg in _rawSuggestions) {
-            final suggName =
-                (sugg['bot_type'] == 'dream' ? sugg['title'] : sugg['name'])
-                    ?.toString()
-                    .toLowerCase();
-            if (suggName == name.toLowerCase() && sugg['bot_type'] == msgType) {
+            final suggName = sugg['name']?.toString().trim().toLowerCase();
+            if (suggName == 'ค่าใช้จ่ายรายเดือน' &&
+                sugg['bot_type'] == 'expense') {
               matchedSuggestion = sugg;
               break;
             }
           }
 
-          // Fallback ไปยัง "ค่าใช้จ่ายรายเดือน" ถ้ายังไม่เจอ และเป็นรายจ่าย
-          if (matchedSuggestion == null && msgType == 'expense') {
-            for (var sugg in _rawSuggestions) {
-              final suggName = sugg['name']?.toString().trim().toLowerCase();
-              if (suggName == 'ค่าใช้จ่ายรายเดือน' &&
-                  sugg['bot_type'] == 'expense') {
-                matchedSuggestion = sugg;
-                break;
-              }
-            }
-
-            // สร้างอัตโนมัติ
-            if (matchedSuggestion == null) {
-              try {
-                final createResp = await _apiClient.post(
-                  '/recurring/expenses',
-                  headers: {'Prefer': 'return=representation'},
-                  body: {
-                    'user_id': _activeUserId,
-                    'name': 'ค่าใช้จ่ายรายเดือน',
-                    'amount': 0.0,
-                    'category': 'อื่นๆ',
-                    'due_day': 1,
-                  },
-                );
-                if (createResp.statusCode == 200 ||
-                    createResp.statusCode == 201) {
-                  final List<dynamic> createdList = jsonDecode(createResp.body);
-                  if (createdList.isNotEmpty) {
-                    final Map<String, dynamic> newSuggestion =
-                        createdList.first as Map<String, dynamic>;
-                    newSuggestion['bot_type'] = 'expense';
-                    matchedSuggestion = newSuggestion;
-                    _rawSuggestions.add(newSuggestion);
-                  }
-                }
-              } catch (e) {
-                // Fallback query
-                try {
-                  final queryResp = await _apiClient.get(
-                    '/recurring/expenses?user_id=eq.$_activeUserId&name=eq.ค่าใช้จ่ายรายเดือน',
-                  );
-                  if (queryResp.statusCode == 200) {
-                    final List<dynamic> queriedList = jsonDecode(
-                      queryResp.body,
-                    );
-                    if (queriedList.isNotEmpty) {
-                      final Map<String, dynamic> newSuggestion =
-                          queriedList.first as Map<String, dynamic>;
-                      newSuggestion['bot_type'] = 'expense';
-                      matchedSuggestion = newSuggestion;
-                      _rawSuggestions.add(newSuggestion);
-                    }
-                  }
-                } catch (_) {}
-              }
-            }
-          }
-
-          if (matchedSuggestion != null) {
-            final suggestionId = matchedSuggestion['id']?.toString();
-            if (msgType == 'expense') {
-              fixedExpenseId = suggestionId;
-              finalNote = name;
-            } else if (msgType == 'income') {
-              incomeSourceId = suggestionId;
-              finalNote = name;
-            } else if (msgType == 'dream') {
-              finalNote = name;
-            }
-          }
-
-          final detectedBank = BankType.detectFromText(name);
-          final String source = msgType == 'dream'
-              ? 'dream_saving'
-              : (fixedExpenseId != null
-                  ? 'recurring_expense'
-                  : (incomeSourceId != null ? 'recurring_income' : 'ai_chat'));
-
-          final Map<String, dynamic> body = {
-            'user_id': _activeUserId,
-            'type': type,
-            'amount': amount,
-            'note': finalNote,
-            'source': source,
-            if (detectedBank != null) 'bank': detectedBank.name,
-            'transaction_date': () {
-              if (_effectiveDateFilter.value != null) {
-                final now = DateTime.now();
-                final filter = _effectiveDateFilter.value!;
-                final merged = DateTime(
-                  filter.year,
-                  filter.month,
-                  filter.day,
-                  now.hour,
-                  now.minute,
-                  now.second,
-                );
-                return merged.toUtc().toIso8601String();
-              }
-              return DateTime.now().toUtc().toIso8601String();
-            }(),
-          };
-          if (fixedExpenseId != null) {
-            body['fixed_expense_id'] = fixedExpenseId;
-          }
-          if (incomeSourceId != null) {
-            body['income_source_id'] = incomeSourceId;
-          }
-          if (msgType == 'dream' && matchedSuggestion != null) {
-            final dreamId = matchedSuggestion['id']?.toString();
-            if (dreamId != null) {
-              body['dream_id'] = dreamId;
-            }
-          }
-
-          var response = await _apiClient.post('/transactions', body: body);
-          if (response.statusCode >= 400 && response.body.contains('column')) {
-            final fallbackBody = Map<String, dynamic>.from(body)
-              ..remove('source')
-              ..remove('bank')
-              ..remove('dream_id');
-            response = await _apiClient.post('/transactions', body: fallbackBody);
-          }
-
-          if (response.statusCode == 200 || response.statusCode == 201) {
-            savedAnyTransaction = true;
-            dynamic createdId;
+          if (matchedSuggestion == null) {
             try {
-              final parsed = jsonDecode(response.body);
-              if (parsed is List && parsed.isNotEmpty) {
-                createdId = parsed[0]['id'];
-              } else if (parsed is Map) {
-                createdId = parsed['id'];
+              final createResp = await _apiClient.post(
+                '/recurring/expenses',
+                headers: {'Prefer': 'return=representation'},
+                body: {
+                  'user_id': _activeUserId,
+                  'name': 'ค่าใช้จ่ายรายเดือน',
+                  'amount': 0.0,
+                  'category': 'อื่นๆ',
+                  'due_day': 1,
+                },
+              );
+              if (createResp.statusCode == 200 ||
+                  createResp.statusCode == 201) {
+                final List<dynamic> createdList = jsonDecode(createResp.body);
+                if (createdList.isNotEmpty) {
+                  final Map<String, dynamic> newSuggestion =
+                      Map<String, dynamic>.from(createdList.first as Map);
+                  newSuggestion['bot_type'] = 'expense';
+                  matchedSuggestion = newSuggestion;
+                  _rawSuggestions.add(newSuggestion);
+                }
               }
             } catch (_) {}
-            
-            // Update dream amount
-            if (note.startsWith('[ออม] หยอดกระปุก: ')) {
-              final dreamTitle = note
-                  .replaceAll('[ออม] หยอดกระปุก: ', '')
-                  .trim();
-              final dreamsResp = await _apiClient.get(
-                '/dreams?user_id=eq.$_activeUserId&title=eq.$dreamTitle',
-              );
+          }
+        }
+
+        if (matchedSuggestion != null) {
+          final suggestionId = matchedSuggestion['id']?.toString();
+          if (msgType == 'expense') {
+            fixedExpenseId = suggestionId;
+            finalNote = name;
+          } else if (msgType == 'income') {
+            incomeSourceId = suggestionId;
+            finalNote = name;
+          } else if (msgType == 'dream') {
+            finalNote = name;
+          }
+        }
+
+        final detectedBank = BankType.detectFromText(name);
+        final String source = msgType == 'dream'
+            ? 'dream_saving'
+            : (fixedExpenseId != null
+                ? 'recurring_expense'
+                : (incomeSourceId != null ? 'recurring_income' : 'ai_chat'));
+
+        final Map<String, dynamic> body = {
+          'user_id': _activeUserId,
+          'type': type,
+          'amount': amount,
+          'note': finalNote,
+          'source': source,
+          if (detectedBank != null) 'bank': detectedBank.name,
+          'transaction_date': cardData['transaction_date'] ??
+              DateTime.now().toUtc().toIso8601String(),
+        };
+        if (fixedExpenseId != null) {
+          body['fixed_expense_id'] = fixedExpenseId;
+        }
+        if (incomeSourceId != null) {
+          body['income_source_id'] = incomeSourceId;
+        }
+        if (msgType == 'dream' && matchedSuggestion != null) {
+          final dreamId = matchedSuggestion['id']?.toString();
+          if (dreamId != null) {
+            body['dream_id'] = dreamId;
+          }
+        }
+
+        var response = await _apiClient.post('/transactions', body: body);
+        if (response.statusCode >= 400 && response.body.contains('column')) {
+          final fallbackBody = Map<String, dynamic>.from(body)
+            ..remove('source')
+            ..remove('bank')
+            ..remove('dream_id');
+          response = await _apiClient.post('/transactions', body: fallbackBody);
+        }
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          savedAny = true;
+          dynamic createdId;
+          try {
+            final parsed = jsonDecode(response.body);
+            if (parsed is List && parsed.isNotEmpty) {
+              createdId = parsed[0]['id'];
+            } else if (parsed is Map) {
+              createdId = parsed['id'];
+            }
+          } catch (_) {}
+
+          if (createdId != null) {
+            cardData['id'] = createdId;
+          }
+
+          // Update dream amount asynchronously in background
+          if (note.startsWith('[ออม] หยอดกระปุก: ')) {
+            final dreamTitle = note.replaceAll('[ออม] หยอดกระปุก: ', '').trim();
+            _apiClient.get(
+              '/dreams?user_id=eq.$_activeUserId&title=eq.$dreamTitle',
+            ).then((dreamsResp) {
               if (dreamsResp.statusCode == 200) {
-                final List<dynamic> matchingDreams = jsonDecode(
-                  dreamsResp.body,
-                );
+                final List<dynamic> matchingDreams =
+                    jsonDecode(dreamsResp.body);
                 if (matchingDreams.isNotEmpty) {
                   final dream = matchingDreams.first;
-                  final double newSaved =
-                      (dream['current_amount'] as num).toDouble() + amount;
-                  await _apiClient.patch(
+                  final double currentSaved =
+                      num.tryParse(dream['current_amount']?.toString() ?? '')
+                          ?.toDouble() ??
+                      0.0;
+                  final double newSaved = currentSaved + amount;
+                  _apiClient.patch(
                     '/dreams?id=eq.${dream['id']}',
                     body: {'current_amount': newSaved},
                   );
                 }
               }
-            }
-
-            double budget = 0.0;
-            bool hasBudget = false;
-            if (matchedSuggestion != null) {
-              hasBudget = true;
-              if (msgType == 'expense' || msgType == 'income') {
-                budget =
-                    (matchedSuggestion['amount'] as num?)?.toDouble() ?? 0.0;
-              } else if (msgType == 'dream') {
-                budget =
-                    (matchedSuggestion['target_amount'] as num?)?.toDouble() ??
-                    0.0;
-              }
-            }
-
-            double totalAccumulated = 0.0;
-            try {
-              final txResponseForSum = await _apiClient.get(
-                '/transactions?user_id=eq.$_activeUserId',
-              );
-              if (txResponseForSum.statusCode == 200) {
-                final List<dynamic> txList = jsonDecode(txResponseForSum.body);
-                final now = DateTime.now();
-                final String? matchedId = matchedSuggestion?['id']?.toString();
-                final bool isGenericMonthlyBudget = matchedSuggestion != null &&
-                    matchedSuggestion['name']?.toString().trim() == 'ค่าใช้จ่ายรายเดือน';
-
-                for (var tx in txList) {
-                  final dateStr = tx['transaction_date'] ?? '';
-                  final date = DateTime.tryParse(dateStr);
-                  final noteText = tx['note']?.toString() ?? '';
-                  final txAmount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-                  final txFixedExpenseId = tx['fixed_expense_id']?.toString();
-                  final txIncomeSourceId = tx['income_source_id']?.toString();
-                  final txType = tx['type']?.toString() ?? 'expense';
-
-                  if (date != null &&
-                      date.year == now.year &&
-                      date.month == now.month) {
-                    if (isGenericMonthlyBudget && msgType == 'expense') {
-                      if (txType == 'expense') {
-                        totalAccumulated += txAmount;
-                      }
-                    } else {
-                      bool isTxMatch = false;
-                      if (matchedId != null) {
-                        if (msgType == 'expense' &&
-                            txFixedExpenseId == matchedId) {
-                          isTxMatch = true;
-                        } else if (msgType == 'income' &&
-                            txIncomeSourceId == matchedId) {
-                          isTxMatch = true;
-                        }
-                      }
-                      if (!isTxMatch) {
-                        final cleanNote = noteText
-                            .replaceAll(RegExp(r'\[สลิป\s+[^\]]+\]'), '')
-                            .replaceAll(RegExp(r'\[Ref:[^\]]+\]'), '')
-                            .replaceAll('[รายจ่ายประจำ]', '')
-                            .replaceAll('[รายรับประจำ]', '')
-                            .replaceAll('[ออม] หยอดกระปุก:', '')
-                            .trim()
-                            .toLowerCase();
-                        final cleanName = name.trim().toLowerCase();
-                        if (cleanNote == cleanName) {
-                          isTxMatch = true;
-                        }
-                      }
-                      if (isTxMatch) {
-                        totalAccumulated += txAmount;
-                      }
-                    }
-                  }
-                }
-              }
-            } catch (e) {
-              totalAccumulated = amount;
-            }
-            if (totalAccumulated <= 0.0) {
-              totalAccumulated = amount;
-            }
-
-            final String replyText = hasBudget
-                ? _successMessage(msgType)
-                : 'ไม่พบแผนงบประมาณที่ตรงกับรายการนี้ ยอดเงินถูกบันทึกสำเร็จแล้ว';
-
-            final matchedBank = BankType.detectFromText(name);
-
-            setState(() {
-              _messages.add(
-                Message(
-                  text: replyText,
-                  isUser: false,
-                  timestamp: DateTime.now(),
-                ),
-              );
-              _messages.add(
-                Message(
-                  text: '',
-                  isUser: false,
-                  timestamp: DateTime.now(),
-                  cardData: {
-                    'id': createdId,
-                    'rawNote': note,
-                    'isSlip': false,
-                    'bank': matchedBank?.name,
-                    'source': source,
-                    'transaction_date': body['transaction_date'],
-                    'name': name,
-                    'amount': amount,
-                    'category': category,
-                    'hasBudget': hasBudget,
-                    'budget': budget,
-                    'totalAccumulated': totalAccumulated,
-                    'msgType': msgType,
-                    'bankType': matchedBank,
-                    'icon': matchedBank != null
-                        ? BankLogoIcon(
-                            bank: matchedBank,
-                            size: 44,
-                            showShadow: true,
-                          )
-                        : _getIconForTransaction(
-                            name,
-                            category,
-                            msgType,
-                            matchedSuggestion,
-                          ),
-                  },
-                ),
-              );
-            });
-            _loadQuickSuggestions();
-          } else {
-            _addLocalFallbackMessage(name, amount, category, msgType);
+            }).catchError((_) {});
           }
-        } catch (e) {
-          _addLocalFallbackMessage(name, amount, category, msgType);
         }
+      } catch (_) {
+        // ออฟไลน์หรือมีปัญหาเครือข่าย: การ์ดยังคงแสดงผลอยู่ในเครื่องอย่างราบรื่น
       }
-      if (savedAnyTransaction) {
-        await widget.onTransactionSaved?.call();
-      }
-      _scrollToBottom();
-      _playAiReplySound();
-    });
-  }
+    }
 
-  void _addLocalFallbackMessage(
-    String name,
-    double amount,
-    String category,
-    String msgType,
-  ) {
-    final matchedBank = BankType.detectFromText(name);
-    setState(() {
-      _messages.add(
-        Message(
-          text: 'บันทึกสำเร็จชั่วคราวในเครื่อง (ขัดข้องด้านการเชื่อมต่อ)',
-          isUser: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-      _messages.add(
-        Message(
-          text: '',
-          isUser: false,
-          timestamp: DateTime.now(),
-          cardData: {
-            'name': name,
-            'isSlip': false,
-            'amount': amount,
-            'category': category,
-            'hasBudget': false,
-            'budget': 0.0,
-            'totalAccumulated': amount,
-            'msgType': msgType,
-            'bankType': matchedBank,
-            'icon': matchedBank != null
-                ? BankLogoIcon(
-                    bank: matchedBank,
-                    size: 44,
-                    showShadow: true,
-                  )
-                : _getIconForTransaction(name, category, msgType, null),
-          },
-        ),
-      );
-    });
+    if (savedAny) {
+      widget.onTransactionSaved?.call();
+    }
   }
 
   void _showEditTransactionModal(Map<String, dynamic> card) {
     final String currentDisplayName = card['name']?.toString() ?? '';
     final String rawNote = card['rawNote']?.toString() ?? currentDisplayName;
-    final double currentAmount = (card['amount'] as num?)?.toDouble() ?? 0.0;
+    final double currentAmount =
+        num.tryParse(card['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
     final BankType? bank = card['bankType'] as BankType?;
     final BankType? destBank = card['destinationBankType'] as BankType?;
     final bool isTransfer = card['isTransfer'] == true || card['category'] == 'ย้ายเงิน';
@@ -1599,7 +1570,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                             ),
                             tooltip: 'ลบรายการ',
                             onPressed: () async {
-                              final currentId = txId;
+                              final currentId = (card['id']?.toString() != null &&
+                                      !card['id'].toString().startsWith('temp_'))
+                                  ? card['id'].toString()
+                                  : txId;
                               if (currentId == null || currentId.isEmpty) return;
 
                               final confirm = await showDialog<bool>(
@@ -1647,7 +1621,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                                       overwrite: true,
                                     );
                                   }
-                                  if (ctx.mounted) {
+                                  if (ctx.mounted && Navigator.canPop(ctx)) {
                                     Navigator.pop(ctx);
                                   }
                                   if (mounted) {
@@ -2268,7 +2242,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => Navigator.pop(ctx),
+                            onPressed: () {
+                              if (ctx.mounted && Navigator.canPop(ctx)) {
+                                Navigator.pop(ctx);
+                              }
+                            },
                             style: OutlinedButton.styleFrom(
                               foregroundColor: const Color(0xFF64748B),
                               side: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -2309,7 +2287,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                               }
 
                               // 1. ปิดหน้าต่าง Modal ทันที (0ms ไม่ต้องรอเน็ตเวิร์ก)
-                              Navigator.pop(ctx);
+                              if (ctx.mounted && Navigator.canPop(ctx)) {
+                                Navigator.pop(ctx);
+                              }
 
                               // 2. อัปเดตการ์ดบนหน้าจอทันที ไม่ให้ผู้ใช้ต้องรอ
                               card['name'] = newTitle;
@@ -2559,8 +2539,13 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     required double newAmount,
   }) async {
     try {
-      String? currentTxId = txId;
-      if (currentTxId == null || currentTxId.isEmpty) {
+      String? currentTxId = (card['id']?.toString() != null &&
+              !card['id'].toString().startsWith('temp_'))
+          ? card['id'].toString()
+          : txId;
+      if (currentTxId == null ||
+          currentTxId.isEmpty ||
+          currentTxId.startsWith('temp_')) {
         final q = await _apiClient.get(
           '/transactions?user_id=eq.$_activeUserId&order=transaction_date.desc&limit=15',
         );
@@ -2693,15 +2678,15 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     if (message.cardData != null) {
       final card = message.cardData!;
       final name = card['name'] ?? '';
-      final amount = (card['amount'] as num?)?.toDouble() ?? 0.0;
+      final amount = num.tryParse(card['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
       final category = card['category'] ?? 'รายจ่าย';
       final msgType = card['msgType'] as String? ?? 'expense';
       final cardDate = DateTime.tryParse(card['transaction_date']?.toString() ?? '')?.toLocal() ?? message.timestamp;
 
       final bool hasBudget = card['hasBudget'] as bool? ?? false;
-      final double budget = (card['budget'] as num?)?.toDouble() ?? 0.0;
+      final double budget = num.tryParse(card['budget']?.toString() ?? '')?.toDouble() ?? 0.0;
       final double totalAccumulated =
-          (card['totalAccumulated'] as num?)?.toDouble() ?? amount;
+          num.tryParse(card['totalAccumulated']?.toString() ?? '')?.toDouble() ?? amount;
 
       final BankType? bank = card['bankType'] as BankType?;
       final BankType? destinationBank = card['destinationBankType'] as BankType?;
@@ -3063,102 +3048,115 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: ThemePatternPainter(
-                style: AppSettings.themeStyle.value,
-                brightness: Theme.of(context).brightness,
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _unfocusKeyboard,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: ThemePatternPainter(
+                  style: AppSettings.themeStyle.value,
+                  brightness: Theme.of(context).brightness,
+                ),
               ),
             ),
-          ),
-          Column(
-            children: [
-              ValueListenableBuilder<DateTime?>(
-                valueListenable: _effectiveDateFilter,
-                builder: (context, dateFilterVal, _) {
-                  if (dateFilterVal == null) return const SizedBox.shrink();
-                  final formattedDate =
-                      '${dateFilterVal.day} ${_monthName(dateFilterVal.month)} ${dateFilterVal.year + 543}';
-                  return Container(
-                    margin: EdgeInsets.fromLTRB(
-                      16,
-                      widget.topPadding + 8,
-                      16,
-                      0,
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.2),
+            Column(
+              children: [
+                ValueListenableBuilder<DateTime?>(
+                  valueListenable: _effectiveDateFilter,
+                  builder: (context, dateFilterVal, _) {
+                    if (dateFilterVal == null) return const SizedBox.shrink();
+                    final formattedDate =
+                        '${dateFilterVal.day} ${_monthName(dateFilterVal.month)} ${dateFilterVal.year + 543}';
+                    return Container(
+                      margin: EdgeInsets.fromLTRB(
+                        16,
+                        widget.topPadding + 8,
+                        16,
+                        0,
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.calendar_today_outlined,
-                          size: 14,
-                          color: AppTheme.primaryColor,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.2),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            context.tr(
-                              'จดบันทึกของวันที่: $formattedDate',
-                              'Recording for: $formattedDate',
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 14,
+                            color: AppTheme.primaryColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              context.tr(
+                                'จดบันทึกของวันที่: $formattedDate',
+                                'Recording for: $formattedDate',
+                              ),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primaryColor,
+                              ),
                             ),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              _effectiveDateFilter.value = null;
+                            },
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 16,
                               color: AppTheme.primaryColor,
                             ),
                           ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                Expanded(
+                  child: NotificationListener<UserScrollNotification>(
+                    onNotification: _handleUserScroll,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: _unfocusKeyboard,
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          _effectiveDateFilter.value != null
+                              ? 8
+                              : widget.topPadding,
+                          16,
+                          _quickSuggestions.isNotEmpty ? 58 : 16,
                         ),
-                        GestureDetector(
-                          onTap: () {
-                            _effectiveDateFilter.value = null;
-                          },
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 16,
-                            color: AppTheme.primaryColor,
-                          ),
-                        ),
-                      ],
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) {
+                          return GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onTap: _unfocusKeyboard,
+                            child: _buildMessageBubble(_messages[index]),
+                          );
+                        },
+                      ),
                     ),
-                  );
-                },
-              ),
-              Expanded(
-                child: NotificationListener<UserScrollNotification>(
-                  onNotification: _handleUserScroll,
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      _effectiveDateFilter.value != null
-                          ? 8
-                          : widget.topPadding,
-                      16,
-                      _quickSuggestions.isNotEmpty ? 58 : 16,
-                    ),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      return _buildMessageBubble(_messages[index]);
-                    },
                   ),
                 ),
-              ),
-              if (_isLoading)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: SizedBox(
+                if (_isLoading)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
@@ -3382,8 +3380,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildQuickSuggestions() {
     return SizedBox(

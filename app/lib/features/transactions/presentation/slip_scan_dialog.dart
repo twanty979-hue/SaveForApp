@@ -420,7 +420,9 @@ class _SlipScanDialogState extends State<SlipScanDialog>
 
     if (!mounted) return;
     setState(() => _isSaving = false);
-    Navigator.of(context).pop();
+    if (Navigator.canPop(context)) {
+      Navigator.of(context).pop();
+    }
 
     if (savedSuccessCount == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -604,7 +606,9 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                                 ? null
                                 : () {
                                     final navContext = context;
-                                    Navigator.of(navContext).pop();
+                                    if (Navigator.canPop(navContext)) {
+                                      Navigator.of(navContext).pop();
+                                    }
                                     SlipScanDateSheet.show(
                                       navContext,
                                       onTransactionsSaved: widget.onTransactionsSaved,
@@ -641,7 +645,11 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                     Tooltip(
                       message: context.tr('ปิด', 'Close'),
                       child: GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
+                        onTap: () {
+                          if (mounted && Navigator.canPop(context)) {
+                            Navigator.of(context).pop();
+                          }
+                        },
                         child: Container(
                           width: 32,
                           height: 32,
@@ -1358,7 +1366,11 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded, size: 20),
-                      onPressed: () => Navigator.pop(ctx),
+                      onPressed: () {
+                        if (ctx.mounted && Navigator.canPop(ctx)) {
+                          Navigator.pop(ctx);
+                        }
+                      },
                     ),
                   ],
                 ),
@@ -1373,7 +1385,9 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                         setState(() {
                           slip.destinationBank = bank;
                         });
-                        Navigator.pop(ctx);
+                        if (ctx.mounted && Navigator.canPop(ctx)) {
+                          Navigator.pop(ctx);
+                        }
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1911,7 +1925,9 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                                   slip.includeRecipientInNote = true;
                                   slip.isTransfer = false;
                                 });
-                                Navigator.of(context).pop();
+                                if (mounted && Navigator.canPop(context)) {
+                                  Navigator.of(context).pop();
+                                }
                               },
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFFEF4444),
@@ -1945,7 +1961,9 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                                   slip.destinationBank = destinationBank;
                                 }
                               });
-                              Navigator.of(context).pop();
+                              if (mounted && Navigator.canPop(context)) {
+                                Navigator.of(context).pop();
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.primaryColor,
@@ -2107,7 +2125,11 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                       ),
                       // ปุ่มปิด X กลมมนสไตล์ครีมมินิมอล
                       GestureDetector(
-                        onTap: () => Navigator.of(ctx).pop(),
+                        onTap: () {
+                          if (ctx.mounted && Navigator.canPop(ctx)) {
+                            Navigator.of(ctx).pop();
+                          }
+                        },
                         child: Container(
                           width: 30,
                           height: 30,

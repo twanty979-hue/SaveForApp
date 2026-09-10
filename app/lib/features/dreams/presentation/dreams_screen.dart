@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-import 'package:intl/intl.dart';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
@@ -188,10 +186,12 @@ class _DreamsScreenState extends State<DreamsScreen> {
     try {
       final response = await _apiClient.delete('/dreams?id=eq.$id');
       if (response.statusCode == 200 || response.statusCode == 204) {
-        _fetchData();
+        if (mounted) {
+          _fetchData();
+        }
       }
     } catch (e) {
-      // จัดการผิดพลาด
+      debugPrint('[DreamsScreen] Error deleting dream: $e');
     }
   }
 
@@ -224,7 +224,11 @@ class _DreamsScreenState extends State<DreamsScreen> {
           actionsPadding: const EdgeInsets.only(right: 16, bottom: 16),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+              },
               child: const Text(
                 'ยกเลิก',
                 style: TextStyle(
@@ -242,7 +246,9 @@ class _DreamsScreenState extends State<DreamsScreen> {
                 elevation: 0,
               ),
               onPressed: () {
-                Navigator.pop(context);
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
                 _deleteDream(id);
               },
               child: const Text(
@@ -1455,15 +1461,14 @@ class _DreamsScreenState extends State<DreamsScreen> {
                           padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
                           itemCount: _dreams.length,
                           itemBuilder: (context, index) {
-                            final dream = _dreams[index];
+                            final rawDream = _dreams[index];
+                            final dream = rawDream is Map
+                                ? Map<String, dynamic>.from(rawDream)
+                                : <String, dynamic>{};
                             final id = dream['id'];
-                            final target = (dream['target_amount'] as num)
-                                .toDouble();
-                            final current = (dream['current_amount'] as num)
-                                .toDouble();
-                            final monthly =
-                                (dream['monthly_saving_target'] as num)
-                                    .toDouble();
+                            final target = num.tryParse(dream['target_amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+                            final current = num.tryParse(dream['current_amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+                            final monthly = num.tryParse(dream['monthly_saving_target']?.toString() ?? '')?.toDouble() ?? 0.0;
                             final isStarred =
                                 dream['is_starred'] as bool? ?? false;
                             final progress = target > 0
@@ -1482,339 +1487,16 @@ class _DreamsScreenState extends State<DreamsScreen> {
                               if (monthsRemaining < 0) monthsRemaining = 0;
                             }
 
-                            if (dream is Map<String, dynamic>) {
-                              return _buildDreamListCard(
-                                dream: dream,
-                                id: id.toString(),
-                                target: target,
-                                current: current,
-                                monthly: monthly,
-                                isStarred: isStarred,
-                                progress: progress.toDouble(),
-                                depositCount: depositCount,
-                                monthsRemaining: monthsRemaining,
-                              );
-                            }
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 16),
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                // หากติดดาว (isStarred) ให้เปลี่ยนพื้นหลังเป็นสีส้มเหลืองนวลขอบหนาตามแบบรูปภาพที่หนึ่ง
-                                color: isStarred
-                                    ? const Color(0xFFFFFBEB)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: isStarred
-                                      ? const Color(0xFFFDE68A)
-                                      : const Color(0xFFE2E8F0),
-                                  width: isStarred ? 2 : 1,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.01),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      // กล่องแสดงผลไอคอนเป้าหมายสีสะท้อนหมวดหมู่
-                                      Container(
-                                        width: 44,
-                                        height: 44,
-                                        decoration: BoxDecoration(
-                                          color: isStarred
-                                              ? const Color(0xFFFEF3C7)
-                                              : const Color(0xFFE6F4F1),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        child: _buildIcon(dream['icon']?.toString(), size: 40, color: const Color(0xFF38BDF8)),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              dream['title'] ?? '',
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(0xFF1E293B),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              '${(progress * 100).toStringAsFixed(0)}% สำเร็จแล้ว',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: isStarred
-                                                    ? const Color(0xFFD97706)
-                                                    : const Color(0xFF64748B),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      // แผงปุ่ม Action (ดาวส้ม, แก้ไข, ลบ)
-                                      Row(
-                                        children: [
-                                          GestureDetector(
-                                            onTap: () =>
-                                                _toggleStar(id, isStarred),
-                                            child: Icon(
-                                              isStarred
-                                                  ? Icons.star
-                                                  : Icons.star_border,
-                                              color: isStarred
-                                                  ? Colors.amber
-                                                  : const Color(0xFFCBD5E1),
-                                              size: 20,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          GestureDetector(
-                                            onTap: () =>
-                                                _showAddDreamBottomSheet(
-                                                  dreamToEdit: dream,
-                                                ),
-                                            child: const Icon(
-                                              Icons.edit_outlined,
-                                              color: Color(0xFFCBD5E1),
-                                              size: 20,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          GestureDetector(
-                                            onTap: () =>
-                                                _showDeleteConfirmation(id),
-                                            child: const Icon(
-                                              Icons.delete_outline,
-                                              color: Color(0xFFEF4444),
-                                              size: 20,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // ป้ายประวัติการหยอดกระปุก (คำนวณจำนวนครั้งจริงจากธุรกรรม)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isStarred
-                                          ? const Color(0xFFFEF3C7)
-                                          : const Color(0xFFE6F4F1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.history,
-                                          size: 12,
-                                          color: isStarred
-                                              ? const Color(0xFFD97706)
-                                              : Theme.of(context).primaryColor,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          'หยอดแล้ว $depositCount ครั้ง',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: isStarred
-                                                ? const Color(0xFFD97706)
-                                                : Theme.of(context).primaryColor,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 14),
-
-                                  // แถบสเกลแสดงสถานะโปรเกรส
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(3),
-                                    child: LinearProgressIndicator(
-                                      value: progress,
-                                      backgroundColor: isStarred
-                                          ? const Color(
-                                              0xFFFDE68A,
-                                            ).withValues(alpha: 0.3)
-                                          : const Color(0xFFF1F5F9),
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        isStarred
-                                            ? const Color(0xFFD97706)
-                                            : const Color(0xFF2563EB),
-                                      ),
-                                      minHeight: 5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // ยอดเงินเก็บได้เทียบกับเป้าหมาย
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      RichText(
-                                        text: TextSpan(
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            color: Color(0xFF1E293B),
-                                          ),
-                                          children: [
-                                            const TextSpan(text: 'เก็บได้ '),
-                                            TextSpan(
-                                              text:
-                                                  '฿${current.toStringAsFixed(0)}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Text(
-                                        'เป้าหมาย ฿${target.toStringAsFixed(0)}',
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          color: Color(0xFF64748B),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // ป้ายข้อมูลคำนวณเป้าหมายรายเดือนตามแบบรูปภาพ
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isStarred
-                                          ? const Color(0xFFFEF3C7)
-                                          : const Color(0xFFF0FDF4),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'เป้าหมาย: เก็บเดือนละ ฿${monthly.toStringAsFixed(0)}',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: isStarred
-                                                ? const Color(0xFFB45309)
-                                                : const Color(0xFF15803D),
-                                          ),
-                                        ),
-                                        Text(
-                                          monthly > 0
-                                              ? '(อีก $monthsRemaining เดือน)'
-                                              : '(ยังไม่ระบุรายเดือน)',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: isStarred
-                                                ? const Color(0xFFB45309)
-                                                : const Color(0xFF15803D),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-
-                                  // ปุ่มกดหยอดกระปุก (สไลด์เปลี่ยนสีตามสถานะติดดาว)
-                                  SizedBox(
-                                    width: double.infinity,
-                                    height: 40,
-                                    child: isStarred
-                                        ? ElevatedButton.icon(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(
-                                                0xFFF59E0B,
-                                              ), // ปุ่มส้มเหลืองทึบ
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                              elevation: 0,
-                                            ),
-                                            onPressed: () => _showDepositDialog(
-                                              id,
-                                              dream['title'] ?? '',
-                                              current,
-                                              target,
-                                            ),
-                                            icon: const Icon(
-                                              Icons.savings_outlined,
-                                              color: Colors.white,
-                                              size: 18,
-                                            ),
-                                            label: const Text(
-                                              'หยอดกระปุก',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          )
-                                        : OutlinedButton.icon(
-                                            style: OutlinedButton.styleFrom(
-                                              side: BorderSide(
-                                                color: Theme.of(context).primaryColor,
-                                              ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                            ),
-                                            onPressed: () => _showDepositDialog(
-                                              id,
-                                              dream['title'] ?? '',
-                                              current,
-                                              target,
-                                            ),
-                                            icon: Icon(
-                                              Icons.savings_outlined,
-                                              color: Theme.of(context).primaryColor,
-                                              size: 18,
-                                            ),
-                                            label: Text(
-                                              'หยอดกระปุก',
-                                              style: TextStyle(
-                                                color: Theme.of(context).primaryColor,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                  ),
-                                ],
-                              ),
+                            return _buildDreamListCard(
+                              dream: dream,
+                              id: id.toString(),
+                              target: target,
+                              current: current,
+                              monthly: monthly,
+                              isStarred: isStarred,
+                              progress: progress.toDouble(),
+                              depositCount: depositCount,
+                              monthsRemaining: monthsRemaining,
                             );
                           },
                         ),

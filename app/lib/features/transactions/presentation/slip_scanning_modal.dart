@@ -165,7 +165,9 @@ class _SlipScanningModalState extends State<SlipScanningModal>
         // รอให้ผู้ใช้ชม animation สัก 1.2 วินาที แล้วเปิดหน้าสรุปสลิป
         await Future<void>.delayed(const Duration(milliseconds: 1400));
         if (!mounted) return;
-        Navigator.of(context).pop();
+        if (Navigator.canPop(context)) {
+          Navigator.of(context).pop();
+        }
         SlipScanDialog.show(
           context,
           slips: slips,
@@ -185,7 +187,9 @@ class _SlipScanningModalState extends State<SlipScanningModal>
   }
 
   Future<void> _pickSingleImageFallback() async {
-    Navigator.of(context).pop();
+    if (mounted && Navigator.canPop(context)) {
+      Navigator.of(context).pop();
+    }
     try {
       final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
       if (picked == null || !mounted) return;
@@ -288,7 +292,11 @@ class _SlipScanningModalState extends State<SlipScanningModal>
 
                       InkWell(
                         borderRadius: BorderRadius.circular(20),
-                        onTap: () => Navigator.of(context).pop(),
+                        onTap: () {
+                          if (mounted && Navigator.canPop(context)) {
+                            Navigator.of(context).pop();
+                          }
+                        },
                         child: Padding(
                           padding: const EdgeInsets.all(4),
                           child: Icon(
@@ -556,7 +564,11 @@ class _SlipScanningModalState extends State<SlipScanningModal>
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    if (mounted && Navigator.canPop(context)) {
+                      Navigator.of(context).pop();
+                    }
+                  },
                   style: FilledButton.styleFrom(
                     backgroundColor: primary,
                     shape: RoundedRectangleBorder(

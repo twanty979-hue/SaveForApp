@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
@@ -139,7 +137,8 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
           date.month == now.month &&
           tx['type'] == 'income' &&
           isMatch) {
-        total += (tx['amount'] as num?)?.toDouble() ?? 0.0;
+        total +=
+            num.tryParse(tx['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
       }
     }
     return total;
@@ -149,10 +148,12 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
     try {
       final response = await _apiClient.delete('/recurring/sources?id=eq.$id');
       if (response.statusCode == 200 || response.statusCode == 204) {
-        _fetchData();
+        if (mounted) {
+          _fetchData();
+        }
       }
     } catch (e) {
-      // จัดการข้อผิดพลาดเงียบ
+      debugPrint('[RecurringIncome] Error deleting source: $e');
     }
   }
 
@@ -185,7 +186,11 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
           actionsPadding: const EdgeInsets.only(right: 16, bottom: 16),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+              },
               child: const Text(
                 'ยกเลิก',
                 style: TextStyle(
@@ -203,7 +208,9 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                 elevation: 0,
               ),
               onPressed: () {
-                Navigator.pop(context);
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
                 _deleteSource(id);
               },
               child: const Text(
@@ -1141,10 +1148,10 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
     double totalIncomeReceived = 0.0;
 
     for (var source in _incomeSources) {
-      final amt = (source['amount'] as num).toDouble();
+      final amt = num.tryParse(source['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
       totalIncomeExpected += amt;
-      final id = source['id'] as String? ?? '';
-      final name = source['name'] as String? ?? '';
+      final id = source['id']?.toString() ?? '';
+      final name = source['name']?.toString() ?? '';
       final receivedAmt = _getReceivedAmountThisMonth(id, name);
       totalIncomeReceived += receivedAmt;
     }
@@ -1295,28 +1302,29 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                           itemCount: _incomeSources.length,
                           itemBuilder: (context, index) {
-                            final source = _incomeSources[index];
-                            final id = source['id'] ?? '';
-                            final name = source['name'] ?? '';
-                            final amount = (source['amount'] as num).toDouble();
-                            final category = source['category'] ?? 'ทั่วไป';
-                            final dueDay = source['due_day'] ?? 1;
+                            final rawSource = _incomeSources[index];
+                            final source = rawSource is Map
+                                ? Map<String, dynamic>.from(rawSource)
+                                : <String, dynamic>{};
+                            final id = source['id']?.toString() ?? '';
+                            final name = source['name']?.toString() ?? '';
+                            final amount = num.tryParse(source['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
+                            final category = source['category']?.toString() ?? 'ทั่วไป';
+                            final dueDay = int.tryParse(source['due_day']?.toString() ?? '') ?? 1;
                             final receivedAmt = _getReceivedAmountThisMonth(
                               id,
                               name,
                             );
                             final hasReceived = receivedAmt > 0;
 
-                            if (source is Map<String, dynamic>) {
+                            if (source.isNotEmpty) {
                               return _buildIncomeListCard(
                                 source: source,
-                                id: id.toString(),
-                                name: name.toString(),
+                                id: id,
+                                name: name,
                                 amount: amount,
-                                category: category.toString(),
-                                dueDay: dueDay is int
-                                    ? dueDay
-                                    : int.tryParse(dueDay.toString()) ?? 1,
+                                category: category,
+                                dueDay: dueDay,
                                 receivedAmount: receivedAmt,
                               );
                             }
