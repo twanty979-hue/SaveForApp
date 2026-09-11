@@ -4,6 +4,7 @@ import 'package:app/core/localization/app_material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/localization/app_localizations.dart';
@@ -776,6 +777,24 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                                 builder: (context) => const HelpSupportScreen(),
                               ),
                             );
+                          },
+                        ),
+                        _SettingsTile(
+                          icon: Icons.school_outlined,
+                          title: context.tr('แนะนำการใช้งานแอป', 'App Walkthrough'),
+                          subtitle: context.tr(
+                            'ดูวิธีการใช้งานหลักและการสแกนสลิปอัตโนมัติ',
+                            'Review main features and auto slip scanning',
+                          ),
+                          onTap: () async {
+                            final prefs = await SharedPreferences.getInstance();
+                            final uid = AuthSession.userId ?? '';
+                            if (uid.isNotEmpty) {
+                              await prefs.setBool('tutorial_$uid', false);
+                            }
+                            if (context.mounted) {
+                              Navigator.pop(context, true);
+                            }
                           },
                         ),
                         const SizedBox(height: 14),

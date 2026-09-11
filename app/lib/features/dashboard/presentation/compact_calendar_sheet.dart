@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:app/core/localization/app_material.dart';
 
 import '../../../core/network/api_client.dart';
@@ -107,7 +108,9 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
       );
     }
     var nextDay = 1;
-    while (cells.length < 42) {
+    final totalRows = (cells.length / 7).ceil();
+    final targetLength = totalRows * 7;
+    while (cells.length < targetLength) {
       cells.add(
         _CompactCalendarCell(
           date: DateTime(_year, _month + 1, nextDay++),
@@ -119,6 +122,7 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
   }
 
   void _changeMonth(int offset) {
+    HapticFeedback.selectionClick();
     final target = DateTime(_year, _month + offset, 1);
     setState(() {
       _year = target.year;
@@ -469,13 +473,12 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
   }
 
   void _selectDate(DateTime date) {
+    HapticFeedback.selectionClick();
     final isAlreadySelected =
         date.year == _year && date.month == _month && date.day == _day;
 
-    if (isAlreadySelected) {
-      if (widget.onDateSelected != null) {
-        widget.onDateSelected!(date);
-      }
+    if (isAlreadySelected && widget.onDateSelected != null) {
+      widget.onDateSelected!(date);
     } else {
       setState(() {
         _year = date.year;
@@ -502,65 +505,90 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final cells = _calendarCells();
     final selectedTransactions = _selectedTransactions;
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      minChildSize: 0.42,
-      maxChildSize: 0.92,
-      expand: false,
-      builder: (context, scrollController) {
-        return Material(
-          color: context.pageColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          clipBehavior: Clip.antiAlias,
-          child: SingleChildScrollView(
-            controller: scrollController,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(14, 9, 14, 24),
-            child: Column(
-              children: [
-                Container(
-                  width: 34,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCBD5E1),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _buildHeader(context),
-                const SizedBox(height: 9),
-                _buildMonthNavigator(),
-                const SizedBox(height: 7),
-                const _WeekdayHeader(),
-                const SizedBox(height: 5),
-                _buildCalendar(cells),
-                const SizedBox(height: 13),
-                _buildSelectedDateHeader(selectedTransactions.length),
-                const SizedBox(height: 8),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  child: _isLoading
-                      ? const SizedBox(
-                          key: ValueKey('loading'),
-                          height: 70,
-                          child: Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        )
-                      : _buildSelectedTransactions(selectedTransactions),
-                ),
-              ],
-            ),
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.90,
+      ),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFDFBF7),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x28000000),
+            blurRadius: 32,
+            offset: Offset(0, -6),
           ),
-        );
-      },
+        ],
+      ),
+      padding: EdgeInsets.only(
+        left: 18,
+        right: 18,
+        top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 16,
+      ),
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Header matching SlipScanDateSheet
+            _buildHeader(context),
+
+            const SizedBox(height: 14),
+
+            // Embedded Custom Calendar Card (SaveForApp Luxury Theme)
+            _buildCalendarCard(cells, today),
+
+            const SizedBox(height: 14),
+
+            // Selected Date Summary Header
+            _buildSelectedDateHeader(selectedTransactions.length),
+
+            const SizedBox(height: 10),
+
+            // Transactions List or Empty State
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: _isLoading
+                  ? const SizedBox(
+                      key: ValueKey('loading'),
+                      height: 80,
+                      child: Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2.2),
+                        ),
+                      ),
+                    )
+                  : _buildSelectedTransactions(selectedTransactions),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Bottom Action CTA Button matching SlipScanDateSheet style
+            _buildBottomActionButton(),
+          ],
+        ),
+      ),
     );
   }
 
@@ -568,175 +596,453 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
     return Row(
       children: [
         Container(
-          width: 32,
-          height: 32,
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            shape: BoxShape.circle,
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE8E0D2)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
+          padding: const EdgeInsets.all(8),
           child: Icon(
             Icons.calendar_month_rounded,
             color: AppTheme.primaryColor,
-            size: 17,
+            size: 24,
           ),
         ),
-        const SizedBox(width: 9),
-        const Expanded(
+        const SizedBox(width: 14),
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'ปฏิทินรายการ',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                style: TextStyle(
+                  fontFamily: 'SukhumvitSet',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1E293B),
+                  letterSpacing: -0.2,
+                ),
               ),
+              const SizedBox(height: 2),
               Text(
                 'แตะวันที่เพื่อดูสิ่งที่จดไว้',
-                style: TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+                style: TextStyle(
+                  fontFamily: 'SukhumvitSet',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey.shade600,
+                ),
               ),
             ],
           ),
         ),
         IconButton(
-          visualDensity: VisualDensity.compact,
+          tooltip: 'จดรายการใหม่',
+          onPressed: () => _showTransactionFormModal(),
+          icon: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.add_rounded,
+              size: 18,
+              color: AppTheme.primaryColor,
+            ),
+          ),
+        ),
+        IconButton(
           tooltip: 'ปิด',
           onPressed: () {
             if (Navigator.canPop(context)) {
               Navigator.pop(context);
             }
           },
-          icon: const Icon(Icons.close_rounded, size: 19),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMonthNavigator() {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            '${_monthName(_month)} ${_year + 543}',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF1E293B),
+          icon: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.05),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: Color(0xFF64748B),
             ),
           ),
         ),
-        _MonthButton(
-          icon: Icons.chevron_left_rounded,
-          onTap: () => _changeMonth(-1),
-        ),
-        const SizedBox(width: 5),
-        _MonthButton(
-          icon: Icons.chevron_right_rounded,
-          onTap: () => _changeMonth(1),
-        ),
       ],
     );
   }
 
-  Widget _buildCalendar(List<_CompactCalendarCell> cells) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: cells.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 7,
-        mainAxisSpacing: 3,
-        crossAxisSpacing: 3,
-        childAspectRatio: 1.2,
+  Widget _buildCalendarCard(List<_CompactCalendarCell> cells, DateTime today) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8E0D2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      itemBuilder: (context, index) {
-        final cell = cells[index];
-        final selected =
-            cell.date.year == _year &&
-            cell.date.month == _month &&
-            cell.date.day == _day;
-        final hasTransactions = _hasTransactions(cell.date);
-        return InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () => _selectDate(cell.date),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            decoration: BoxDecoration(
-              color: selected
-                  ? AppTheme.primaryColor
-                  : cell.inCurrentMonth
-                  ? (Theme.of(context).brightness == Brightness.dark
-                        ? const Color(0xFF1E293B)
-                        : Colors.white)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: selected
-                    ? AppTheme.primaryColor
-                    : (Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF334155)
-                          : const Color(0xFFE9EDF2)),
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '${cell.date.day}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                    color: selected
-                        ? Colors.white
-                        : cell.inCurrentMonth
-                        ? (Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white
-                              : const Color(0xFF334155))
-                        : (Theme.of(context).brightness == Brightness.dark
-                              ? const Color(0xFF475569)
-                              : const Color(0xFFB8C1CC)),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      child: Column(
+        children: [
+          // Centered Month Navigator
+          Row(
+            children: [
+              InkWell(
+                onTap: () => _changeMonth(-1),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Icon(
+                    Icons.chevron_left_rounded,
+                    size: 20,
+                    color: Color(0xFF1E293B),
                   ),
                 ),
-                if (hasTransactions) ...[
-                  const SizedBox(height: 2),
-                  Container(
-                    width: 3,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: selected ? Colors.white : AppTheme.primaryColor,
-                      shape: BoxShape.circle,
+              ),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    '${_monthName(_month)} ${_year + 543}',
+                    style: const TextStyle(
+                      fontFamily: 'SukhumvitSet',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1E293B),
                     ),
                   ),
-                ],
+                ),
+              ),
+              InkWell(
+                onTap: () => _changeMonth(1),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Weekdays header
+          Row(
+            children: const ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
+                .map(
+                  (day) => Expanded(
+                    child: Center(
+                      child: Text(
+                        day,
+                        style: const TextStyle(
+                          fontFamily: 'SukhumvitSet',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Calendar Grid
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: cells.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 5,
+              crossAxisSpacing: 5,
+              childAspectRatio: 1.15,
+            ),
+            itemBuilder: (context, index) {
+              return _buildCalendarCell(
+                cell: cells[index],
+                today: today,
+              );
+            },
+          ),
+
+          const SizedBox(height: 12),
+
+          // Legend
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildLegendItem(
+                  color: AppTheme.primaryColor,
+                  label: 'วันที่เลือก',
+                  isSolid: true,
+                ),
+                _buildLegendItem(
+                  color: AppTheme.primaryColor,
+                  label: 'มีรายการจดไว้',
+                  isDot: true,
+                ),
+                _buildLegendItem(
+                  color: AppTheme.primaryColor,
+                  borderColor: AppTheme.primaryColor,
+                  label: 'วันนี้',
+                  isBorderOnly: true,
+                ),
               ],
             ),
           ),
-        );
-      },
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCalendarCell({
+    required _CompactCalendarCell cell,
+    required DateTime today,
+  }) {
+    final date = cell.date;
+    final isSelected =
+        date.year == _year && date.month == _month && date.day == _day;
+    final isToday =
+        date.year == today.year &&
+        date.month == today.month &&
+        date.day == today.day;
+    final hasTx = _hasTransactions(date);
+
+    Color bgColor = Colors.transparent;
+    Color textColor = const Color(0xFF1E293B);
+    Border? border;
+    List<BoxShadow>? shadows;
+    FontWeight fontWeight = FontWeight.w600;
+
+    if (isSelected) {
+      bgColor = AppTheme.primaryColor;
+      textColor = Colors.white;
+      fontWeight = FontWeight.w700;
+      shadows = [
+        BoxShadow(
+          color: AppTheme.primaryColor.withValues(alpha: 0.35),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
+        ),
+      ];
+    } else if (cell.inCurrentMonth) {
+      bgColor = Colors.white;
+      if (isToday) {
+        border = Border.all(color: AppTheme.primaryColor, width: 1.5);
+        textColor = AppTheme.primaryColor;
+        fontWeight = FontWeight.w700;
+      } else {
+        border = Border.all(color: const Color(0xFFE2E8F0));
+        textColor = const Color(0xFF1E293B);
+      }
+    } else {
+      bgColor = const Color(0xFFFAFAFA);
+      border = Border.all(color: const Color(0xFFF1F5F9));
+      textColor = const Color(0xFFCBD5E1);
+      fontWeight = FontWeight.w400;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _selectDate(date),
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(12),
+            border: border,
+            boxShadow: shadows,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '${date.day}',
+                style: TextStyle(
+                  fontFamily: 'SukhumvitSet',
+                  fontSize: 12.5,
+                  fontWeight: fontWeight,
+                  color: textColor,
+                ),
+              ),
+              if (hasTx)
+                Container(
+                  margin: const EdgeInsets.only(top: 2),
+                  width: 4.5,
+                  height: 4.5,
+                  decoration: BoxDecoration(
+                    color: isSelected ? Colors.white : AppTheme.primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                )
+              else if (isToday && !isSelected)
+                Container(
+                  margin: const EdgeInsets.only(top: 2),
+                  width: 4.5,
+                  height: 4.5,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLegendItem({
+    required Color color,
+    required String label,
+    Color? borderColor,
+    bool isSolid = false,
+    bool isDot = false,
+    bool isBorderOnly = false,
+  }) {
+    Widget indicator;
+    if (isDot) {
+      indicator = Container(
+        width: 6,
+        height: 6,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
+      );
+    } else if (isBorderOnly) {
+      indicator = Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: borderColor ?? color, width: 1.5),
+        ),
+      );
+    } else {
+      indicator = Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(3),
+          border: borderColor != null
+              ? Border.all(color: borderColor, width: 1)
+              : null,
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        indicator,
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'SukhumvitSet',
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF64748B),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildSelectedDateHeader(int count) {
     return Row(
       children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            Icons.event_note_rounded,
+            color: AppTheme.primaryColor,
+            size: 18,
+          ),
+        ),
+        const SizedBox(width: 10),
         Expanded(
           child: Text(
             '$_day ${_monthName(_month)} ${_year + 543}',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white
-                  : const Color(0xFF1E293B),
+            style: const TextStyle(
+              fontFamily: 'SukhumvitSet',
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F172A),
             ),
           ),
         ),
-        Text(
-          '$count รายการ',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF94A3B8)
-                : const Color(0xFF64748B),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: count == 0
+                ? const Color(0xFFF1F5F9)
+                : AppTheme.primaryColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '$count รายการ',
+            style: TextStyle(
+              fontFamily: 'SukhumvitSet',
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: count == 0
+                  ? const Color(0xFF64748B)
+                  : AppTheme.primaryColor,
+            ),
           ),
         ),
       ],
@@ -749,19 +1055,54 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
       return Container(
         key: key,
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 22),
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
         decoration: BoxDecoration(
-          color: context.surfaceColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE9EDF2)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE8E0D2)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        child: const Column(
+        child: Column(
           children: [
-            Icon(Icons.event_note_rounded, size: 25, color: Color(0xFFB8C1CC)),
-            SizedBox(height: 5),
-            Text(
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Icon(
+                Icons.edit_calendar_rounded,
+                size: 22,
+                color: Color(0xFF94A3B8),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
               'วันนี้ยังไม่ได้จดรายการ',
-              style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+              style: TextStyle(
+                fontFamily: 'SukhumvitSet',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'แตะปุ่มด้านล่างเพื่อเพิ่มรายการสำหรับวันนี้',
+              style: TextStyle(
+                fontFamily: 'SukhumvitSet',
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade500,
+              ),
             ),
           ],
         ),
@@ -773,7 +1114,7 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: transactions.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 6),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final tx = Map<String, dynamic>.from(transactions[index] as Map);
         return InkWell(
@@ -782,6 +1123,56 @@ class _CompactCalendarSheetState extends State<CompactCalendarSheet> {
           child: _TransactionRow(transaction: tx),
         );
       },
+    );
+  }
+
+  Widget _buildBottomActionButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          final selectedDate = DateTime(_year, _month, _day);
+          if (widget.onDateSelected != null) {
+            widget.onDateSelected!(selectedDate);
+          } else {
+            _showTransactionFormModal();
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppTheme.primaryColor,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: EdgeInsets.zero,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              widget.onDateSelected != null
+                  ? Icons.check_circle_outline_rounded
+                  : Icons.add_circle_outline_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              widget.onDateSelected != null
+                  ? 'เลือกวันที่ $_day ${_monthName(_month)}'
+                  : 'จดรายการวันที่ $_day ${_monthName(_month)}',
+              style: const TextStyle(
+                fontFamily: 'SukhumvitSet',
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -796,56 +1187,6 @@ class _CompactCalendarCell {
   });
 }
 
-class _WeekdayHeader extends StatelessWidget {
-  const _WeekdayHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: const ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
-          .map(
-            (day) => Expanded(
-              child: Center(
-                child: Text(
-                  day,
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class _MonthButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _MonthButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: context.surfaceColor,
-      borderRadius: BorderRadius.circular(9),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(9),
-        onTap: onTap,
-        child: SizedBox(
-          width: 30,
-          height: 30,
-          child: Icon(icon, size: 19, color: const Color(0xFF475569)),
-        ),
-      ),
-    );
-  }
-}
-
 class _TransactionRow extends StatelessWidget {
   final Map<String, dynamic> transaction;
 
@@ -856,7 +1197,8 @@ class _TransactionRow extends StatelessWidget {
     final rawNote = transaction['note']?.toString() ?? 'รายการ';
     final source = transaction['source']?.toString();
     final dreamId = transaction['dream_id']?.toString();
-    final saving = source == 'dream_saving' || dreamId != null || rawNote.startsWith('[ออม]');
+    final saving =
+        source == 'dream_saving' || dreamId != null || rawNote.startsWith('[ออม]');
     final income = transaction['type'] == 'income';
     final color = saving
         ? const Color(0xFF8B5CF6)
@@ -884,24 +1226,31 @@ class _TransactionRow extends StatelessWidget {
         num.tryParse(transaction['amount']?.toString() ?? '')?.toDouble() ?? 0.0;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: context.surfaceColor,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE9EDF2)),
+        border: Border.all(color: const Color(0xFFE8E0D2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 30,
-            height: 30,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(icon, size: 15, color: color),
+            child: Icon(icon, size: 18, color: color),
           ),
-          const SizedBox(width: 9),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -911,14 +1260,21 @@ class _TransactionRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontFamily: 'SukhumvitSet',
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF1E293B),
                   ),
                 ),
+                const SizedBox(height: 1),
                 Text(
                   typeLabel,
-                  style: const TextStyle(fontSize: 9, color: Color(0xFF94A3B8)),
+                  style: const TextStyle(
+                    fontFamily: 'SukhumvitSet',
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF94A3B8),
+                  ),
                 ),
               ],
             ),
@@ -926,8 +1282,9 @@ class _TransactionRow extends StatelessWidget {
           Text(
             '${income ? '+' : '-'}฿${amount.toStringAsFixed(0)}',
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontFamily: 'SukhumvitSet',
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
               color: color,
             ),
           ),

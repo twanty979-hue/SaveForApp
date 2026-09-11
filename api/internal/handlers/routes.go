@@ -75,6 +75,12 @@ func SetupRouter() *gin.Engine {
 		v1.POST("/auth/google/android", func(c *gin.Context) {
 			handleSupabaseProxy(c, "POST", "/auth/v1/token?grant_type=id_token")
 		})
+		v1.POST("/auth/apple", func(c *gin.Context) {
+			handleSupabaseProxy(c, "POST", "/auth/v1/token?grant_type=id_token")
+		})
+		v1.POST("/auth/id-token", func(c *gin.Context) {
+			handleSupabaseProxy(c, "POST", "/auth/v1/token?grant_type=id_token")
+		})
 		v1.POST("/auth/refresh", func(c *gin.Context) {
 			handleSupabaseProxy(c, "POST", "/auth/v1/token?grant_type=refresh_token")
 		})

@@ -915,21 +915,6 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     });
   }
 
-  bool _isScanningSlips = false;
-
-  Future<void> _openSlipScanner() async {
-    HapticFeedback.lightImpact();
-    SlipScanDateSheet.show(
-      context,
-      onTransactionsSaved: () {
-        if (!mounted) return;
-        _loadPastTransactions(forceScrollToBottom: true);
-        widget.onTransactionSaved?.call();
-        SlipScannerBridge.instance.refreshUnscannedCount();
-      },
-    );
-  }
-
   bool _handleUserScroll(UserScrollNotification notification) {
     if (notification.direction == ScrollDirection.idle) return false;
 
@@ -3212,75 +3197,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                           ),
                         ),
                       ),
-                      ValueListenableBuilder<int>(
-                        valueListenable:
-                            SlipScannerBridge.instance.unscannedCount,
-                        builder: (context, count, _) => Tooltip(
-                          message: count > 0
-                              ? context.tr(
-                                  'พบสลิป $count รายการ กดเพื่อสแกน',
-                                  'Found $count slips, tap to scan',
-                                )
-                              : context.tr(
-                                  'สแกนสลิปธนาคาร',
-                                  'Scan Bank Slip',
-                                ),
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            alignment: Alignment.center,
-                            children: [
-                              IconButton(
-                                onPressed:
-                                    _isScanningSlips ? null : _openSlipScanner,
-                                icon: _isScanningSlips
-                                    ? SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Theme.of(context).primaryColor,
-                                        ),
-                                      )
-                                    : Icon(
-                                        Icons.receipt_long_rounded,
-                                        color: Theme.of(context).primaryColor,
-                                        size: 21,
-                                      ),
-                              ),
-                              if (count > 0 && !_isScanningSlips)
-                                Positioned(
-                                  top: 6,
-                                  right: 6,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 1,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEF4444),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    constraints: const BoxConstraints(
-                                      minWidth: 16,
-                                      minHeight: 16,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        count > 9 ? '9+' : '$count',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                          height: 1,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: TextField(
                           controller: _inputController,

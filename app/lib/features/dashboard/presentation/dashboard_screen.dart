@@ -50,6 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final GlobalKey _notificationKey = GlobalKey();
   final GlobalKey _homeMenuKey = GlobalKey();
   final GlobalKey _inputKey = GlobalKey();
+  final GlobalKey _slipScannerKey = GlobalKey();
   int _tutorialStep = -1;
   final String _activeUserId =
       AuthSession.userId ?? '5b2d488d-75a0-4ea4-8f14-43047d256c8d';
@@ -261,7 +262,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _openProfileSettings() async {
-    await Navigator.push(
+    final replayTutorial = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const ProfileSettingsScreen()),
     );
@@ -270,6 +271,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _fetchHeaderTotals();
       _fetchHeaderAvatar();
       _fetchHeaderProfile();
+      if (replayTutorial == true) {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) {
+            setState(() {
+              _tutorialStep = 0;
+            });
+          }
+        });
+      }
     }
   }
 
@@ -461,34 +471,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 },
                                 child: Padding(
                                   padding: const EdgeInsets.all(3.0),
-                                  child: Stack(
-                                    clipBehavior: Clip.none,
-                                    alignment: Alignment.center,
-                                    children: [
-                                      _HeaderIcon(
-                                        icon: _isScanningSlip ? null : Icons.qr_code_scanner_rounded,
-                                        color: AppTheme.primaryColor,
-                                        backgroundColor: AppTheme.secondaryColor.withValues(alpha: 0.8),
-                                        child: _isScanningSlip
-                                            ? SizedBox(
-                                                width: 17,
-                                                height: 17,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2.2,
-                                                  color: AppTheme.primaryColor,
-                                                ),
-                                              )
-                                            : null,
-                                      ),
-                                      if (unscannedCount > 0 && !_isScanningSlip)
-                                        Positioned(
-                                          top: -6,
-                                          right: -6,
-                                          child: IgnorePointer(
-                                            child: _BouncingSlipBadge(count: unscannedCount),
-                                          ),
+                                  child: SizedBox(
+                                    key: _slipScannerKey,
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      alignment: Alignment.center,
+                                      children: [
+                                        _HeaderIcon(
+                                          icon: _isScanningSlip ? null : Icons.qr_code_scanner_rounded,
+                                          color: AppTheme.primaryColor,
+                                          backgroundColor: AppTheme.secondaryColor.withValues(alpha: 0.8),
+                                          child: _isScanningSlip
+                                              ? SizedBox(
+                                                  width: 17,
+                                                  height: 17,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2.2,
+                                                    color: AppTheme.primaryColor,
+                                                  ),
+                                                )
+                                              : null,
                                         ),
-                                    ],
+                                        if (unscannedCount > 0 && !_isScanningSlip)
+                                          Positioned(
+                                            top: -6,
+                                            right: -6,
+                                            child: IgnorePointer(
+                                              child: _BouncingSlipBadge(count: unscannedCount),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -697,6 +710,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           targetRadiusVal = 22.0;
         }
         break;
+      case 7:
+        final rect = _getWidgetRect(_slipScannerKey);
+        if (rect != null) {
+          targetRectVal = rect;
+          targetRadiusVal = rect.width / 2 > 0 ? rect.width / 2 : 24.0;
+        }
+        break;
     }
 
     final titles = [
@@ -707,6 +727,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context.tr('ศูนย์แจ้งเตือน', 'Notification Center'),
       context.tr('เมนูทางเลือกหลัก', 'Main Home Menu'),
       context.tr('พิมพ์บันทึกธุรกรรมด่วน', 'AI Fast Recording'),
+      context.tr('สแกนสลิปธนาคารอัตโนมัติ', 'Auto Bank Slip Scanner'),
     ];
 
     final descriptions = [
@@ -737,6 +758,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context.tr(
         'พิมพ์ข้อความบันทึกง่าย ๆ เช่น "ค่าข้าว 50" หรือ "+เงินเดือน 20000" เพื่อบันทึกทันที หรือคลิกไอคอนบวกเพื่อเลือกรายการแนะนำด่วน',
         'Type quick statements like "Food 60" or "+Salary 20000" to log instantly, or tap the plus icon for shortcuts.',
+      ),
+      context.tr(
+        'แตะไอคอนสแกนสลิปด้านบนนี้ เพื่อให้ระบบตรวจจับสลิปโอนเงินจากอัลบั้มให้อัตโนมัติทันที โดยระบบจะอ่านยอดเงิน วันที่ และธนาคารให้ครบถ้วน พร้อมช่วยแยกรายการโอนเงินระหว่างบัญชีของตนเองออกให้อย่างแม่นยำ',
+        'Tap this scan slip icon at the top to automatically scan bank transfer slips from your gallery. It detects amounts, dates, and banks instantly while smartly excluding self-transfers.',
       ),
     ];
 
@@ -818,6 +843,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
               color: context.secondaryTextColor,
             ),
           ),
+          if (_tutorialStep == 7) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 20,
+                    color: AppTheme.primaryColor,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.tr(
+                            'ตรวจสลิปอัตโนมัติเมื่อเปิดแอป',
+                            'Auto-scan slips on app open',
+                          ),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: context.primaryTextColor,
+                          ),
+                        ),
+                        Text(
+                          context.tr(
+                            'นำเข้าสลิปใหม่อัตโนมัติเมื่อเข้าใช้งาน',
+                            'Automatically import new slips on launch',
+                          ),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.secondaryTextColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: AppSettings.autoSlipScanningEnabled,
+                    activeColor: AppTheme.primaryColor,
+                    onChanged: (val) async {
+                      await AppSettings.setAutoSlipScanningEnabled(val);
+                      setState(() {});
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -856,12 +940,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     // Determine layout coordinates dynamically for smooth sliding animation
-    final double cardHeight = 220.0;
+    final double cardHeight = _tutorialStep == 7 ? 300.0 : 220.0;
     double animTop = (screenHeight - cardHeight) / 2;
     if (_tutorialStep == 6) {
-      animTop = 160.0;
+      animTop = 130.0;
     } else if (_tutorialStep > 0) {
-      animTop = screenHeight - cardHeight - 110;
+      animTop = screenHeight - cardHeight - 80;
     }
 
     return Positioned.fill(
@@ -935,37 +1019,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _startTutorial() async {
-    final prefs = await SharedPreferences.getInstance();
-    final localKey = 'tutorial_$_activeUserId';
-
-    bool shouldShow = false;
-
-    try {
-      final response = await _apiClient.get(
-        '/profile?id=eq.$_activeUserId&select=has_completed_tutorial',
-      );
-      if (response.statusCode == 200) {
-        final List<dynamic> profiles = jsonDecode(response.body);
-        if (profiles.isNotEmpty) {
-          final profile = Map<String, dynamic>.from(profiles.first as Map);
-          final hasCompleted =
-              profile['has_completed_tutorial'] as bool? ?? false;
-
-          shouldShow = !hasCompleted;
-          // Sync local preference with DB
-          await prefs.setBool(localKey, hasCompleted);
-        }
-      } else {
-        // Fallback to local if DB fails
-        shouldShow = !(prefs.getBool(localKey) ?? false);
-      }
-    } catch (_) {
-      // Fallback to local on network error
-      shouldShow = !(prefs.getBool(localKey) ?? false);
-    }
-
-    if (!shouldShow) return;
-
+    // โหมดทดสอบสำหรับผู้ใช้: แสดงการสอน (Tutorial) ตลอดเวลาทุกครั้งที่เปิดเข้าแอป
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted && _tutorialStep < 0) {
         setState(() {

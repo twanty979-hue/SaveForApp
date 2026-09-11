@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
+import 'package:flutter/services.dart';
 import 'package:app/core/localization/app_material.dart';
 
 import '../../../core/network/api_client.dart';
@@ -10,7 +12,9 @@ import '../../auth/domain/auth_session.dart';
 import 'dashboard_overview_card.dart';
 import 'monthly_comparison_card.dart';
 
-bool isTransferTransaction(dynamic tx) {
+bool isTransferTransaction(dynamic tx) => _checkIsTransferTransaction(tx);
+
+bool _checkIsTransferTransaction(dynamic tx) {
   if (tx is! Map) return false;
   final type = tx['type']?.toString();
   final source = tx['source']?.toString();
@@ -29,8 +33,8 @@ class FinanceDashboardScreen extends StatefulWidget {
 
   const FinanceDashboardScreen({super.key, this.onRefreshHeader});
 
-  static bool isTransfer(dynamic tx) => isTransferTransaction(tx);
-  static bool isTransferTransaction(dynamic tx) => isTransferTransaction(tx);
+  static bool isTransfer(dynamic tx) => _checkIsTransferTransaction(tx);
+  static bool isTransferTransaction(dynamic tx) => _checkIsTransferTransaction(tx);
 
   @override
   State<FinanceDashboardScreen> createState() => _FinanceDashboardScreenState();
@@ -40,6 +44,9 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   final ApiClient _apiClient = ApiClient();
   final List<String> _periods = ['เดือนนี้', 'เดือนก่อน', '30 วัน', 'ทั้งหมด'];
 
+  late final ScrollController _scrollController;
+  int _visibleCount = 5;
+
   List<dynamic> _transactions = [];
   int _selectedPeriod = 0;
   bool _loading = true;
@@ -47,7 +54,30 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController()..addListener(_onScroll);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMore();
+    }
+  }
+
+  void _loadMore() {
+    if (_visibleCount < _filteredTransactions.length) {
+      setState(() {
+        _visibleCount = math.min(_visibleCount + 5, _filteredTransactions.length);
+      });
+    }
   }
 
   Future<void> _load() async {
@@ -232,6 +262,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                             color: AppTheme.primaryColor,
                             onRefresh: _load,
                             child: ListView(
+                              controller: _scrollController,
                               physics: const AlwaysScrollableScrollPhysics(
                                 parent: BouncingScrollPhysics(),
                               ),
@@ -240,8 +271,10 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                                 _PeriodSelector(
                                   labels: _periods,
                                   selectedIndex: _selectedPeriod,
-                                  onSelected: (index) =>
-                                      setState(() => _selectedPeriod = index),
+                                  onSelected: (index) => setState(() {
+                                    _selectedPeriod = index;
+                                    _visibleCount = 5;
+                                  }),
                                 ),
                                 const SizedBox(height: 12),
                                 DashboardOverviewCard(
@@ -315,6 +348,8 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                                 const SizedBox(height: 8),
                                 _RecentTransactions(
                                   transactions: _filteredTransactions,
+                                  visibleCount: _visibleCount,
+                                  onLoadMore: _loadMore,
                                 ),
                               ],
                             ),
@@ -528,8 +563,14 @@ class _InsightCard extends StatelessWidget {
 
 class _RecentTransactions extends StatelessWidget {
   final List<dynamic> transactions;
+  final int visibleCount;
+  final VoidCallback onLoadMore;
 
-  const _RecentTransactions({required this.transactions});
+  const _RecentTransactions({
+    required this.transactions,
+    required this.visibleCount,
+    required this.onLoadMore,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -555,7 +596,10 @@ class _RecentTransactions extends StatelessWidget {
       );
     }
 
-    final visible = transactions.take(8).toList();
+    final visible = transactions.take(visibleCount).toList();
+    final hasMore = visible.length < transactions.length;
+    final remaining = transactions.length - visible.length;
+
     return Container(
       decoration: BoxDecoration(
         color: context.surfaceColor.withValues(alpha: 0.96),
@@ -563,13 +607,63 @@ class _RecentTransactions extends StatelessWidget {
         border: Border.all(color: context.borderColor),
       ),
       child: Column(
-        children: List.generate(visible.length, (index) {
-          final transaction = Map<String, dynamic>.from(visible[index] as Map);
-          return _RecentTransactionRow(
-            transaction: transaction,
-            showDivider: index < visible.length - 1,
-          );
-        }),
+        children: [
+          ...List.generate(visible.length, (index) {
+            final transaction = Map<String, dynamic>.from(visible[index] as Map);
+            return _RecentTransactionRow(
+              transaction: transaction,
+              showDivider: index < visible.length - 1 || hasMore,
+            );
+          }),
+          if (hasMore)
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onLoadMore();
+                },
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(18)),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'ดูเพิ่มอีก 5 รายการ (เหลืออีก $remaining)',
+                        style: TextStyle(
+                          fontFamily: 'SukhumvitSet',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primaryColor,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else if (transactions.length > 5)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'แสดงครบทั้งหมดแล้ว (${transactions.length} รายการ)',
+                style: const TextStyle(
+                  fontFamily: 'SukhumvitSet',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF94A3B8),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

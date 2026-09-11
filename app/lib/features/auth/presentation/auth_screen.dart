@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
@@ -40,12 +41,19 @@ class _AuthScreenState extends State<AuthScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _appleSignInAvailable = false;
   String? _errorMessage;
   String? _successMessage;
 
   @override
   void initState() {
     super.initState();
+    SignInWithApple.isAvailable().then((available) {
+      if (mounted) {
+        setState(() => _appleSignInAvailable = available);
+      }
+    }).catchError((_) {});
+
     // ตรวจสอบข้อมูลล็อกอินขากลับจาก URL Fragment หรือ Query Parameters
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkUrlFragment();
@@ -259,6 +267,134 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  // เรียกใช้กระบวนการล็อกอิน Sign in with Apple (ตามมาตรฐาน App Store Guideline 4.8)
+  Future<void> _handleAppleSignIn() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _successMessage = 'กำลังเชื่อมต่อบัญชี Apple...';
+    });
+
+    try {
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final idToken = credential.identityToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw Exception('ไม่ได้รับ Identity Token จาก Apple');
+      }
+
+      // บน Render โปรดักชัน endpoint /auth/google/android ทำหน้าที่เป็น proxy ส่งต่อไปยัง
+      // Supabase /auth/v1/token?grant_type=id_token โดยตรง (รองรับ ID token ของทั้ง Google และ Apple)
+      var response = await _apiClient.post(
+        '/auth/google/android',
+        body: {
+          'provider': 'apple',
+          'id_token': idToken,
+        },
+      );
+
+      // สำรองกรณีที่เซิร์ฟเวอร์ในอนาคตมีการแยก endpoint /auth/apple เป็นพิเศษ
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        final appleResp = await _apiClient.post(
+          '/auth/apple',
+          body: {
+            'provider': 'apple',
+            'id_token': idToken,
+          },
+        );
+        if (appleResp.statusCode == 200 || appleResp.statusCode == 201) {
+          response = appleResp;
+        }
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final sessionData = jsonDecode(response.body);
+        final accessToken = sessionData['access_token']?.toString();
+        final refreshToken = sessionData['refresh_token']?.toString();
+        final user = sessionData['user'] as Map<String, dynamic>?;
+        final id = user?['id']?.toString();
+        final email = user?['email']?.toString() ?? credential.email;
+        final userMetadata = user?['user_metadata'] as Map<String, dynamic>?;
+
+        String? displayName =
+            userMetadata?['full_name']?.toString() ??
+            userMetadata?['name']?.toString();
+
+        if (displayName == null || displayName.isEmpty) {
+          final parts = [credential.givenName, credential.familyName]
+              .where((s) => s != null && s.trim().isNotEmpty)
+              .map((s) => s!.trim())
+              .toList();
+          if (parts.isNotEmpty) {
+            displayName = parts.join(' ');
+          }
+        }
+
+        if (displayName == null || displayName.isEmpty) {
+          displayName = email?.split('@').first ?? 'Apple User';
+        }
+
+        if (id != null && id.isNotEmpty && accessToken != null) {
+          await AuthSession.save(
+            id,
+            displayName,
+            email,
+            token: accessToken,
+            refresh: refreshToken,
+          );
+
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const DashboardScreen(),
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      // ดึงรายละเอียด error จาก Supabase / Backend เพื่อแสดงข้อความที่แท้จริง
+      String errDetail = response.body;
+      try {
+        final errJson = jsonDecode(response.body);
+        errDetail = errJson['msg'] ??
+            errJson['error_description'] ??
+            errJson['message'] ??
+            errJson['error'] ??
+            response.body;
+      } catch (_) {}
+      throw Exception(errDetail);
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        setState(() {
+          _isLoading = false;
+          _successMessage = null;
+        });
+        return;
+      }
+      setState(() {
+        _errorMessage = 'เกิดข้อผิดพลาดในการยืนยันตัวตน Apple: ${e.message}';
+        _isLoading = false;
+        _successMessage = null;
+      });
+    } catch (e) {
+      debugPrint("SaveFor: Apple Sign In error: $e");
+      final cleanMsg = e.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        _errorMessage = 'เข้าสู่ระบบด้วย Apple ไม่สำเร็จ: $cleanMsg';
+        _isLoading = false;
+        _successMessage = null;
+      });
+    }
+  }
+
   // เรียกใช้กระบวนการล็อกอิน Google OAuth ของจริงโดยตรงทันที
   Future<void> _handleGoogleSignIn() async {
     setState(() {
@@ -286,6 +422,9 @@ class _AuthScreenState extends State<AuthScreen> {
         // Native Google Sign-In on Android/iOS
         final googleSignIn = GoogleSignIn(
           scopes: ['email', 'profile'],
+          clientId: defaultTargetPlatform == TargetPlatform.iOS
+              ? '569249732125-jqsu8h9np7n91isd5ur37ugk70drk6rd.apps.googleusercontent.com'
+              : null,
           serverClientId:
               '569249732125-g3s97ooml3nbf5hvelg8mvmmfdo3h5nl.apps.googleusercontent.com',
         );
@@ -649,56 +788,54 @@ class _AuthScreenState extends State<AuthScreen> {
                             ),
                             const SizedBox(height: 14),
 
-                            // Google remains available as the secondary sign-in method.
-                            Container(
-                              width: double.infinity,
-                              height: 52,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: const Color(0xFFE2E8F0),
-                                ),
-                              ),
-                              child: TextButton(
-                                style: TextButton.styleFrom(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                                onPressed: _isLoading
-                                    ? null
-                                    : _handleGoogleSignIn,
-                                child: _isLoading
-                                    ? SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: CircularProgressIndicator(
-                                          color: AppTheme.primaryColor,
-                                          strokeWidth: 2.5,
+                            // Social Logins: Apple & Google Side-by-Side (Icon Buttons)
+                            Builder(
+                              builder: (context) {
+                                final showApple = _appleSignInAvailable ||
+                                    (!kIsWeb &&
+                                        defaultTargetPlatform ==
+                                            TargetPlatform.iOS);
+                                final isAppleLoading = _isLoading &&
+                                    _successMessage?.contains('Apple') == true;
+                                final isGoogleLoading = _isLoading &&
+                                    _successMessage?.contains('Google') == true;
+
+                                return Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    if (showApple) ...[
+                                      _buildSocialIconButton(
+                                        key: const ValueKey('apple_sign_in_button'),
+                                        icon: const Icon(
+                                          Icons.apple,
+                                          color: Colors.white,
+                                          size: 28,
                                         ),
-                                      )
-                                    : Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: const [
-                                          GoogleLogo(size: 22),
-                                          SizedBox(width: 10),
-                                          Flexible(
-                                            child: Text(
-                                              'เข้าสู่ระบบด้วย Google',
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: Color(0xFF0F172A),
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                        backgroundColor: Colors.black,
+                                        tooltip: 'Apple ID',
+                                        semanticsLabel: 'เข้าสู่ระบบด้วย Apple',
+                                        isLoading: isAppleLoading,
+                                        onTap: _isLoading
+                                            ? null
+                                            : _handleAppleSignIn,
                                       ),
-                              ),
+                                      const SizedBox(width: 16),
+                                    ],
+                                    _buildSocialIconButton(
+                                      key: const ValueKey('google_sign_in_button'),
+                                      icon: const GoogleLogo(size: 24),
+                                      backgroundColor: Colors.white,
+                                      borderColor: const Color(0xFFE2E8F0),
+                                      tooltip: 'Google',
+                                      semanticsLabel: 'เข้าสู่ระบบด้วย Google',
+                                      isLoading: isGoogleLoading,
+                                      onTap: _isLoading
+                                          ? null
+                                          : _handleGoogleSignIn,
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
                             const SizedBox(height: 18),
 
@@ -743,6 +880,78 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSocialIconButton({
+    Key? key,
+    required Widget icon,
+    required VoidCallback? onTap,
+    required Color backgroundColor,
+    Color? borderColor,
+    required String tooltip,
+    required String semanticsLabel,
+    bool isLoading = false,
+  }) {
+    final isDark = backgroundColor == Colors.black ||
+        backgroundColor == const Color(0xFF0F172A);
+    final isDisabled = onTap == null && !isLoading;
+
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        label: semanticsLabel,
+        button: true,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 200),
+          opacity: isDisabled ? 0.6 : 1.0,
+          child: Material(
+            key: key,
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(16),
+              splashColor: (isDark ? Colors.white : Colors.black)
+                  .withValues(alpha: 0.12),
+              highlightColor: (isDark ? Colors.white : Colors.black)
+                  .withValues(alpha: 0.06),
+              child: Ink(
+                width: 64,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: backgroundColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: borderColor != null
+                      ? Border.all(color: borderColor, width: 1.2)
+                      : null,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black
+                          .withValues(alpha: isDark ? 0.14 : 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: isLoading
+                      ? SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: isDark
+                                ? Colors.white
+                                : AppTheme.primaryColor,
+                            strokeWidth: 2.2,
+                          ),
+                        )
+                      : icon,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
