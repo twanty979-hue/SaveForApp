@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/bank_rule_model.dart';
+import '../settings/app_settings.dart';
 import 'slip_parser_service.dart';
 export 'slip_parser_service.dart';
 
@@ -43,6 +45,24 @@ class SlipScannerBridge {
     } catch (e) {
       debugPrint('Error requesting slip permission: $e');
       return 'error';
+    }
+  }
+
+  /// อัปเดตรายชื่อธนาคารและคีย์เวิร์ดอัลบั้มไปยัง Native (iOS / Android)
+  Future<bool> updateBankRules(List<BankRuleConfig> rules) async {
+    if (!isSupported) return false;
+    try {
+      final payload = rules.map((r) => {
+        'name': r.name,
+        'appName': r.appName,
+        'keywords': r.albumKeywords,
+        'bankTag': '${r.name} ${r.appName}',
+      }).toList();
+      final res = await _channel.invokeMethod<bool>('updateBankRules', payload);
+      return res ?? true;
+    } catch (e) {
+      debugPrint('Error updating bank rules: $e');
+      return false;
     }
   }
 
@@ -173,6 +193,12 @@ class SlipScannerBridge {
           final cutoff = DateTime(effectiveStartDate.year, effectiveStartDate.month, effectiveStartDate.day);
           if (parsed.date.isBefore(cutoff)) {
             debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped: date ${parsed.date} is before cutoff $cutoff');
+            continue;
+          }
+
+          // ตรวจสอบว่าธนาคารนี้ถูกเปิดใช้งานในหน้าตั้งค่าหรือไม่ (ผู้ใช้สามารถติ๊กเปิด/ปิดได้)
+          if (!AppSettings.isAutoScanBankEnabled(parsed.bank.name)) {
+            debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped (bank ${parsed.bank.name} is disabled by user)');
             continue;
           }
 

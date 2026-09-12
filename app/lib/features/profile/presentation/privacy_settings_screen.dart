@@ -33,8 +33,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
         content: SingleChildScrollView(
           child: Text(
             context.tr(
-              'เราให้ความสำคัญกับความเป็นส่วนตัวของคุณ ข้อมูลการเงินและธุรกรรมทั้งหมดจะถูกบันทึกและจัดเก็บไว้บนอุปกรณ์ของคุณ รวมถึงซิงค์ผ่านฐานข้อมูลคลาวด์ที่ปลอดภัยเมื่อมีการเข้าสู่ระบบ เราจะไม่แบ่งปันหรือเผยแพร่ข้อมูลของคุณให้แก่บุคคลภายนอกโดยเด็ดขาด',
-              'We value your privacy. All financial data and transactions are stored locally on your device and synchronized via a secure cloud database when signed in. We never share or sell your personal data to any third party.',
+              'เราให้ความสำคัญกับความเป็นส่วนตัวของคุณ ข้อมูลการเงินทั้งหมดจะถูกจัดเก็บอย่างปลอดภัยบนอุปกรณ์ของคุณ และได้รับการดูแลอย่างเคร่งครัดเมื่อเข้าสู่ระบบ โดยไม่มีการเปิดเผยหรือแชร์ข้อมูลให้แก่บุคคลภายนอกโดยเด็ดขาด',
+              'We value your privacy. All your financial data is securely stored on your device and strictly protected when signed in. We never share or sell your personal data to any third party.',
             ),
           ),
         ),
@@ -280,7 +280,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                _SectionLabel(context.tr('เขตอันตราย', 'Danger Zone')),
+                _SectionLabel(context.tr('จัดการบัญชี', 'Account Management')),
                 const SizedBox(height: 8),
                 _SettingsTile(
                   icon: Icons.delete_forever_rounded,

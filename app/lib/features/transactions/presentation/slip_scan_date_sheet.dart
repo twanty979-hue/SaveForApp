@@ -4,7 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/models/bank_rule_model.dart';
+import '../../../core/services/bank_rules_service.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
+import '../../../core/widgets/bank_logo_icon.dart';
 import 'slip_scan_dialog.dart';
 import 'no_slips_found_sheet.dart';
 
@@ -803,28 +806,32 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
 
             const SizedBox(height: 12),
 
-            // Supported Bank tags row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  context.tr('รองรับอัลบั้ม 4 ธนาคาร:', 'Supports 4 bank albums:'),
-                  style: TextStyle(
-                    fontFamily: 'SukhumvitSet',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade500,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                _buildBankTag('K PLUS', const Color(0xFF138F2D)),
-                const SizedBox(width: 4),
-                _buildBankTag('SCB', const Color(0xFF4E2A84)),
-                const SizedBox(width: 4),
-                _buildBankTag('กรุงศรี', const Color(0xFF86724C)),
-                const SizedBox(width: 4),
-                _buildBankTag('TrueMoney', const Color(0xFFFF6600)),
-              ],
+            // Supported Bank tags row (with official bank logo icons)
+            ValueListenableBuilder<List<BankRuleConfig>>(
+              valueListenable: BankRulesService.rulesNotifier,
+              builder: (context, rules, _) {
+                final displayRules = rules.isNotEmpty ? rules : BankRuleConfig.defaultRules;
+                final count = displayRules.length;
+
+                return Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 4.5,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                      context.tr('รองรับอัลบั้ม $count ธนาคาร:', 'Supports $count bank albums:'),
+                      style: TextStyle(
+                        fontFamily: 'SukhumvitSet',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                    ...displayRules.map((r) => _buildBankLogoChip(r)),
+                  ],
+                );
+              },
             ),
 
             const SizedBox(height: 16),
@@ -1052,21 +1059,60 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
     );
   }
 
-  Widget _buildBankTag(String text, Color color) {
+  String _getBankShortName(BankRuleConfig rule) {
+    switch (rule.bankType) {
+      case BankType.kbank:
+        return 'K PLUS';
+      case BankType.scb:
+        return 'SCB';
+      case BankType.krungsri:
+        return 'กรุงศรี';
+      case BankType.truemoney:
+        return 'TrueMoney';
+      case BankType.ktb:
+        return 'กรุงไทย';
+      default:
+        return rule.name;
+    }
+  }
+
+  Widget _buildBankLogoChip(BankRuleConfig rule) {
+    final color = rule.colorHex != null
+        ? Color(int.parse(rule.colorHex!.replaceFirst('#', '0xFF')))
+        : AppTheme.primaryColor;
+    final shortName = _getBankShortName(rule);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      padding: const EdgeInsets.fromLTRB(4, 2, 6, 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(5),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'SukhumvitSet',
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: color,
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withValues(alpha: 0.25),
+          width: 0.8,
         ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          BankLogoIcon(
+            bank: rule.bankType,
+            size: 14,
+            isCircle: true,
+            showShadow: false,
+            showBorder: false,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            shortName,
+            style: TextStyle(
+              fontFamily: 'SukhumvitSet',
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }

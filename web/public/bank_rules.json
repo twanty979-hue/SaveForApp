@@ -1,0 +1,112 @@
+[
+  {
+    "id": "kbank",
+    "name": "กสิกรไทย",
+    "appName": "K PLUS • Kasikornbank",
+    "bankType": "kbank",
+    "logoUrl": "/images/banks/kbank.png",
+    "albumKeywords": [
+      "k plus",
+      "kplus",
+      "k-plus",
+      "kasikorn",
+      "กสิกร"
+    ],
+    "isEnabled": true,
+    "isCustom": false,
+    "colorHex": "#00A950",
+    "priority": 1,
+    "updatedAt": "2026-09-11T19:20:43.558Z"
+  },
+  {
+    "id": "scb",
+    "name": "ไทยพาณิชย์",
+    "appName": "SCB EASY • แม่มณี",
+    "bankType": "scb",
+    "logoUrl": "/images/banks/scb.png",
+    "albumKeywords": [
+      "scb easy",
+      "scbeasy",
+      "scb",
+      "แม่มณี",
+      "ไทยพาณิชย์"
+    ],
+    "isEnabled": true,
+    "isCustom": false,
+    "colorHex": "#4E2A84",
+    "priority": 2,
+    "updatedAt": "2026-09-11T19:20:43.558Z"
+  },
+  {
+    "id": "krungsri",
+    "name": "กรุงศรีอยุธยา",
+    "appName": "KMA • Bank of Ayudhya",
+    "bankType": "krungsri",
+    "logoUrl": "/images/banks/krungsri.png",
+    "albumKeywords": [
+      "krungsri",
+      "kma",
+      "bay",
+      "กรุงศรี"
+    ],
+    "isEnabled": true,
+    "isCustom": false,
+    "colorHex": "#7A6400",
+    "priority": 3,
+    "updatedAt": "2026-09-11T19:20:43.558Z"
+  },
+  {
+    "id": "truemoney",
+    "name": "ทรูมันนี่",
+    "appName": "TrueMoney Wallet",
+    "bankType": "truemoney",
+    "logoUrl": "/images/banks/truemoney.png",
+    "albumKeywords": [
+      "truemoney",
+      "true money",
+      "ทรูมันนี่",
+      "tmn"
+    ],
+    "isEnabled": true,
+    "isCustom": false,
+    "colorHex": "#FF6600",
+    "priority": 4,
+    "updatedAt": "2026-09-11T19:20:43.558Z"
+  },
+  {
+    "id": "ktb",
+    "name": "กรุงไทย",
+    "appName": "Krungthai NEXT",
+    "bankType": "ktb",
+    "logoUrl": "/images/banks/ktb.png",
+    "albumKeywords": [
+      "krungthai",
+      "ktb",
+      "สลิปกรุงไทย",
+      "กรุงไทย"
+    ],
+    "isEnabled": true,
+    "isCustom": true,
+    "colorHex": "#00AEEF",
+    "priority": 5,
+    "updatedAt": "2026-09-11T19:20:43.558Z"
+  },
+  {
+    "id": "custom_1789154442327",
+    "name": "กรุงเทพ",
+    "appName": "Bangkok Bank Mobile",
+    "bankType": "bbl",
+    "logoUrl": "/images/banks/bbl.png",
+    "albumKeywords": [
+      "bangkok bank",
+      "bbl",
+      "บัวหลวง",
+      "กรุงเทพ"
+    ],
+    "isEnabled": true,
+    "isCustom": true,
+    "colorHex": "#1E3A8A",
+    "priority": 6,
+    "updatedAt": "2026-09-11T19:20:43.558Z"
+  }
+]

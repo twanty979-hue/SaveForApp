@@ -1,13 +1,10 @@
 import 'dart:convert';
 
 import 'package:app/core/localization/app_material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/api_client.dart';
-import '../../../core/localization/app_localizations.dart';
 import '../../../core/notifications/notification_service.dart';
 import '../../../core/settings/app_settings.dart';
 import '../../../core/theme/app_theme.dart';
@@ -16,9 +13,12 @@ import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/safe_network_image.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../auth/presentation/auth_screen.dart';
+import '../../../core/models/bank_rule_model.dart';
+import '../../../core/services/bank_rules_service.dart';
 import 'privacy_settings_screen.dart';
 import 'account_settings_screen.dart';
 import 'help_support_screen.dart';
+import 'supported_banks_screen.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
   const ProfileSettingsScreen({super.key});
@@ -31,9 +31,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   final ApiClient _apiClient = ApiClient();
 
   bool _isLoading = false;
-  bool _isSaving = false;
   bool _isUploadingAvatar = false;
-  bool _profileExists = false;
   bool _notificationsEnabled = AppSettings.notificationsEnabled;
   String _displayName = AuthSession.displayName ?? '';
   String _tier = 'free';
@@ -67,7 +65,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         final List<dynamic> profiles = jsonDecode(response.body);
         if (profiles.isNotEmpty) {
           final profile = profiles.first as Map<String, dynamic>;
-          _profileExists = true;
           final dbName = profile['display_name']?.toString().trim();
           if (dbName != null && dbName.isNotEmpty) {
             _displayName = dbName;
@@ -247,7 +244,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         _showMessage('ไม่สามารถลบรูปโปรไฟล์ได้', isError: true);
       }
     } catch (_) {
-      _showMessage('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้', isError: true);
+      _showMessage('เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', isError: true);
     } finally {
       if (mounted) setState(() => _isUploadingAvatar = false);
     }
@@ -416,89 +413,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     }
   }
 
-  void _showFcmTokenDialog() {
-    final token = NotificationService.instance.currentToken;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.key_rounded, color: AppTheme.primaryColor),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                context.tr('FCM Device Token', 'FCM Device Token'),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              token != null
-                  ? context.tr(
-                      'ใช้โทเคนนี้สำหรับวางในช่อง "Send test message" บน Firebase Console เพื่อยิงทดสอบเฉพาะเครื่องนี้:',
-                      'Use this token in Firebase Console "Send test message" to test targeting this device:',
-                    )
-                  : context.tr(
-                      'ยังไม่พบ Token ในระบบ\n\n(หากรันบน iOS Simulator จะไม่รองรับ APNs ของ Apple แนะนำให้ทดสอบบน iPhone เครื่องจริง หรือเลือก Target เป็นแอป com.savefor.app บนหน้าเว็บ Firebase แทนครับ)',
-                      'Token not found yet.\n\n(iOS Simulator does not support APNs. Test on a real device or target app com.savefor.app directly on Firebase).',
-                    ),
-              style: TextStyle(
-                fontSize: 13,
-                color: context.secondaryTextColor,
-              ),
-            ),
-            if (token != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: context.borderColor),
-                ),
-                child: SelectableText(
-                  token,
-                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
-                ),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          if (token != null)
-            FilledButton.icon(
-              icon: const Icon(Icons.copy_rounded, size: 16),
-              label: Text(context.tr('คัดลอก Token', 'Copy Token')),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: token));
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      context.tr(
-                        'คัดลอก FCM Token เรียบร้อยแล้ว',
-                        'FCM Token copied to clipboard',
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.tr('ปิด', 'Close')),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Future<void> _showLanguageSettings() async {
     await showModalBottomSheet<void>(
@@ -515,33 +430,53 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           children: [
             const _SheetHandle(),
             const SizedBox(height: 18),
-            Text(
-              context.tr('ภาษา', 'Language'),
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: context.primaryTextColor,
-              ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.translate_rounded,
+                    size: 20,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  context.tr('ภาษา', 'Language'),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: context.primaryTextColor,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            ListTile(
-              leading: const Text('🇹🇭', style: TextStyle(fontSize: 24)),
-              title: const Text('ภาษาไทย'),
-              trailing: AppSettings.locale.value.languageCode == 'th'
-                  ? Icon(Icons.check_circle, color: AppTheme.primaryColor)
-                  : const Icon(Icons.circle_outlined),
+            const SizedBox(height: 14),
+            _buildLangTile(
+              sheetContext: sheetContext,
+              flagAsset: 'assets/images/flags/th.png',
+              code: 'TH',
+              title: 'ภาษาไทย',
+              subtitle: 'Thai',
+              isSelected: AppSettings.locale.value.languageCode == 'th',
               onTap: () async {
                 await AppSettings.setLocale(const Locale('th'));
                 if (mounted) setState(() {});
                 if (sheetContext.mounted) Navigator.pop(sheetContext);
               },
             ),
-            ListTile(
-              leading: const Text('🇬🇧', style: TextStyle(fontSize: 24)),
-              title: const Text('English'),
-              trailing: AppSettings.locale.value.languageCode == 'en'
-                  ? Icon(Icons.check_circle, color: AppTheme.primaryColor)
-                  : const Icon(Icons.circle_outlined),
+            const SizedBox(height: 8),
+            _buildLangTile(
+              sheetContext: sheetContext,
+              flagAsset: 'assets/images/flags/gb.png',
+              code: 'EN',
+              title: 'English',
+              subtitle: 'อังกฤษ',
+              isSelected: AppSettings.locale.value.languageCode == 'en',
               onTap: () async {
                 await AppSettings.setLocale(const Locale('en'));
                 if (mounted) setState(() {});
@@ -549,6 +484,125 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               },
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLangTile({
+    required BuildContext sheetContext,
+    required String flagAsset,
+    required String code,
+    required String title,
+    required String subtitle,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppTheme.primaryColor.withValues(alpha: 0.08)
+                : sheetContext.surfaceColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected
+                  ? AppTheme.primaryColor.withValues(alpha: 0.4)
+                  : sheetContext.borderColor,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppTheme.primaryColor.withValues(alpha: 0.35)
+                        : (Theme.of(sheetContext).brightness == Brightness.dark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : Colors.black.withValues(alpha: 0.08)),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(11),
+                  child: Image.asset(
+                    flagAsset,
+                    width: 42,
+                    height: 42,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      color: isSelected
+                          ? AppTheme.primaryColor.withValues(alpha: 0.15)
+                          : (Theme.of(sheetContext).brightness == Brightness.dark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : const Color(0xFFF1F5F9)),
+                      child: Center(
+                        child: Text(
+                          code,
+                          style: TextStyle(
+                            fontFamily: 'SukhumvitSet',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: isSelected
+                                ? AppTheme.primaryColor
+                                : sheetContext.primaryTextColor,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: isSelected
+                            ? AppTheme.primaryColor
+                            : sheetContext.primaryTextColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: sheetContext.secondaryTextColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                isSelected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                color: isSelected ? AppTheme.primaryColor : Colors.grey.shade400,
+                size: 22,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -761,6 +815,63 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                         ),
 
                         _SettingsTile(
+                          icon: Icons.cloud_sync_rounded,
+                          title: context.tr(
+                            'สำรองรูปสลิป',
+                            'Backup slip photos',
+                          ),
+                          subtitle: context.tr(
+                            'เปิดดูรูปสลิปได้แม้ย้ายไปเครื่องใหม่',
+                            'Access slip photos across your devices',
+                          ),
+                          trailing: ValueListenableBuilder<bool>(
+                            valueListenable: AppSettings.backupSlipsToCloud,
+                            builder: (context, enabled, _) {
+                              return Switch.adaptive(
+                                value: enabled,
+                                activeTrackColor: AppTheme.primaryColor,
+                                onChanged: (value) async {
+                                  await AppSettings.setBackupSlipsToCloud(value);
+                                },
+                              );
+                            },
+                          ),
+                          onTap: () async {
+                            await AppSettings.setBackupSlipsToCloud(
+                              !AppSettings.backupSlipsToCloud.value,
+                            );
+                          },
+                        ),
+
+                        ValueListenableBuilder<List<BankRuleConfig>>(
+                          valueListenable: BankRulesService.rulesNotifier,
+                          builder: (context, rules, _) {
+                            final activeCount = rules.where((r) => r.isEnabled).length;
+                            final totalCount = rules.length;
+                            return _SettingsTile(
+                              icon: Icons.account_balance_rounded,
+                              title: context.tr(
+                                'ธนาคารที่อ่านสลิป',
+                                'Slip scanning banks',
+                              ),
+                              subtitle: context.tr(
+                                'เลือกเปิด-ปิดธนาคารที่ต้องการให้อ่านสลิป ($activeCount/$totalCount ธนาคาร)',
+                                'Choose banks to auto-scan slips ($activeCount/$totalCount banks)',
+                              ),
+                              trailingText: '$activeCount/$totalCount',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const SupportedBanksScreen(),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+
+                        _SettingsTile(
                           icon: Icons.help_outline_rounded,
                           title: context.tr(
                             'ความช่วยเหลือและการสนับสนุน',
@@ -777,24 +888,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                                 builder: (context) => const HelpSupportScreen(),
                               ),
                             );
-                          },
-                        ),
-                        _SettingsTile(
-                          icon: Icons.school_outlined,
-                          title: context.tr('แนะนำการใช้งานแอป', 'App Walkthrough'),
-                          subtitle: context.tr(
-                            'ดูวิธีการใช้งานหลักและการสแกนสลิปอัตโนมัติ',
-                            'Review main features and auto slip scanning',
-                          ),
-                          onTap: () async {
-                            final prefs = await SharedPreferences.getInstance();
-                            final uid = AuthSession.userId ?? '';
-                            if (uid.isNotEmpty) {
-                              await prefs.setBool('tutorial_$uid', false);
-                            }
-                            if (context.mounted) {
-                              Navigator.pop(context, true);
-                            }
                           },
                         ),
                         const SizedBox(height: 14),

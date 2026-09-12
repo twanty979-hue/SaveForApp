@@ -13,6 +13,7 @@ import '../../auth/presentation/auth_screen.dart';
 import '../../transactions/presentation/slip_scan_dialog.dart';
 import '../../transactions/presentation/no_slips_found_sheet.dart';
 import '../../transactions/presentation/slip_scan_date_sheet.dart';
+import 'supported_banks_screen.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -224,8 +225,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                 SnackBar(
                                   content: Text(
                                     this.context.tr(
-                                      'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้',
-                                      'Cannot reach the server',
+                                      'เชื่อมต่อไม่ได้ กรุณาลองใหม่อีกครั้ง',
+                                      'Cannot connect, please try again',
                                     ),
                                   ),
                                   backgroundColor: Colors.red,
@@ -338,8 +339,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         SnackBar(
           content: Text(
             context.tr(
-              'การสแกนสลิปจากอัลบั้มรองรับบนอุปกรณ์ iOS ในเวอร์ชันนี้ครับ',
-              'Slip scanning from album is supported on iOS in this version',
+              'ฟีเจอร์นี้รองรับบน iPhone ในเวอร์ชันนี้ครับ',
+              'This feature is supported on iPhone in this version',
             ),
           ),
         ),
@@ -377,8 +378,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         SnackBar(
           content: Text(
             context.tr(
-              'การสแกนสลิปรองรับบนอุปกรณ์ iOS ในเวอร์ชันนี้ครับ',
-              'Slip scanning is supported on iOS in this version',
+              'ฟีเจอร์นี้รองรับบน iPhone ในเวอร์ชันนี้ครับ',
+              'This feature is supported on iPhone in this version',
             ),
           ),
         ),
@@ -625,9 +626,23 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                           },
                         ),
                         _SettingsTile(
+                          icon: Icons.account_balance_rounded,
+                          title: context.tr('ธนาคารที่รองรับ', 'Supported Banks'),
+                          subtitle: context.tr('อ่านอัตโนมัติ 4 ธนาคารยอดนิยม', 'Auto-detect 4 popular banks'),
+                          trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFF94A3B8)),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SupportedBanksScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _SettingsTile(
                           icon: Icons.photo_library_outlined,
-                          title: context.tr('เลือกรูปสลิปเพื่อทดสอบ', 'Pick a slip to test'),
-                          subtitle: context.tr('เลือกภาพสลิปจากเครื่องเพื่อทดสอบอ่านยอด', 'Select a slip to test OCR recognition'),
+                          title: context.tr('นำเข้ารูปสลิป', 'Pick a slip photo'),
+                          subtitle: context.tr('เลือกรูปสลิปจากอัลบั้มเพื่อบันทึกรายการ', 'Select a slip from photos to add entry'),
                           trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFF94A3B8)),
                           onTap: () {
                             if (!_isScanningSlips) _pickAndScanSingleSlip();
@@ -637,7 +652,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
                         const SizedBox(height: 22),
                         _SectionLabel(
-                          context.tr('การจัดการบัญชีระดับลึก', 'Danger Zone'),
+                          context.tr('จัดการบัญชี', 'Account Management'),
                         ),
                         const SizedBox(height: 8),
                         _SettingsTile(

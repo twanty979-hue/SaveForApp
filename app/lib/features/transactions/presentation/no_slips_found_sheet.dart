@@ -92,8 +92,8 @@ class NoSlipsFoundSheet extends StatelessWidget {
           // Description
           Text(
             context.tr(
-              'ระบบสแกนอัลบั้มธนาคารแล้ว ไม่พบสลิปใหม่ หรือสลิปทั้งหมดถูกบันทึกเข้าระบบเรียบร้อยแล้วครับ หากมีสลิปเพิ่มเติม สามารถเลือกรูปจากอัลบั้มได้เลยครับ',
-              'Scanned bank albums and found no new slips, or all slips have already been saved. You can pick an image directly from your gallery.',
+              'ไม่พบสลิปใหม่ในอัลบั้ม หรืออาจจะบันทึกไว้หมดแล้วครับ หากมีสลิปอื่น สามารถเลือกรูปภาพได้เลยครับ',
+              'No new slips found in your photos, or all slips have already been saved. You can pick an image directly from your gallery.',
             ),
             textAlign: TextAlign.center,
             style: TextStyle(

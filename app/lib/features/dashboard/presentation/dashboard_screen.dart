@@ -1019,7 +1019,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _startTutorial() async {
-    // โหมดทดสอบสำหรับผู้ใช้: แสดงการสอน (Tutorial) ตลอดเวลาทุกครั้งที่เปิดเข้าแอป
+    final prefs = await SharedPreferences.getInstance();
+    final hasShownLocally = prefs.getBool('tutorial_$_activeUserId') ?? false;
+
+    // หากผู้ใช้เคยผ่าน Tutorial ในเครื่องนี้แล้ว ไม่ต้องแสดงซ้ำ
+    if (hasShownLocally) return;
+
+    try {
+      final response = await _apiClient.get(
+        '/profile?id=eq.$_activeUserId&select=has_completed_tutorial',
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> profiles = jsonDecode(response.body);
+        if (profiles.isNotEmpty) {
+          final profile = profiles.first as Map<String, dynamic>;
+          final hasCompleted =
+              profile['has_completed_tutorial'] as bool? ?? false;
+          if (hasCompleted) {
+            await prefs.setBool('tutorial_$_activeUserId', true);
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // แสดง Tutorial เฉพาะผู้ใช้ใหม่ที่ยังไม่เคยผ่านการสอน
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted && _tutorialStep < 0) {
         setState(() {

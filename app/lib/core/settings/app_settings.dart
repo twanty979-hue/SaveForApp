@@ -15,8 +15,17 @@ class AppSettings {
   static bool notificationsEnabled = true;
   static bool appLockEnabled = false;
   static bool autoSlipScanningEnabled = false;
+  static final ValueNotifier<bool> backupSlipsToCloud = ValueNotifier(false);
   static final ValueNotifier<bool> hideBalances = ValueNotifier(false);
   static bool analyticsEnabled = true;
+
+  static final ValueNotifier<Set<String>> enabledAutoScanBanks = ValueNotifier({
+    'kbank',
+    'scb',
+    'krungsri',
+    'truemoney',
+    'ktb',
+  });
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -30,8 +39,38 @@ class AppSettings {
     notificationsEnabled = prefs.getBool('notificationsEnabled') ?? true;
     appLockEnabled = prefs.getBool('appLockEnabled') ?? false;
     autoSlipScanningEnabled = prefs.getBool('autoSlipScanningEnabled') ?? false;
+    backupSlipsToCloud.value = prefs.getBool('backupSlipsToCloud') ?? false;
     hideBalances.value = prefs.getBool('hideBalances') ?? false;
     analyticsEnabled = prefs.getBool('analyticsEnabled') ?? true;
+    final banks = prefs.getStringList('enabledAutoScanBanks');
+    if (banks != null) {
+      enabledAutoScanBanks.value = banks.toSet();
+    }
+  }
+
+  static bool isAutoScanBankEnabled(String bankKey) {
+    return enabledAutoScanBanks.value.contains(bankKey.toLowerCase());
+  }
+
+  static Future<void> setAutoScanBankEnabled(String bankKey, bool enabled) async {
+    final updated = Set<String>.from(enabledAutoScanBanks.value);
+    if (enabled) {
+      updated.add(bankKey.toLowerCase());
+    } else {
+      updated.remove(bankKey.toLowerCase());
+    }
+    enabledAutoScanBanks.value = updated;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('enabledAutoScanBanks', updated.toList());
+  }
+
+  static Future<void> setAllAutoScanBanksEnabled(bool enabled) async {
+    final updated = enabled
+        ? {'kbank', 'scb', 'krungsri', 'truemoney'}
+        : <String>{};
+    enabledAutoScanBanks.value = updated;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('enabledAutoScanBanks', updated.toList());
   }
 
   static Future<void> setThemeMode(ThemeMode mode) async {
@@ -68,6 +107,12 @@ class AppSettings {
     autoSlipScanningEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('autoSlipScanningEnabled', enabled);
+  }
+
+  static Future<void> setBackupSlipsToCloud(bool enabled) async {
+    backupSlipsToCloud.value = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('backupSlipsToCloud', enabled);
   }
 
   static Future<void> setHideBalances(bool enabled) async {

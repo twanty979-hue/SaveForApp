@@ -1,7 +1,4 @@
 import 'package:app/core/localization/app_material.dart';
-import 'dart:math' as math;
-
-import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
@@ -121,7 +118,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                       ],
                     ),
                   ),
-                  Padding(
+                    Padding(
                     padding: const EdgeInsets.fromLTRB(14, 7, 14, 7),
                     child: Row(
                       children: [
@@ -129,22 +126,23 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                           child: Align(
                             alignment: Alignment.centerLeft,
                             child: SizedBox(
-                              width: 220,
+                              width: 230,
                               child: Container(
-                                height: 38,
-                                padding: const EdgeInsets.all(3),
+                                height: 40,
+                                padding: const EdgeInsets.all(3.5),
                                 decoration: BoxDecoration(
                                   color: context.surfaceColor,
-                                  borderRadius: BorderRadius.circular(19),
+                                  borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
                                     color: context.borderColor,
+                                    width: 1.2,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: const Color(
                                         0xFF0F172A,
-                                      ).withValues(alpha: 0.07),
-                                      blurRadius: 8,
+                                      ).withValues(alpha: 0.05),
+                                      blurRadius: 10,
                                       offset: const Offset(0, 3),
                                     ),
                                   ],
@@ -175,7 +173,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                                               boxShadow: [
                                                 BoxShadow(
                                                   color: indicatorColor
-                                                      .withValues(alpha: 0.55),
+                                                      .withValues(alpha: 0.45),
                                                   blurRadius: 6,
                                                   offset: const Offset(0, 2),
                                                 ),
@@ -230,35 +228,33 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                         const SizedBox(width: 8),
                         SizedBox(
                           key: _editButtonKey,
-                          width: 38,
-                          height: 38,
+                          width: 40,
+                          height: 40,
                           child: Material(
                             color: Colors.transparent,
                             child: InkWell(
-                              customBorder: const CircleBorder(),
+                              borderRadius: BorderRadius.circular(13),
                               onTap: _requestAdd,
-                              child: Center(
-                                child: Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF111111),
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.22,
-                                        ),
-                                        blurRadius: 7,
-                                        offset: const Offset(0, 3),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F172A),
+                                  borderRadius: BorderRadius.circular(13),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF0F172A).withValues(
+                                        alpha: 0.22,
                                       ),
-                                    ],
-                                  ),
-                                  child: const Icon(
-                                    Icons.edit_outlined,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.edit_rounded,
+                                  color: Colors.white,
+                                  size: 18,
                                 ),
                               ),
                             ),
@@ -396,7 +392,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
         final rect = _getWidgetRect(_editButtonKey);
         if (rect != null) {
           targetRectVal = rect;
-          targetRadiusVal = rect.width / 2;
+          targetRadiusVal = 13.0;
         }
         break;
     }
@@ -679,11 +675,12 @@ class _SegmentButton extends StatelessWidget {
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOut,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
+                letterSpacing: -0.2,
                 fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                 color: selected
-                    ? const Color(0xFF161616)
-                    : const Color(0xFF737780),
+                    ? const Color(0xFF0F172A)
+                    : context.secondaryTextColor,
               ),
               child: Text(label),
             ),

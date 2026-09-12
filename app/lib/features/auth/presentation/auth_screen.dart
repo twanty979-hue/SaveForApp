@@ -246,7 +246,7 @@ class _AuthScreenState extends State<AuthScreen> {
         final errText =
             errorData['error_description'] ??
             errorData['message'] ??
-            'ข้อมูลเซสชันไม่ถูกต้อง';
+            'ข้อมูลการเข้าสู่ระบบไม่ถูกต้อง';
         setState(() {
           _errorMessage = 'เข้าสู่ระบบไม่สำเร็จ: $errText';
         });
@@ -254,7 +254,7 @@ class _AuthScreenState extends State<AuthScreen> {
         debugPrint("SaveFor: Error verifying token: $e");
         setState(() {
           _errorMessage =
-              'ไม่สามารถตรวจสอบสิทธิ์การเชื่อมต่อกับเซิร์ฟเวอร์หลังบ้านได้';
+              'เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
         });
       } finally {
         if (mounted) {
@@ -417,7 +417,7 @@ class _AuthScreenState extends State<AuthScreen> {
             return;
           }
         }
-        throw Exception('ไม่สามารถรับ URL เชื่อมต่อจากหลังบ้านได้');
+        throw Exception('เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
       } else {
         // Native Google Sign-In on Android/iOS
         final googleSignIn = GoogleSignIn(

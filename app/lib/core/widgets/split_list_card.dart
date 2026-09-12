@@ -1,5 +1,14 @@
 import 'package:app/core/localization/app_material.dart';
 
+String formatMoney(double amount) {
+  final parts = amount.toStringAsFixed(0).split('.');
+  final withCommas = parts[0].replaceAllMapped(
+    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+    (Match m) => '${m[1]},',
+  );
+  return withCommas;
+}
+
 class SplitListCard extends StatelessWidget {
   final double height;
   final double leadingWidth;
@@ -20,35 +29,39 @@ class SplitListCard extends StatelessWidget {
     required this.leadingColor,
     required this.child,
     this.leadingWidth = 104,
-    this.borderColor = const Color(0xFFE2E8F0),
+    this.borderColor = const Color(0xFFE8E0D2),
     this.iconContainerSize = 54,
-    this.iconSize = 28,
+    this.iconSize = 26,
     this.glowColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBorderColor = glowColor ??
+        (isDark ? Theme.of(context).colorScheme.outlineVariant : borderColor);
+    final borderWidth = glowColor != null ? 2.2 : 1.2;
+
     return Stack(
       children: [
         Container(
           height: height,
-          margin: const EdgeInsets.only(bottom: 14),
+          margin: const EdgeInsets.only(bottom: 12),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: isDark ? Theme.of(context).colorScheme.surface : Colors.white,
             borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0F172A).withValues(alpha: 0.07),
+                color: const Color(0xFF0F172A).withValues(alpha: isDark ? 0.2 : 0.05),
                 blurRadius: 14,
-                offset: const Offset(0, 5),
+                offset: const Offset(0, 4),
               ),
               if (glowColor != null)
                 BoxShadow(
-                  color: glowColor!.withValues(alpha: 0.32),
-                  blurRadius: 12,
-                  spreadRadius: 0.8,
-                  offset: const Offset(0, 1),
+                  color: glowColor!.withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 2),
                 ),
             ],
           ),
@@ -58,7 +71,7 @@ class SplitListCard extends StatelessWidget {
               SizedBox(
                 width: leadingWidth,
                 child: ColoredBox(
-                  color: leadingColor,
+                  color: isDark ? leadingColor.withValues(alpha: 0.25) : leadingColor,
                   child: Center(
                     child: icon is Widget
                         ? icon as Widget
@@ -66,34 +79,48 @@ class SplitListCard extends StatelessWidget {
                             width: iconContainerSize,
                             height: iconContainerSize,
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.56),
-                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: isDark ? 0.12 : 0.75),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: accentColor.withValues(alpha: 0.2),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: accentColor.withValues(alpha: 0.12),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
-                            child: Icon(icon as IconData, color: accentColor, size: iconSize),
+                            child: Icon(
+                              icon as IconData,
+                              color: accentColor,
+                              size: iconSize,
+                            ),
                           ),
                   ),
                 ),
               ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 11, 11, 11),
+                  padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
                   child: child,
                 ),
               ),
             ],
           ),
         ),
+        // Crisp 360-degree border overlay on top of ColoredBox
         Positioned.fill(
-          bottom: 14,
+          bottom: 12,
           child: IgnorePointer(
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Theme.of(context).colorScheme.outlineVariant
-                      : borderColor,
-                  width: glowColor != null ? 2.2 : 1.0,
+                  color: cardBorderColor,
+                  width: borderWidth,
                   strokeAlign: BorderSide.strokeAlignInside,
                 ),
               ),

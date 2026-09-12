@@ -1,19 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:app/core/localization/app_material.dart';
 import 'package:flutter/rendering.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
+import '../../../core/services/slip_cloud_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/bank_logo_icon.dart';
 import '../../../core/widgets/shared_icon_selector.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../../core/settings/app_settings.dart';
-import 'slip_scan_date_sheet.dart';
 
 class Message {
   final String text;
@@ -1156,7 +1156,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
 
       final String replyText = hasBudget
           ? _successMessage(msgType)
-          : 'ไม่พบแผนงบประมาณที่ตรงกับรายการนี้ ยอดเงินถูกบันทึกสำเร็จแล้ว';
+          : (msgType == 'income'
+              ? _successMessage('income')
+              : (msgType == 'dream'
+                  ? _successMessage('dream')
+                  : 'ไม่พบแผนงบประมาณที่ตรงกับรายการนี้ ยอดเงินถูกบันทึกสำเร็จแล้ว'));
 
       final matchedBank = BankType.detectFromText(name);
       final tempId =
@@ -1416,6 +1420,8 @@ class _TransactionsScreenState extends State<TransactionsScreen>
         card['image_path'] != null;
     String? txId = card['id']?.toString();
     String? currentImagePath = card['image_path']?.toString();
+    String? cloudImagePath = card['cloud_image_url']?.toString() ??
+        (card['metadata'] is Map ? card['metadata']['cloud_image_path']?.toString() : null);
     final String? assetId = card['asset_id']?.toString();
     final String? refNo = card['reference_no']?.toString() ??
         RegExp(r'\[Ref:([^\]]+)\]').firstMatch(rawNote)?.group(1);
@@ -1432,17 +1438,42 @@ class _TransactionsScreenState extends State<TransactionsScreen>
       ),
     );
 
-    final quickChips = [
-      {'label': 'ค่าข้าว', 'icon': Icons.restaurant_rounded},
-      {'label': 'ชากาแฟ', 'icon': Icons.local_cafe_rounded},
-      {'label': 'ของใช้ 7-11', 'icon': Icons.storefront_rounded},
-      {'label': 'ค่าน้ำมัน', 'icon': Icons.local_gas_station_rounded},
-      {'label': 'ช้อปปิ้ง', 'icon': Icons.shopping_bag_rounded},
-      {'label': 'ค่าเดินทาง', 'icon': Icons.directions_car_rounded},
-      {'label': 'จ่ายบิล / ค่าห้อง', 'icon': Icons.home_work_rounded},
-      {'label': 'ค่าขนม', 'icon': Icons.cake_rounded},
-      {'label': 'ยา / สุขภาพ', 'icon': Icons.medication_rounded},
-    ];
+    final String msgType = card['msgType']?.toString() ?? 'expense';
+    final String category = card['category']?.toString() ?? 'รายจ่าย';
+    final bool isIncome = msgType == 'income' || category == 'รายรับ' || card['type'] == 'income';
+    final bool isDream = msgType == 'dream' || category == 'เงินออม' || card['source'] == 'dream_saving';
+
+    final quickChips = isIncome
+        ? [
+            {'label': 'เงินเดือน', 'icon': Icons.payments_rounded},
+            {'label': 'โบนัส', 'icon': Icons.card_giftcard_rounded},
+            {'label': 'ทิป', 'icon': Icons.volunteer_activism_rounded},
+            {'label': 'ขายของ', 'icon': Icons.storefront_rounded},
+            {'label': 'งานเสริม', 'icon': Icons.work_rounded},
+            {'label': 'ลงทุน / ปันผล', 'icon': Icons.trending_up_rounded},
+            {'label': 'เงินโอน', 'icon': Icons.account_balance_wallet_rounded},
+            {'label': 'คืนเงิน', 'icon': Icons.assignment_return_rounded},
+            {'label': 'รายรับอื่นๆ', 'icon': Icons.add_circle_outline_rounded},
+          ]
+        : (isDream
+            ? [
+                {'label': 'เงินออมฉุกเฉิน', 'icon': Icons.savings_rounded},
+                {'label': 'เที่ยว / พักผ่อน', 'icon': Icons.flight_takeoff_rounded},
+                {'label': 'ซื้อของชิ้นใหญ่', 'icon': Icons.shopping_bag_rounded},
+                {'label': 'ลงทุนระยะยาว', 'icon': Icons.trending_up_rounded},
+                {'label': 'เงินเก็บ', 'icon': Icons.account_balance_rounded},
+              ]
+            : [
+                {'label': 'ค่าข้าว', 'icon': Icons.restaurant_rounded},
+                {'label': 'ชากาแฟ', 'icon': Icons.local_cafe_rounded},
+                {'label': 'ของใช้ 7-11', 'icon': Icons.storefront_rounded},
+                {'label': 'ค่าน้ำมัน', 'icon': Icons.local_gas_station_rounded},
+                {'label': 'ช้อปปิ้ง', 'icon': Icons.shopping_bag_rounded},
+                {'label': 'ค่าเดินทาง', 'icon': Icons.directions_car_rounded},
+                {'label': 'จ่ายบิล / ค่าห้อง', 'icon': Icons.home_work_rounded},
+                {'label': 'ค่าขนม', 'icon': Icons.cake_rounded},
+                {'label': 'ยา / สุขภาพ', 'icon': Icons.medication_rounded},
+              ]);
 
     showModalBottomSheet<void>(
       context: context,
@@ -1466,6 +1497,10 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 }
               });
             }
+
+            final bool hasLocalImage = currentImagePath != null && File(currentImagePath!).existsSync();
+            final bool hasCloudImage = cloudImagePath != null && cloudImagePath!.isNotEmpty;
+            final String? displayImagePath = hasLocalImage ? currentImagePath : (hasCloudImage ? cloudImagePath : null);
 
             return Padding(
               padding: EdgeInsets.only(
@@ -1506,14 +1541,20 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                         else
                           Container(
                             padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFF1F5F9),
+                            decoration: BoxDecoration(
+                              color: isIncome
+                                  ? const Color(0xFFDCFCE7)
+                                  : (isDream ? const Color(0xFFFEF3C7) : const Color(0xFFF1F5F9)),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
-                              Icons.receipt_long_rounded,
+                              isIncome
+                                  ? Icons.account_balance_wallet_rounded
+                                  : (isDream ? Icons.savings_rounded : Icons.receipt_long_rounded),
                               size: 22,
-                              color: AppTheme.primaryColor,
+                              color: isIncome
+                                  ? const Color(0xFF10B981)
+                                  : (isDream ? const Color(0xFFF59E0B) : AppTheme.primaryColor),
                             ),
                           ),
                         const SizedBox(width: 10),
@@ -1524,7 +1565,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                               Text(
                                 isSlip
                                     ? 'รายการสลิป (${bank?.displayName ?? 'ธนาคาร'})'
-                                    : 'ข้อมูลรายการธุรกรรม',
+                                    : (isIncome
+                                        ? 'ข้อมูลรายการรายรับ'
+                                        : (isDream ? 'ข้อมูลรายการเงินออม' : 'ข้อมูลรายการธุรกรรม')),
                                 style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w800,
@@ -1677,278 +1720,341 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (currentImagePath != null && File(currentImagePath!).existsSync())
-                              GestureDetector(
-                                onTap: () => _showFullSlipImagePreview(
-                                  modalContext,
-                                  currentImagePath!,
-                                  bank: bank,
-                                  destBank: destBank,
-                                  refNo: refNo,
-                                  recipient: recipient,
-                                  amount: currentAmount,
-                                  date: txDate,
-                                  isTransfer: isTransfer,
-                                ),
-                                child: Stack(
-                                  alignment: Alignment.bottomRight,
-                                  children: [
-                                    Container(
-                                      width: 66,
-                                      height: 90,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(alpha: 0.08),
-                                            blurRadius: 6,
-                                            offset: const Offset(0, 2),
+                                if (displayImagePath != null)
+                                  GestureDetector(
+                                    onTap: () => _showFullSlipImagePreview(
+                                      modalContext,
+                                      displayImagePath,
+                                      bank: bank,
+                                      destBank: destBank,
+                                      refNo: refNo,
+                                      recipient: recipient,
+                                      amount: currentAmount,
+                                      date: txDate,
+                                      isTransfer: isTransfer,
+                                    ),
+                                    child: Stack(
+                                      alignment: Alignment.bottomRight,
+                                      children: [
+                                        Container(
+                                          width: 66,
+                                          height: 90,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(alpha: 0.08),
+                                                blurRadius: 6,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(9),
+                                            child: hasLocalImage
+                                                ? Image.file(
+                                                    File(displayImagePath),
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (_, _, _) => Container(
+                                                      color: const Color(0xFFE2E8F0),
+                                                      child: const Icon(Icons.broken_image, color: Colors.grey),
+                                                    ),
+                                                  )
+                                                : Image.network(
+                                                    _apiClient.absoluteUrl(displayImagePath),
+                                                    headers: _apiClient.imageHeaders(
+                                                      _apiClient.absoluteUrl(displayImagePath),
+                                                    ),
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (_, _, _) => Container(
+                                                      color: const Color(0xFFE2E8F0),
+                                                      child: const Icon(Icons.broken_image, color: Colors.grey),
+                                                    ),
+                                                  ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.all(3),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.65),
+                                            borderRadius: const BorderRadius.only(
+                                              topLeft: Radius.circular(6),
+                                              bottomRight: Radius.circular(9),
+                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.zoom_in_rounded,
+                                            size: 13,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    width: 66,
+                                    height: 80,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        if (bank != null)
+                                          BankLogoIcon(bank: bank, size: 28, showShadow: false)
+                                        else
+                                          const Icon(Icons.receipt_long_rounded, size: 28, color: Color(0xFF64748B)),
+                                        const SizedBox(height: 4),
+                                        const Text(
+                                          'สลิป',
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF64748B),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            isTransfer ? 'สลิปย้ายเงิน' : 'สลิปธนาคาร',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF0F172A),
+                                            ),
+                                          ),
+                                          if (bank != null) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFE0F2FE),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                bank.displayName,
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Color(0xFF0369A1),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      if (refNo != null && refNo.isNotEmpty) ...[
+                                        const SizedBox(height: 3),
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                'Ref: $refNo',
+                                                style: const TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontFamily: 'monospace',
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF64748B),
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                      if (recipient != null && recipient.isNotEmpty) ...[
+                                        const SizedBox(height: 2.5),
+                                        Text(
+                                          'ผู้รับ: $recipient',
+                                          style: const TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF475569),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                      const SizedBox(height: 8),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: [
+                                          if (displayImagePath != null)
+                                            InkWell(
+                                              onTap: () => _showFullSlipImagePreview(
+                                                modalContext,
+                                                displayImagePath,
+                                                bank: bank,
+                                                destBank: destBank,
+                                                refNo: refNo,
+                                                recipient: recipient,
+                                                amount: currentAmount,
+                                                date: txDate,
+                                                isTransfer: isTransfer,
+                                              ),
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  border: Border.all(
+                                                    color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.zoom_in_rounded,
+                                                      size: 13,
+                                                      color: AppTheme.primaryColor,
+                                                    ),
+                                                    const SizedBox(width: 3.5),
+                                                    Text(
+                                                      'ดูสลิปเต็มใบ',
+                                                      style: TextStyle(
+                                                        fontSize: 10.5,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: AppTheme.primaryColor,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          InkWell(
+                                            onTap: () async {
+                                              final picker = ImagePicker();
+                                              final picked = await picker.pickImage(source: ImageSource.gallery);
+                                              if (picked != null) {
+                                                setModalState(() {
+                                                  currentImagePath = picked.path;
+                                                  card['image_path'] = picked.path;
+                                                });
+                                                if (txId != null && txId.isNotEmpty) {
+                                                  final newMeta = Map<String, dynamic>.from(
+                                                    card['metadata'] is Map ? card['metadata'] as Map : {},
+                                                  );
+                                                  newMeta['image_path'] = picked.path;
+                                                  card['metadata'] = newMeta;
+                                                  try {
+                                                    await _apiClient.patch('/transactions?id=eq.$txId', body: {
+                                                      'metadata': newMeta,
+                                                    });
+                                                    // Silent Cloud Backup (WebP) in background if enabled
+                                                    if (AppSettings.backupSlipsToCloud.value) {
+                                                      unawaited(
+                                                        SlipCloudService.instance.silentUploadSlip(
+                                                          slipId: txId,
+                                                          localPath: picked.path,
+                                                        ).then((cloudUrl) {
+                                                          if (cloudUrl != null) {
+                                                            newMeta['cloud_image_path'] = cloudUrl;
+                                                            card['cloud_image_url'] = cloudUrl;
+                                                            setModalState(() {
+                                                              cloudImagePath = cloudUrl;
+                                                            });
+                                                            _apiClient.patch('/transactions?id=eq.$txId', body: {
+                                                              'metadata': newMeta,
+                                                            });
+                                                          }
+                                                        }),
+                                                      );
+                                                    }
+                                                  } catch (e) {
+                                                    debugPrint('Error updating transaction slip image: $e');
+                                                  }
+                                                }
+                                              }
+                                            },
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: const Color(0xFFCBD5E1)),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    displayImagePath != null
+                                                        ? Icons.sync_rounded
+                                                        : Icons.add_photo_alternate_rounded,
+                                                    size: 13,
+                                                    color: const Color(0xFF475569),
+                                                  ),
+                                                  const SizedBox(width: 3.5),
+                                                  Text(
+                                                    displayImagePath != null
+                                                        ? 'เปลี่ยนรูป'
+                                                        : 'แนบรูปสลิป',
+                                                    style: const TextStyle(
+                                                      fontSize: 10.5,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: Color(0xFF475569),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
                                           ),
                                         ],
                                       ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(9),
-                                        child: Image.file(
-                                          File(currentImagePath!),
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) => Container(
-                                            color: const Color(0xFFE2E8F0),
-                                            child: const Icon(Icons.broken_image, color: Colors.grey),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.all(3),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.65),
-                                        borderRadius: const BorderRadius.only(
-                                          topLeft: Radius.circular(6),
-                                          bottomRight: Radius.circular(9),
-                                        ),
-                                      ),
-                                      child: const Icon(
-                                        Icons.zoom_in_rounded,
-                                        size: 13,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            else
-                              Container(
-                                width: 66,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    if (bank != null)
-                                      BankLogoIcon(bank: bank, size: 28, showShadow: false)
-                                    else
-                                      const Icon(Icons.receipt_long_rounded, size: 28, color: Color(0xFF64748B)),
-                                    const SizedBox(height: 4),
-                                    const Text(
-                                      'สลิป',
-                                      style: TextStyle(
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF64748B),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        isTransfer ? 'สลิปย้ายเงิน' : 'สลิปธนาคาร',
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w800,
-                                          color: Color(0xFF0F172A),
-                                        ),
-                                      ),
-                                      if (bank != null) ...[
-                                        const SizedBox(width: 6),
+                                      if (displayImagePath == null) ...[
+                                        const SizedBox(height: 7),
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFE0F2FE),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            bank.displayName,
-                                            style: const TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF0369A1),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  if (refNo != null && refNo.isNotEmpty) ...[
-                                    const SizedBox(height: 3),
-                                    Row(
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            'Ref: $refNo',
-                                            style: const TextStyle(
-                                              fontSize: 10.5,
-                                              fontFamily: 'monospace',
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF64748B),
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                  if (recipient != null && recipient.isNotEmpty) ...[
-                                    const SizedBox(height: 2.5),
-                                    Text(
-                                      'ผู้รับ: $recipient',
-                                      style: const TextStyle(
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF475569),
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 6,
-                                    children: [
-                                      if (currentImagePath != null && File(currentImagePath!).existsSync())
-                                        InkWell(
-                                          onTap: () => _showFullSlipImagePreview(
-                                            modalContext,
-                                            currentImagePath!,
-                                            bank: bank,
-                                            destBank: destBank,
-                                            refNo: refNo,
-                                            recipient: recipient,
-                                            amount: currentAmount,
-                                            date: txDate,
-                                            isTransfer: isTransfer,
-                                          ),
-                                          borderRadius: BorderRadius.circular(8),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
-                                            decoration: BoxDecoration(
-                                              color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color: AppTheme.primaryColor.withValues(alpha: 0.25),
-                                              ),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  Icons.zoom_in_rounded,
-                                                  size: 13,
-                                                  color: AppTheme.primaryColor,
-                                                ),
-                                                const SizedBox(width: 3.5),
-                                                Text(
-                                                  'ดูสลิปเต็มใบ',
-                                                  style: TextStyle(
-                                                    fontSize: 10.5,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: AppTheme.primaryColor,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      InkWell(
-                                        onTap: () async {
-                                          final picker = ImagePicker();
-                                          final picked = await picker.pickImage(source: ImageSource.gallery);
-                                          if (picked != null) {
-                                            setModalState(() {
-                                              currentImagePath = picked.path;
-                                              card['image_path'] = picked.path;
-                                            });
-                                            if (txId != null && txId.isNotEmpty) {
-                                              final newMeta = Map<String, dynamic>.from(
-                                                card['metadata'] is Map ? card['metadata'] as Map : {},
-                                              );
-                                              newMeta['image_path'] = picked.path;
-                                              card['metadata'] = newMeta;
-                                              try {
-                                                await _apiClient.patch('/transactions?id=eq.$txId', body: {
-                                                  'metadata': newMeta,
-                                                });
-                                              } catch (e) {
-                                                debugPrint('Error updating transaction slip image: $e');
-                                              }
-                                            }
-                                          }
-                                        },
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
+                                            color: const Color(0xFFF1F5F9),
                                             borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                                            border: Border.all(color: const Color(0xFFE2E8F0)),
                                           ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
+                                          child: const Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Icon(
-                                                currentImagePath != null && File(currentImagePath!).existsSync()
-                                                    ? Icons.sync_rounded
-                                                    : Icons.add_photo_alternate_rounded,
-                                                size: 13,
-                                                color: const Color(0xFF475569),
+                                              Padding(
+                                                padding: EdgeInsets.only(top: 1.5),
+                                                child: Icon(Icons.lock_outline_rounded, size: 12, color: Color(0xFF64748B)),
                                               ),
-                                              const SizedBox(width: 3.5),
-                                              Text(
-                                                currentImagePath != null && File(currentImagePath!).existsSync()
-                                                    ? 'เปลี่ยนรูป'
-                                                    : 'แนบรูปสลิป',
-                                                style: const TextStyle(
-                                                  fontSize: 10.5,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFF475569),
+                                              SizedBox(width: 5),
+                                              Expanded(
+                                                child: Text(
+                                                  'รูปสลิปนี้อยู่ในเครื่องเดิม (ข้อมูลรายการยังอยู่ครบ) แตะเพื่อแนบรูปใหม่ในเครื่องนี้ได้ครับ',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: Color(0xFF64748B),
+                                                    height: 1.35,
+                                                  ),
                                                 ),
                                               ),
                                             ],
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ],
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
+                          ),
+                        ],
 
                     // Label: ชื่อรายการ
                     const Text(
@@ -1968,7 +2074,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                         color: Color(0xFF0F172A),
                       ),
                       decoration: InputDecoration(
-                        hintText: 'เช่น ค่าข้าว, ค่าน้ำมัน, ช้อปปิ้ง...',
+                        hintText: isIncome
+                            ? 'เช่น เงินเดือน, ทิป, ขายของ...'
+                            : (isDream
+                                ? 'เช่น เงินออมฉุกเฉิน, เที่ยว...'
+                                : 'เช่น ค่าข้าว, ค่าน้ำมัน, ช้อปปิ้ง...'),
                         prefixIcon: Icon(
                           Icons.edit_note_rounded,
                           color: AppTheme.primaryColor,
@@ -2387,8 +2497,11 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     DateTime? date,
     bool isTransfer = false,
   }) {
-    final file = File(imagePath);
-    if (!file.existsSync()) return;
+    final bool isLocal = File(imagePath).existsSync();
+    final bool isNetwork = imagePath.startsWith('http://') ||
+        imagePath.startsWith('https://') ||
+        imagePath.startsWith('/transactions/slip');
+    if (!isLocal && !isNetwork) return;
 
     showDialog<void>(
       context: context,
@@ -2499,10 +2612,34 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                       child: InteractiveViewer(
                         minScale: 0.8,
                         maxScale: 4.5,
-                        child: Image.file(
-                          file,
-                          fit: BoxFit.contain,
-                        ),
+                        child: isLocal
+                            ? Image.file(
+                                File(imagePath),
+                                fit: BoxFit.contain,
+                              )
+                            : Image.network(
+                                _apiClient.absoluteUrl(imagePath),
+                                headers: _apiClient.imageHeaders(
+                                  _apiClient.absoluteUrl(imagePath),
+                                ),
+                                fit: BoxFit.contain,
+                                loadingBuilder: (_, child, progress) {
+                                  if (progress == null) return child;
+                                  return const Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white70,
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (_, _, _) => const Center(
+                                  child: Icon(
+                                    Icons.broken_image_rounded,
+                                    color: Colors.white54,
+                                    size: 40,
+                                  ),
+                                ),
+                              ),
                       ),
                     ),
                   ),
@@ -2895,7 +3032,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                             ],
                           ),
                         ),
-                      ] else ...[
+                      ] else if (hasBudget && budget > 0) ...[
                         const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2925,10 +3062,29 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                             value: progress,
                             backgroundColor: const Color(0xFFF1F5F9),
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              hasBudget ? categoryColor : const Color(0xFFEF4444),
+                              categoryColor,
                             ),
                             minHeight: 4,
                           ),
+                        ),
+                      ] else ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              totalAccumulated > amount
+                                  ? (msgType == 'income'
+                                      ? 'ยอดรับสะสมเดือนนี้ ${totalAccumulated.toStringAsFixed(0)} บาท'
+                                      : 'ยอดจ่ายสะสมเดือนนี้ ${totalAccumulated.toStringAsFixed(0)} บาท')
+                                  : '${amount.toStringAsFixed(0)} บาท',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: context.secondaryTextColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ],
@@ -3406,6 +3562,7 @@ class _TransactionsScreenState extends State<TransactionsScreen>
     final isTransfer = msgType == 'transfer' || category == 'ย้ายเงิน';
     final isExpense = !isTransfer && (msgType == 'expense' || category == 'รายจ่าย');
     final isDream = !isTransfer && (msgType == 'dream' || category == 'เงินออม');
+    final isIncome = !isTransfer && (msgType == 'income' || category == 'รายรับ');
     final title = isTransfer
         ? 'ย้ายเงินระหว่างบัญชี'
         : (bank != null
@@ -3416,7 +3573,9 @@ class _TransactionsScreenState extends State<TransactionsScreen>
                 ? context.tr('บันทึกรายจ่าย', 'EXPENSE RECORD')
                 : (isDream
                     ? context.tr('หยอดเป้าหมาย', 'SAVINGS GOAL')
-                    : context.tr('รายการใหม่', 'NEW ENTRY'))));
+                    : (isIncome
+                        ? context.tr('บันทึกรายรับ', 'INCOME RECORD')
+                        : context.tr('รายการใหม่', 'NEW ENTRY')))));
 
     final editButton = onEdit != null
         ? Positioned(
@@ -3451,28 +3610,73 @@ class _TransactionsScreenState extends State<TransactionsScreen>
           )
         : const SizedBox.shrink();
 
-    final badge = !hasBudget
-        ? Positioned(
-            top: 10,
-            left: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFEF4444), width: 1),
-              ),
-              child: const Text(
-                'ไม่มีงบ',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFEF4444),
-                ),
-              ),
+    final Widget badge;
+    if (isIncome) {
+      badge = Positioned(
+        top: 10,
+        left: 10,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF10B981), width: 1),
+          ),
+          child: const Text(
+            'รายรับ',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF10B981),
             ),
-          )
-        : const SizedBox.shrink();
+          ),
+        ),
+      );
+    } else if (isDream) {
+      badge = Positioned(
+        top: 10,
+        left: 10,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFF59E0B), width: 1),
+          ),
+          child: const Text(
+            'เงินออม',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFF59E0B),
+            ),
+          ),
+        ),
+      );
+    } else if (!hasBudget) {
+      badge = Positioned(
+        top: 10,
+        left: 10,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFEF4444), width: 1),
+          ),
+          child: const Text(
+            'ไม่มีงบ',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFEF4444),
+            ),
+          ),
+        ),
+      );
+    } else {
+      badge = const SizedBox.shrink();
+    }
 
     switch (style) {
       case ThemeStyle.cartoon:

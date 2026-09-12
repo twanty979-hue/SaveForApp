@@ -451,16 +451,17 @@ class _DreamsScreenState extends State<DreamsScreen> {
       isScrollControlled: true,
       backgroundColor: context.surfaceColor,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
             return Padding(
               padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 24,
+                left: 20,
+                right: 20,
+                top: 16,
                 bottom: MediaQuery.of(context).viewInsets.bottom + 24,
               ),
               child: SingleChildScrollView(
@@ -468,76 +469,143 @@ class _DreamsScreenState extends State<DreamsScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Drag handle
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4.5,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFCBD5E1).withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                    ),
+
+                    // Header with luxury icon pod and dual-line title
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Row(
                           children: [
                             if (activeStep == 1) ...[
-                              GestureDetector(
+                              InkWell(
+                                borderRadius: BorderRadius.circular(12),
                                 onTap: () {
                                   setModalState(() {
                                     activeStep = 0;
                                   });
                                 },
-                                child: Icon(
-                                  Icons.arrow_back_ios,
-                                  size: 18,
-                                  color: Theme.of(context).brightness == Brightness.dark
-                                      ? Colors.white
-                                      : const Color(0xFF0F172A),
+                                child: Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? const Color(0xFF334155)
+                                        : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    Icons.arrow_back_ios_new_rounded,
+                                    size: 15,
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF0F172A),
+                                  ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                            ],
-                            Text(
-                              dreamToEdit != null
-                                  ? (activeStep == 0
-                                        ? 'แก้ไขหมวดหมู่เป้าหมาย'
-                                        : 'แก้ไขรายละเอียดเป้าหมาย')
-                                  : (activeStep == 0
-                                        ? 'เลือกหมวดหมู่เป้าหมาย'
-                                        : 'กรอกรายละเอียดเป้าหมาย'),
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.white
-                                    : const Color(0xFF1E293B),
+                              const SizedBox(width: 10),
+                            ] else ...[
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF3E8FF),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.savings_rounded,
+                                  size: 20,
+                                  color: Color(0xFF8B5CF6),
+                                ),
                               ),
+                              const SizedBox(width: 10),
+                            ],
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  dreamToEdit != null
+                                      ? (activeStep == 0
+                                            ? 'แก้ไขหมวดหมู่เป้าหมาย'
+                                            : 'แก้ไขรายละเอียดเป้าหมาย')
+                                      : (activeStep == 0
+                                            ? 'เลือกหมวดหมู่เป้าหมาย'
+                                            : 'กรอกรายละเอียดเป้าหมาย'),
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  activeStep == 0
+                                      ? 'ขั้นตอน 1 จาก 2 : เลือกไอคอนเป้าหมาย'
+                                      : 'ขั้นตอน 2 จาก 2 : กำหนดยอดเงินออม',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.close,
-                            color: Color(0xFF64748B),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(99),
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF334155)
+                                  : const Color(0xFFF1F5F9),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              color: Color(0xFF64748B),
+                              size: 18,
+                            ),
                           ),
-                          onPressed: () => Navigator.pop(context),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
 
                     if (activeStep == 0) ...[
                       Text(
                         'หมวดหมู่ความฝัน',
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? const Color(0xFF94A3B8)
-                              : const Color(0xFF475569),
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? const Color(0xFFCBD5E1)
+                              : const Color(0xFF334155),
                           fontSize: 13,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       SizedBox(
-                        height:
-                            220, // แสดงหมวดหมู่ชัดเจนขึ้นเมื่อไม่ต้องแสดง TextFields
+                        height: 230,
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             final cardWidth = (constraints.maxWidth - 16) / 3;
-                            const cardHeight = 48.0;
+                            const cardHeight = 54.0;
 
                             return SingleChildScrollView(
                               physics: const BouncingScrollPhysics(),
@@ -562,21 +630,29 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                         height: cardHeight,
                                         decoration: BoxDecoration(
                                           color: isSelected
-                                              ? (Theme.of(context).brightness == Brightness.dark
-                                                  ? Theme.of(context).primaryColor.withValues(alpha: 0.18)
-                                                  : const Color(0xFFE6F4F1))
-                                              : (Theme.of(context).brightness == Brightness.dark
+                                              ? (isDark
+                                                  ? const Color(0xFF581C87).withValues(alpha: 0.35)
+                                                  : const Color(0xFFF5F3FF))
+                                              : (isDark
                                                   ? const Color(0xFF1E293B)
-                                                  : const Color(0xFFF8FAFC)),
-                                          borderRadius: BorderRadius.circular(12),
+                                                  : Colors.white),
+                                          borderRadius: BorderRadius.circular(14),
                                           border: Border.all(
                                             color: isSelected
-                                                ? Theme.of(context).primaryColor
-                                                : (Theme.of(context).brightness == Brightness.dark
+                                                ? const Color(0xFF8B5CF6)
+                                                : (isDark
                                                     ? const Color(0xFF334155)
-                                                    : const Color(0xFFE2E8F0)),
-                                            width: isSelected ? 1.5 : 1,
+                                                    : const Color(0xFFE8E0D2)),
+                                            width: isSelected ? 1.6 : 1,
                                           ),
+                                          boxShadow: [
+                                            if (isSelected)
+                                              BoxShadow(
+                                                color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                          ],
                                         ),
                                         child: Column(
                                           mainAxisAlignment:
@@ -584,27 +660,31 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                           children: [
                                             Icon(
                                               catIcon,
-                                              size: 16,
+                                              size: 19,
                                               color: isSelected
-                                                  ? Theme.of(context).primaryColor
-                                                  : (Theme.of(context).brightness == Brightness.dark
+                                                  ? const Color(0xFF8B5CF6)
+                                                  : (isDark
                                                       ? const Color(0xFF94A3B8)
                                                       : const Color(0xFF64748B)),
                                             ),
-                                            const SizedBox(height: 2),
+                                            const SizedBox(height: 3),
                                             Text(
                                               catName,
                                               style: TextStyle(
-                                                fontSize: 10,
+                                                fontSize: 10.5,
                                                 fontWeight: isSelected
-                                                    ? FontWeight.bold
-                                                    : FontWeight.normal,
+                                                    ? FontWeight.w800
+                                                    : FontWeight.w600,
                                                 color: isSelected
-                                                    ? Theme.of(context).primaryColor
-                                                    : (Theme.of(context).brightness == Brightness.dark
-                                                        ? const Color(0xFFE2E8F0)
+                                                    ? (isDark
+                                                        ? const Color(0xFFD8B4FE)
+                                                        : const Color(0xFF7C3AED))
+                                                    : (isDark
+                                                        ? const Color(0xFFCBD5E1)
                                                         : const Color(0xFF475569)),
                                               ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ],
                                         ),
@@ -628,15 +708,29 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                         height: cardHeight,
                                         decoration: BoxDecoration(
                                           color: isSelected
-                                              ? const Color(0xFFE6F4F1)
-                                              : const Color(0xFFF8FAFC),
-                                          borderRadius: BorderRadius.circular(12),
+                                              ? (isDark
+                                                  ? const Color(0xFF581C87).withValues(alpha: 0.35)
+                                                  : const Color(0xFFF5F3FF))
+                                              : (isDark
+                                                  ? const Color(0xFF1E293B)
+                                                  : Colors.white),
+                                          borderRadius: BorderRadius.circular(14),
                                           border: Border.all(
                                             color: isSelected
-                                                ? Theme.of(context).primaryColor
-                                                : const Color(0xFFE2E8F0),
-                                            width: isSelected ? 1.5 : 1,
+                                                ? const Color(0xFF8B5CF6)
+                                                : (isDark
+                                                    ? const Color(0xFF334155)
+                                                    : const Color(0xFFE8E0D2)),
+                                            width: isSelected ? 1.6 : 1,
                                           ),
+                                          boxShadow: [
+                                            if (isSelected)
+                                              BoxShadow(
+                                                color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                          ],
                                         ),
                                         child: Column(
                                           mainAxisAlignment:
@@ -644,22 +738,28 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                           children: [
                                             _buildIcon(
                                               catKey,
-                                              size: 16,
+                                              size: 19,
                                               color: isSelected
-                                                  ? Theme.of(context).primaryColor
-                                                  : const Color(0xFF64748B),
+                                                  ? const Color(0xFF8B5CF6)
+                                                  : (isDark
+                                                      ? const Color(0xFF94A3B8)
+                                                      : const Color(0xFF64748B)),
                                             ),
-                                            const SizedBox(height: 2),
+                                            const SizedBox(height: 3),
                                             Text(
                                               catName,
                                               style: TextStyle(
-                                                fontSize: 10,
+                                                fontSize: 10.5,
                                                 fontWeight: isSelected
-                                                    ? FontWeight.bold
-                                                    : FontWeight.normal,
+                                                    ? FontWeight.w800
+                                                    : FontWeight.w600,
                                                 color: isSelected
-                                                    ? Theme.of(context).primaryColor
-                                                    : const Color(0xFF475569),
+                                                    ? (isDark
+                                                        ? const Color(0xFFD8B4FE)
+                                                        : const Color(0xFF7C3AED))
+                                                    : (isDark
+                                                        ? const Color(0xFFCBD5E1)
+                                                        : const Color(0xFF475569)),
                                               ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
@@ -672,37 +772,44 @@ class _DreamsScreenState extends State<DreamsScreen> {
 
                                   GestureDetector(
                                     onTap: () {
-                                      Navigator.pop(context); // ปิด bottom sheet เดิมก่อน
+                                      Navigator.pop(context);
                                       _startCustomCategoryFlow();
                                     },
                                     child: Container(
                                       width: cardWidth,
                                       height: cardHeight,
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(12),
+                                        color: isDark
+                                            ? const Color(0xFF1E293B)
+                                            : const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(14),
                                         border: Border.all(
-                                          color: const Color(0xFFE2E8F0),
+                                          color: isDark
+                                              ? const Color(0xFF334155)
+                                              : const Color(0xFFCBD5E1),
                                           width: 1,
-                                          style: BorderStyle.solid,
                                         ),
                                       ),
-                                      child: const Column(
+                                      child: Column(
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
                                         children: [
                                           Icon(
-                                            Icons.add,
-                                            size: 16,
-                                            color: Color(0xFF475569),
+                                            Icons.add_rounded,
+                                            size: 20,
+                                            color: isDark
+                                                ? const Color(0xFF94A3B8)
+                                                : const Color(0xFF64748B),
                                           ),
-                                          SizedBox(height: 2),
+                                          const SizedBox(height: 3),
                                           Text(
                                             'เพิ่ม',
                                             style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF475569),
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark
+                                                  ? const Color(0xFF94A3B8)
+                                                  : const Color(0xFF64748B),
                                             ),
                                           ),
                                         ],
@@ -715,44 +822,41 @@ class _DreamsScreenState extends State<DreamsScreen> {
                           },
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      const Align(
-                        alignment: Alignment.center,
-                        child: Text(
-                          '1/2',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.normal,
-                            color: Color(0xFFCBD5E1),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
-                        height: 38,
+                        height: 50,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1E293B),
+                            backgroundColor: const Color(0xFF0F172A),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
                             ),
                             elevation: 0,
-                            minimumSize: const Size(double.infinity, 38),
-                            padding: EdgeInsets.zero,
                           ),
                           onPressed: () {
                             setModalState(() {
                               activeStep = 1;
                             });
                           },
-                          child: const Text(
-                            'ต่อไป',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'ต่อไป',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -785,105 +889,119 @@ class _DreamsScreenState extends State<DreamsScreen> {
                       ),
                       const SizedBox(height: 16),
                       _buildEstimationCard(targetController, initialController, monthlyController),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 22),
                       Row(
                         children: [
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            ),
-                            onPressed: () {
-                              setModalState(() {
-                                activeStep = 0;
-                              });
-                            },
-                            child: const Text(
-                              'ย้อนกลับ',
-                              style: TextStyle(
-                                color: Color(0xFF64748B),
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
+                          Expanded(
+                            flex: 2,
+                            child: SizedBox(
+                              height: 50,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(
+                                    color: isDark
+                                        ? const Color(0xFF334155)
+                                        : const Color(0xFFE2E8F0),
+                                    width: 1.2,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                ),
+                                onPressed: () {
+                                  setModalState(() {
+                                    activeStep = 0;
+                                  });
+                                },
+                                icon: const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  size: 14,
+                                  color: Color(0xFF64748B),
+                                ),
+                                label: const Text(
+                                  'ย้อนกลับ',
+                                  style: TextStyle(
+                                    color: Color(0xFF64748B),
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           Expanded(
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1E293B),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                            flex: 3,
+                            child: SizedBox(
+                              height: 50,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0F172A),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  elevation: 0,
+                                  padding: EdgeInsets.zero,
                                 ),
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                              onPressed: () async {
-                                final title = titleController.text.trim();
-                                final target = double.tryParse(targetController.text.replaceAll(',', '').trim()) ?? 0.0;
-                                final initial = double.tryParse(initialController.text.replaceAll(',', '').trim()) ?? 0.0;
-                                final monthly = double.tryParse(monthlyController.text.replaceAll(',', '').trim()) ?? 0.0;
+                                onPressed: () async {
+                                  final title = titleController.text.trim();
+                                  final target = double.tryParse(targetController.text.replaceAll(',', '').trim()) ?? 0.0;
+                                  final initial = double.tryParse(initialController.text.replaceAll(',', '').trim()) ?? 0.0;
+                                  final monthly = double.tryParse(monthlyController.text.replaceAll(',', '').trim()) ?? 0.0;
 
-                                if (title.isEmpty || target <= 0) return;
+                                  if (title.isEmpty || target <= 0) return;
 
-                                try {
-                                  final body = {
-                                    'user_id': _activeUserId,
-                                    'title': title,
-                                    'target_amount': target,
-                                    'current_amount': initial,
-                                    'icon': selectedIcon,
-                                    'monthly_saving_target': monthly,
-                                    'is_starred': dreamToEdit?['is_starred'] ?? false,
-                                  };
+                                  try {
+                                    final body = {
+                                      'user_id': _activeUserId,
+                                      'title': title,
+                                      'target_amount': target,
+                                      'current_amount': initial,
+                                      'icon': selectedIcon,
+                                      'monthly_saving_target': monthly,
+                                      'is_starred': dreamToEdit?['is_starred'] ?? false,
+                                    };
 
-                                  final response = dreamToEdit != null
-                                      ? await _apiClient.patch(
-                                          '/dreams?id=eq.${dreamToEdit['id']}',
-                                          body: body,
-                                        )
-                                      : await _apiClient.post(
-                                          '/dreams',
-                                          body: body,
-                                        );
+                                    final response = dreamToEdit != null
+                                        ? await _apiClient.patch(
+                                            '/dreams?id=eq.${dreamToEdit['id']}',
+                                            body: body,
+                                          )
+                                        : await _apiClient.post(
+                                            '/dreams',
+                                            body: body,
+                                          );
 
-                                  if (response.statusCode == 200 ||
-                                      response.statusCode == 201 ||
-                                      response.statusCode == 204) {
-                                    if (context.mounted) {
-                                      Navigator.pop(context);
+                                    if (response.statusCode == 200 ||
+                                        response.statusCode == 201 ||
+                                        response.statusCode == 204) {
+                                      if (context.mounted) {
+                                        Navigator.pop(context);
+                                      }
+                                      _fetchData();
                                     }
-                                    _fetchData();
+                                  } catch (e) {
+                                    //
                                   }
-                                } catch (e) {
-                                  //
-                                }
-                              },
-                              child: Text(
-                                dreamToEdit != null ? 'บันทึกการแก้ไข' : 'สร้างเป้าหมาย',
-                                style: const TextStyle(
+                                },
+                                icon: Icon(
+                                  dreamToEdit != null ? Icons.check_rounded : Icons.add_task_rounded,
+                                  size: 18,
                                   color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                                ),
+                                label: Text(
+                                  dreamToEdit != null ? 'บันทึกการแก้ไข' : 'สร้างเป้าหมาย',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 16),
-                      const Align(
-                        alignment: Alignment.center,
-                        child: Text(
-                          '2/2',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.normal,
-                            color: Color(0xFFCBD5E1),
-                          ),
-                        ),
                       ),
                     ],
                   ],
@@ -1074,9 +1192,13 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                     };
                                     final response = await _apiClient.post('/user_categories', body: body);
                                     if (response.statusCode == 201 || response.statusCode == 200) {
-                                      Navigator.pop(context); // ปิด bottom sheet
+                                      if (context.mounted) {
+                                        Navigator.pop(context); // ปิด bottom sheet
+                                      }
                                       await _fetchData(); // ดึงข้อมูลใหม่
-                                      _showAddDreamBottomSheet(); // กลับไปหน้าเลือกหมวดหมู่
+                                      if (mounted) {
+                                        _showAddDreamBottomSheet(); // กลับไปหน้าเลือกหมวดหมู่
+                                      }
                                     } else {
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
@@ -1125,62 +1247,71 @@ class _DreamsScreenState extends State<DreamsScreen> {
     final initial = double.tryParse(initialController.text.replaceAll(',', '').trim()) ?? 0.0;
     final monthly = double.tryParse(monthlyController.text.replaceAll(',', '').trim()) ?? 0.0;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     String message = '';
-    Color cardColor = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF1E293B)
-        : const Color(0xFFF8FAFC);
-    Color textColor = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF94A3B8)
-        : const Color(0xFF64748B);
+    IconData icon = Icons.calculate_outlined;
+    Color accentColor = const Color(0xFF64748B);
+    Color bgColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC);
 
     if (target <= 0) {
-      message = 'ระบุจำนวนเงินเป้าหมายเพื่อคำนวณเวลา';
+      message = 'ระบุจำนวนเงินเป้าหมายเพื่อคำนวณระยะเวลา';
+      icon = Icons.savings_outlined;
+      accentColor = const Color(0xFF64748B);
+      bgColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC);
     } else if (initial >= target) {
       message = 'เป้าหมายสำเร็จแล้ว! เงินเริ่มต้นถึงเป้าหมายแล้ว 🎉';
-      cardColor = Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF0F2D2A)
-          : const Color(0xFFE6F4F1);
-      textColor = Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF2DD4BF)
-          : const Color(0xFF007A6E);
+      icon = Icons.emoji_events_rounded;
+      accentColor = const Color(0xFF10B981);
+      bgColor = isDark ? const Color(0xFF064E3B).withValues(alpha: 0.3) : const Color(0xFFECFDF5);
     } else if (monthly <= 0) {
-      message = 'ระบุยอดเงินที่ต้องการเก็บต่อเดือน';
+      message = 'ระบุยอดเงินที่ต้องการเก็บต่อเดือน เพื่อดูเวลาที่ต้องใช้';
+      icon = Icons.calendar_today_rounded;
+      accentColor = const Color(0xFF3B82F6);
+      bgColor = isDark ? const Color(0xFF1E3A8A).withValues(alpha: 0.25) : const Color(0xFFEFF6FF);
     } else {
       final remaining = target - initial;
       final months = (remaining / monthly).ceil();
       message = 'คุณจะบรรลุเป้าหมายนี้ได้ในอีกประมาณ $months เดือน 🚀';
-      cardColor = Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF0F2D2A)
-          : const Color(0xFFE6F4F1);
-      textColor = Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF2DD4BF)
-          : const Color(0xFF007A6E);
+      icon = Icons.rocket_launch_rounded;
+      accentColor = const Color(0xFF8B5CF6);
+      bgColor = isDark ? const Color(0xFF581C87).withValues(alpha: 0.25) : const Color(0xFFF5F3FF);
     }
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(12),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? (textColor == const Color(0xFF94A3B8)
-                  ? const Color(0xFF334155)
-                  : Theme.of(context).primaryColor.withValues(alpha: 0.2))
-              : (textColor == const Color(0xFF64748B)
-                  ? const Color(0xFFE2E8F0)
-                  : Theme.of(context).primaryColor.withValues(alpha: 0.3)),
+          color: accentColor.withValues(alpha: 0.25),
+          width: 1,
         ),
       ),
-      child: Text(
-        message,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: textColor,
-        ),
-        textAlign: TextAlign.center,
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: accentColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : const Color(0xFF1E293B),
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1198,13 +1329,13 @@ class _DreamsScreenState extends State<DreamsScreen> {
   }) {
     final accent = isStarred ? const Color(0xFFFF9800) : Theme.of(context).primaryColor;
     return SplitListCard(
-      height: 148,
+      height: 146,
       leadingWidth: 94,
-      iconContainerSize: 50,
+      iconContainerSize: 56,
       iconSize: 26,
-      icon: _buildIcon(dream['icon']?.toString(), size: 28, color: const Color(0xFF64748B)),
+      icon: _buildIcon(dream['icon']?.toString(), size: 28, color: accent),
       accentColor: accent,
-      leadingColor: const Color(0xFFDDF6F1),
+      leadingColor: isStarred ? const Color(0xFFFFF3E0) : const Color(0xFFDDF6F1),
       borderColor: isStarred
           ? const Color(0xFFFFB000)
           : const Color(0xFFE2E8F0),
@@ -1214,26 +1345,35 @@ class _DreamsScreenState extends State<DreamsScreen> {
         children: [
           Row(
             children: [
+              if (isStarred) ...[
+                const Icon(
+                  Icons.star_rounded,
+                  color: Color(0xFFFFB000),
+                  size: 18,
+                ),
+                const SizedBox(width: 4),
+              ],
               Expanded(
                 child: Text(
                   dream['title']?.toString() ?? '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 15.5,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF0F172A),
+                    letterSpacing: -0.2,
                   ),
                 ),
               ),
               SizedBox(
-                width: 30,
+                width: 28,
                 height: 28,
                 child: PopupMenuButton<String>(
                   padding: EdgeInsets.zero,
                   icon: const Icon(
                     Icons.more_horiz_rounded,
-                    color: Color(0xFF64748B),
+                    color: Color(0xFF94A3B8),
                     size: 20,
                   ),
                   onSelected: (value) {
@@ -1263,12 +1403,20 @@ class _DreamsScreenState extends State<DreamsScreen> {
               ),
             ],
           ),
-          Text(
-            'หยอดแล้ว $depositCount ครั้ง',
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: accent,
+          const SizedBox(height: 3),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              'หยอดแล้ว $depositCount ครั้ง',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: accent,
+              ),
             ),
           ),
           const Spacer(),
@@ -1279,39 +1427,53 @@ class _DreamsScreenState extends State<DreamsScreen> {
                   maxLines: 1,
                   text: TextSpan(
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 13.5,
                       color: Color(0xFF0F172A),
                     ),
                     children: [
                       TextSpan(
-                        text: '฿${current.toStringAsFixed(0)}',
+                        text: '฿${formatMoney(current)}',
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                       TextSpan(
-                        text: ' / ฿${target.toStringAsFixed(0)}',
-                        style: const TextStyle(color: Color(0xFF94A3B8)),
+                        text: ' / ฿${formatMoney(target)}',
+                        style: const TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-              Text(
-                '${(progress * 100).toStringAsFixed(0)}%',
-                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${(progress * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 7),
           ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(99),
             child: LinearProgressIndicator(
               value: progress,
-              minHeight: 6,
-              backgroundColor: const Color(0xFFEFF1F5),
+              minHeight: 7,
+              backgroundColor: const Color(0xFFF1F5F9),
               valueColor: AlwaysStoppedAnimation<Color>(accent),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 9),
           Row(
             children: [
               Expanded(
@@ -1319,7 +1481,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                   current >= target
                       ? 'ยินดีด้วย! บรรลุเป้าหมายแล้ว 🎉'
                       : (monthly > 0
-                          ? 'เดือนละ ฿${monthly.toStringAsFixed(0)} • อีก $monthsRemaining เดือน'
+                          ? 'เดือนละ ฿${formatMoney(monthly)} • อีก $monthsRemaining เดือน'
                           : 'ยังไม่ระบุยอดออมรายเดือน'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1331,27 +1493,31 @@ class _DreamsScreenState extends State<DreamsScreen> {
                 ),
               ),
               if (!widget.embedded) ...[
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 SizedBox(
-                  height: 29,
-                  child: OutlinedButton(
+                  height: 28,
+                  child: ElevatedButton(
                     onPressed: () => _showDepositDialog(
                       id,
                       dream['title']?.toString() ?? '',
                       current,
                       target,
                     ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: accent,
-                      side: BorderSide(color: accent.withValues(alpha: 0.65)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accent,
+                      elevation: 0,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(9),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
                     child: const Text(
                       'หยอด',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -1515,13 +1681,11 @@ class _DreamInputField extends StatelessWidget {
   final TextEditingController controller;
   final String title;
   final String hint;
-  final TextInputType keyboardType;
 
   const _DreamInputField({
     required this.controller,
     required this.title,
     required this.hint,
-    this.keyboardType = TextInputType.text,
   });
 
   @override
@@ -1533,48 +1697,49 @@ class _DreamInputField extends StatelessWidget {
         Text(
           title,
           style: TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w700,
             fontSize: 13,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 7),
         TextField(
           controller: controller,
-          keyboardType: keyboardType,
+          keyboardType: TextInputType.text,
           style: TextStyle(
             fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white : const Color(0xFF1E293B),
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
           ),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: const TextStyle(
               fontSize: 14,
               color: Color(0xFF94A3B8),
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.normal,
             ),
             filled: true,
-            fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+            fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 12,
+              vertical: 13,
             ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                color: isDark ? const Color(0xFF334155) : const Color(0xFFE8E0D2),
+                width: 1,
               ),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Theme.of(context).primaryColor,
-                width: 2,
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xFF8B5CF6),
+                width: 1.6,
               ),
             ),
           ),
@@ -1606,20 +1771,20 @@ class _DreamAmountInputField extends StatelessWidget {
         Text(
           title,
           style: TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w700,
             fontSize: 13,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 7),
         TextField(
           controller: controller,
           keyboardType: TextInputType.number,
           onChanged: (_) => onChanged?.call(),
           style: TextStyle(
             fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white : const Color(0xFF1E293B),
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
           ),
           decoration: InputDecoration(
             hintText: hint,
@@ -1628,33 +1793,49 @@ class _DreamAmountInputField extends StatelessWidget {
               color: Color(0xFF94A3B8),
               fontWeight: FontWeight.normal,
             ),
-            suffixText: context.tr('บาท', 'THB'),
-            suffixStyle: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF64748B),
-              fontWeight: FontWeight.bold,
+            suffixIcon: Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                widthFactor: 1,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    context.tr('บาท', 'THB'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+              ),
             ),
             filled: true,
-            fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+            fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 12,
+              vertical: 13,
             ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                color: isDark ? const Color(0xFF334155) : const Color(0xFFE8E0D2),
+                width: 1,
               ),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Theme.of(context).primaryColor,
-                width: 2,
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xFF8B5CF6),
+                width: 1.6,
               ),
             ),
           ),

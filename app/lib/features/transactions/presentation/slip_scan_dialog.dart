@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/services.dart';
@@ -5,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:app/core/localization/app_material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
+import '../../../core/services/slip_cloud_service.dart';
+import '../../../core/settings/app_settings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/bank_logo_icon.dart';
 import '../../auth/domain/auth_session.dart';
@@ -404,6 +408,34 @@ class _SlipScanDialogState extends State<SlipScanDialog>
             SlipParserService.forgetOwnAccount(
               name: slip.recipient,
               accountNumber: slip.recipientAccount,
+            );
+          }
+
+          // สำรองรูปสลิป WebP ขึ้น Cloudflare R2 เงียบๆ ในเบื้องหลัง หากเปิดใช้งานไว้
+          if (AppSettings.backupSlipsToCloud.value && slip.imagePath != null && slip.imagePath!.isNotEmpty) {
+            final savedTxId = (() {
+              try {
+                final respData = jsonDecode(response.body);
+                if (respData is List && respData.isNotEmpty && respData.first is Map) {
+                  return respData.first['id']?.toString();
+                } else if (respData is Map) {
+                  return respData['id']?.toString();
+                }
+              } catch (_) {}
+              return null;
+            })();
+            final targetSlipId = savedTxId ?? slip.deduplicationKey;
+            unawaited(
+              SlipCloudService.instance.silentUploadSlip(
+                slipId: targetSlipId,
+                localPath: slip.imagePath!,
+              ).then((cloudUrl) {
+                if (cloudUrl != null && savedTxId != null) {
+                  final meta = Map<String, dynamic>.from(bodyWithNormalized['metadata'] as Map? ?? {});
+                  meta['cloud_image_path'] = cloudUrl;
+                  _apiClient.patch('/transactions?id=eq.$savedTxId', body: {'metadata': meta});
+                }
+              }),
             );
           }
         } else {

@@ -82,6 +82,12 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
       #else
       result(false)
       #endif
+    case "updateBankRules":
+      guard let rulesList = call.arguments as? [[String: Any]] else {
+        result(FlutterError(code: "INVALID_ARGS", message: "rules must be a list of maps", details: nil))
+        return
+      }
+      updateBankRules(rulesList: rulesList, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -134,12 +140,29 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
     let bankTag: String
   }
 
-  private static let bankRules: [BankAlbumRule] = [
+  private static var bankRules: [BankAlbumRule] = [
     BankAlbumRule(name: "K PLUS", keywords: ["k plus", "kplus", "k-plus", "kasikorn", "กสิกร"], bankTag: "K PLUS กสิกรไทย"),
     BankAlbumRule(name: "SCB EASY", keywords: ["scb easy", "scbeasy", "scb", "แม่มณี", "ไทยพาณิชย์"], bankTag: "SCB EASY ไทยพาณิชย์"),
     BankAlbumRule(name: "Krungsri", keywords: ["krungsri", "kma", "bay", "กรุงศรี"], bankTag: "Krungsri กรุงศรี"),
     BankAlbumRule(name: "TrueMoney", keywords: ["truemoney", "true money", "ทรูมันนี่", "tmn"], bankTag: "TrueMoney ทรูมันนี่"),
   ]
+
+  private func updateBankRules(rulesList: [[String: Any]], result: @escaping FlutterResult) {
+    var newRules: [BankAlbumRule] = []
+    for dict in rulesList {
+      guard let name = dict["name"] as? String,
+            let keywords = dict["keywords"] as? [String] else { continue }
+      let bankTag = (dict["bankTag"] as? String) ?? name
+      let cleanKeywords = keywords.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty }
+      if !cleanKeywords.isEmpty {
+        newRules.append(BankAlbumRule(name: name, keywords: cleanKeywords, bankTag: bankTag))
+      }
+    }
+    if !newRules.isEmpty {
+      SlipScannerPlugin.bankRules = newRules
+    }
+    result(true)
+  }
 
   private func getAvailableBankAlbums(result: @escaping FlutterResult) {
     DispatchQueue.global(qos: .userInitiated).async {

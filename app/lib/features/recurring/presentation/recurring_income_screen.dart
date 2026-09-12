@@ -246,16 +246,17 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
       isScrollControlled: true,
       backgroundColor: context.surfaceColor,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
             return Padding(
               padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 24,
+                left: 20,
+                right: 20,
+                top: 16,
                 bottom: MediaQuery.of(context).viewInsets.bottom + 24,
               ),
               child: SingleChildScrollView(
@@ -263,78 +264,135 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ส่วนหัวหน้าต่าง
+                    // Drag handle
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4.5,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFCBD5E1).withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                    ),
+
+                    // Header
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Row(
                           children: [
                             if (activeStep == 1) ...[
-                              GestureDetector(
+                              InkWell(
+                                borderRadius: BorderRadius.circular(12),
                                 onTap: () {
                                   setSheetState(() {
                                     activeStep = 0;
                                   });
                                 },
-                                child: Icon(
-                                  Icons.arrow_back_ios,
-                                  size: 18,
-                                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF0F172A),
+                                child: Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? const Color(0xFF334155)
+                                        : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    Icons.arrow_back_ios_new_rounded,
+                                    size: 15,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                            ],
-                            Text(
-                              incomeToEdit != null
-                                  ? (activeStep == 0
-                                        ? 'แก้ไขหมวดหมู่รายรับ'
-                                        : 'แก้ไขรายละเอียดรายรับ')
-                                  : (activeStep == 0
-                                        ? 'เลือกหมวดหมู่รายรับ'
-                                        : 'กรอกรายละเอียดรายรับ'),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF0F172A),
+                              const SizedBox(width: 10),
+                            ] else ...[
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFECFDF5),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.trending_up_rounded,
+                                  size: 22,
+                                  color: Color(0xFF10B981),
+                                ),
                               ),
+                              const SizedBox(width: 10),
+                            ],
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  incomeToEdit != null
+                                      ? (activeStep == 0
+                                            ? 'แก้ไขหมวดหมู่รายรับ'
+                                            : 'แก้ไขรายละเอียดรายรับ')
+                                      : (activeStep == 0
+                                            ? 'เลือกหมวดหมู่รายรับ'
+                                            : 'กรอกรายละเอียดรายรับ'),
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  activeStep == 0
+                                      ? 'ขั้นตอน 1 จาก 2 : เลือกประเภทรายรับ'
+                                      : 'ขั้นตอน 2 จาก 2 : กำหนดยอดเงินและวันรับ',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        GestureDetector(
+                        InkWell(
+                          borderRadius: BorderRadius.circular(99),
                           onTap: () => Navigator.pop(context),
                           child: Container(
-                            padding: const EdgeInsets.all(6),
+                            width: 34,
+                            height: 34,
                             decoration: BoxDecoration(
-                              color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
-                              Icons.close,
+                              Icons.close_rounded,
                               color: Color(0xFF64748B),
-                              size: 16,
+                              size: 18,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
 
                     if (activeStep == 0) ...[
                       Text(
                         'ประเภทรายรับ',
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       SizedBox(
-                        height: 220,
+                        height: 230,
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             final cardWidth = (constraints.maxWidth - 16) / 3;
-                            const cardHeight = 48.0;
+                            const cardHeight = 54.0;
 
                             return SingleChildScrollView(
                               physics: const BouncingScrollPhysics(),
@@ -359,21 +417,29 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                         height: cardHeight,
                                         decoration: BoxDecoration(
                                           color: isSelected
-                                              ? (Theme.of(context).brightness == Brightness.dark
-                                                  ? AppTheme.primaryColor.withValues(alpha: 0.18)
-                                                  : const Color(0xFFE6F4F1))
-                                              : (Theme.of(context).brightness == Brightness.dark
+                                              ? (isDark
+                                                  ? const Color(0xFF064E3B).withValues(alpha: 0.35)
+                                                  : const Color(0xFFECFDF5))
+                                              : (isDark
                                                   ? const Color(0xFF1E293B)
-                                                  : const Color(0xFFF8FAFC)),
-                                          borderRadius: BorderRadius.circular(12),
+                                                  : Colors.white),
+                                          borderRadius: BorderRadius.circular(14),
                                           border: Border.all(
                                             color: isSelected
-                                                ? AppTheme.primaryColor
-                                                : (Theme.of(context).brightness == Brightness.dark
+                                                ? const Color(0xFF10B981)
+                                                : (isDark
                                                     ? const Color(0xFF334155)
-                                                    : const Color(0xFFE2E8F0)),
-                                            width: isSelected ? 1.5 : 1,
+                                                    : const Color(0xFFE8E0D2)),
+                                            width: isSelected ? 1.6 : 1,
                                           ),
+                                          boxShadow: [
+                                            if (isSelected)
+                                              BoxShadow(
+                                                color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                          ],
                                         ),
                                         child: Column(
                                           mainAxisAlignment:
@@ -381,27 +447,31 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                           children: [
                                             Icon(
                                               catIcon,
-                                              size: 16,
+                                              size: 19,
                                               color: isSelected
-                                                  ? AppTheme.primaryColor
-                                                  : (Theme.of(context).brightness == Brightness.dark
+                                                  ? const Color(0xFF10B981)
+                                                  : (isDark
                                                       ? const Color(0xFF94A3B8)
                                                       : const Color(0xFF64748B)),
                                             ),
-                                            const SizedBox(height: 2),
+                                            const SizedBox(height: 3),
                                             Text(
                                               catName,
                                               style: TextStyle(
-                                                fontSize: 10,
+                                                fontSize: 10.5,
                                                 fontWeight: isSelected
-                                                    ? FontWeight.bold
-                                                    : FontWeight.normal,
+                                                    ? FontWeight.w800
+                                                    : FontWeight.w600,
                                                 color: isSelected
-                                                    ? AppTheme.primaryColor
-                                                    : (Theme.of(context).brightness == Brightness.dark
-                                                        ? const Color(0xFFE2E8F0)
+                                                    ? (isDark
+                                                        ? const Color(0xFFA7F3D0)
+                                                        : const Color(0xFF059669))
+                                                    : (isDark
+                                                        ? const Color(0xFFCBD5E1)
                                                         : const Color(0xFF475569)),
                                               ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ],
                                         ),
@@ -425,44 +495,54 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                         height: cardHeight,
                                         decoration: BoxDecoration(
                                           color: isSelected
-                                              ? (Theme.of(context).brightness == Brightness.dark
-                                                  ? AppTheme.primaryColor.withValues(alpha: 0.18)
-                                                  : const Color(0xFFE6F4F1))
-                                              : (Theme.of(context).brightness == Brightness.dark
+                                              ? (isDark
+                                                  ? const Color(0xFF064E3B).withValues(alpha: 0.35)
+                                                  : const Color(0xFFECFDF5))
+                                              : (isDark
                                                   ? const Color(0xFF1E293B)
-                                                  : const Color(0xFFF8FAFC)),
-                                          borderRadius: BorderRadius.circular(12),
+                                                  : Colors.white),
+                                          borderRadius: BorderRadius.circular(14),
                                           border: Border.all(
                                             color: isSelected
-                                                ? AppTheme.primaryColor
-                                                : (Theme.of(context).brightness == Brightness.dark
+                                                ? const Color(0xFF10B981)
+                                                : (isDark
                                                     ? const Color(0xFF334155)
-                                                    : const Color(0xFFE2E8F0)),
-                                            width: isSelected ? 1.5 : 1,
+                                                    : const Color(0xFFE8E0D2)),
+                                            width: isSelected ? 1.6 : 1,
                                           ),
+                                          boxShadow: [
+                                            if (isSelected)
+                                              BoxShadow(
+                                                color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                          ],
                                         ),
                                         child: Column(
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
                                             PhosphorIcon(
                                               SharedIconSelector.getIconData(catIconString),
-                                              size: 16,
+                                              size: 19,
                                               color: isSelected
-                                                  ? AppTheme.primaryColor
-                                                  : (Theme.of(context).brightness == Brightness.dark
+                                                  ? const Color(0xFF10B981)
+                                                  : (isDark
                                                       ? const Color(0xFF94A3B8)
                                                       : const Color(0xFF64748B)),
                                             ),
-                                            const SizedBox(height: 2),
+                                            const SizedBox(height: 3),
                                             Text(
                                               catName,
                                               style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                                fontSize: 10.5,
+                                                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                                                 color: isSelected
-                                                    ? AppTheme.primaryColor
-                                                    : (Theme.of(context).brightness == Brightness.dark
-                                                        ? const Color(0xFFE2E8F0)
+                                                    ? (isDark
+                                                        ? const Color(0xFFA7F3D0)
+                                                        : const Color(0xFF059669))
+                                                    : (isDark
+                                                        ? const Color(0xFFCBD5E1)
                                                         : const Color(0xFF475569)),
                                               ),
                                               maxLines: 1,
@@ -476,37 +556,44 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
 
                                   GestureDetector(
                                     onTap: () {
-                                      Navigator.pop(context); // ปิด bottom sheet เดิมก่อน
+                                      Navigator.pop(context);
                                       _startCustomCategoryFlow();
                                     },
                                     child: Container(
                                       width: cardWidth,
                                       height: cardHeight,
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(12),
+                                        color: isDark
+                                            ? const Color(0xFF1E293B)
+                                            : const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(14),
                                         border: Border.all(
-                                          color: const Color(0xFFE2E8F0),
+                                          color: isDark
+                                              ? const Color(0xFF334155)
+                                              : const Color(0xFFCBD5E1),
                                           width: 1,
-                                          style: BorderStyle.solid,
                                         ),
                                       ),
-                                      child: const Column(
+                                      child: Column(
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
                                         children: [
                                           Icon(
-                                            Icons.add,
-                                            size: 16,
-                                            color: Color(0xFF475569),
+                                            Icons.add_rounded,
+                                            size: 20,
+                                            color: isDark
+                                                ? const Color(0xFF94A3B8)
+                                                : const Color(0xFF64748B),
                                           ),
-                                          SizedBox(height: 2),
+                                          const SizedBox(height: 3),
                                           Text(
                                             'เพิ่ม',
                                             style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF475569),
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark
+                                                  ? const Color(0xFF94A3B8)
+                                                  : const Color(0xFF64748B),
                                             ),
                                           ),
                                         ],
@@ -519,44 +606,41 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                           },
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      const Align(
-                        alignment: Alignment.center,
-                        child: Text(
-                          '1/2',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.normal,
-                            color: Color(0xFFCBD5E1),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
-                        height: 38,
+                        height: 50,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF0F172A),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
                             ),
                             elevation: 0,
-                            minimumSize: const Size(double.infinity, 38),
-                            padding: EdgeInsets.zero,
                           ),
                           onPressed: () {
                             setSheetState(() {
                               activeStep = 1;
                             });
                           },
-                          child: const Text(
-                            'ต่อไป',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'ต่อไป',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -566,42 +650,47 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                         'ชื่อรายรับ',
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 7),
                       TextField(
                         controller: nameController,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
                         decoration: InputDecoration(
                           hintText: context.tr('เช่น เงินเดือนประจำ', 'e.g. regular salary'),
                           hintStyle: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 14,
                             color: Color(0xFF94A3B8),
+                            fontWeight: FontWeight.normal,
                           ),
                           filled: true,
-                          fillColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-                          isDense: true,
+                          fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
                           contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
+                            horizontal: 16,
+                            vertical: 13,
                           ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                              color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE8E0D2),
+                              width: 1,
                             ),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: AppTheme.primaryColor,
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF10B981),
+                              width: 1.6,
                             ),
                           ),
                         ),
@@ -610,6 +699,7 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
 
                       // จำนวนเงินและวันที่ครบกำหนด
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             flex: 3,
@@ -620,43 +710,69 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                   'จำนวนเงิน (บาท)',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 7),
                                 TextField(
                                   controller: amountController,
                                   keyboardType: TextInputType.number,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
                                   decoration: InputDecoration(
                                     hintText: '0',
                                     hintStyle: const TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 14,
                                       color: Color(0xFF94A3B8),
+                                      fontWeight: FontWeight.normal,
                                     ),
-                                    filled: true,
-                                    fillColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 8,
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                        color: Color(0xFFE2E8F0),
+                                    suffixIcon: Padding(
+                                      padding: const EdgeInsets.only(right: 12),
+                                      child: Center(
+                                        widthFactor: 1,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            context.tr('บาท', 'THB'),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF64748B),
+                                            ),
+                                          ),
+                                        ),
                                       ),
                                     ),
+                                    filled: true,
+                                    fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 13,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: BorderSide.none,
+                                    ),
                                     enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                        color: Color(0xFFE2E8F0),
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: BorderSide(
+                                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE8E0D2),
+                                        width: 1,
                                       ),
                                     ),
                                     focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(
-                                        color: AppTheme.primaryColor,
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFF10B981),
+                                        width: 1.6,
                                       ),
                                     ),
                                   ),
@@ -674,43 +790,48 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                   'รับวันที่',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 7),
                                 TextField(
                                   controller: dueDayController,
                                   keyboardType: TextInputType.number,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
                                   decoration: InputDecoration(
                                     hintText: '5',
                                     hintStyle: const TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 14,
                                       color: Color(0xFF94A3B8),
+                                      fontWeight: FontWeight.normal,
                                     ),
                                     filled: true,
-                                    fillColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-                                    isDense: true,
+                                    fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
                                     contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 8,
+                                      horizontal: 16,
+                                      vertical: 13,
                                     ),
                                     border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                        color: Color(0xFFE2E8F0),
-                                      ),
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: BorderSide.none,
                                     ),
                                     enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                        color: Color(0xFFE2E8F0),
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: BorderSide(
+                                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE8E0D2),
+                                        width: 1,
                                       ),
                                     ),
                                     focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(
-                                        color: AppTheme.primaryColor,
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFF10B981),
+                                        width: 1.6,
                                       ),
                                     ),
                                   ),
@@ -720,84 +841,121 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 28),
-                      const Align(
-                        alignment: Alignment.center,
-                        child: Text(
-                          '2/2',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.normal,
-                            color: Color(0xFFCBD5E1),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 38,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0F172A),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                            minimumSize: const Size(double.infinity, 38),
-                            padding: EdgeInsets.zero,
-                          ),
-                          onPressed: () async {
-                            final name = nameController.text.trim();
-                            final amount =
-                                double.tryParse(amountController.text.trim()) ??
-                                0.0;
-                            final dueDay =
-                                int.tryParse(dueDayController.text.trim()) ?? 1;
-
-                            if (name.isEmpty || amount <= 0) return;
-
-                            try {
-                              final body = {
-                                'user_id': _activeUserId,
-                                'name': name,
-                                'amount': amount,
-                                'category': selectedCategory,
-                                'due_day': dueDay,
-                              };
-
-                              final response = incomeToEdit != null
-                                  ? await _apiClient.patch(
-                                      '/recurring/sources?id=eq.${incomeToEdit['id']}',
-                                      body: body,
-                                    )
-                                  : await _apiClient.post(
-                                      '/recurring/sources',
-                                      body: body,
-                                    );
-
-                              if (response.statusCode == 200 ||
-                                  response.statusCode == 201 ||
-                                  response.statusCode == 204) {
-                                if (context.mounted) {
-                                  Navigator.pop(context);
-                                }
-                                _fetchData();
-                              }
-                            } catch (e) {
-                              // จัดการข้อผิดพลาดเงียบ
-                            }
-                          },
-                          child: Text(
-                            incomeToEdit != null
-                                ? 'บันทึกการแก้ไข'
-                                : '+ เพิ่มรายรับประจำ',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: SizedBox(
+                              height: 50,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(
+                                    color: isDark
+                                        ? const Color(0xFF334155)
+                                        : const Color(0xFFE2E8F0),
+                                    width: 1.2,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                ),
+                                onPressed: () {
+                                  setSheetState(() {
+                                    activeStep = 0;
+                                  });
+                                },
+                                icon: const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  size: 14,
+                                  color: Color(0xFF64748B),
+                                ),
+                                label: const Text(
+                                  'ย้อนกลับ',
+                                  style: TextStyle(
+                                    color: Color(0xFF64748B),
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 3,
+                            child: SizedBox(
+                              height: 50,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0F172A),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  elevation: 0,
+                                  padding: EdgeInsets.zero,
+                                ),
+                                onPressed: () async {
+                                  final name = nameController.text.trim();
+                                  final amount =
+                                      double.tryParse(amountController.text.replaceAll(',', '').trim()) ??
+                                      0.0;
+                                  final dueDay =
+                                      int.tryParse(dueDayController.text.trim()) ?? 1;
+
+                                  if (name.isEmpty || amount <= 0) return;
+
+                                  try {
+                                    final body = {
+                                      'user_id': _activeUserId,
+                                      'name': name,
+                                      'amount': amount,
+                                      'category': selectedCategory,
+                                      'due_day': dueDay,
+                                    };
+
+                                    final response = incomeToEdit != null
+                                        ? await _apiClient.patch(
+                                            '/recurring/sources?id=eq.${incomeToEdit['id']}',
+                                            body: body,
+                                          )
+                                        : await _apiClient.post(
+                                            '/recurring/sources',
+                                            body: body,
+                                          );
+
+                                    if (response.statusCode == 200 ||
+                                        response.statusCode == 201 ||
+                                        response.statusCode == 204) {
+                                      if (context.mounted) {
+                                        Navigator.pop(context);
+                                      }
+                                      _fetchData();
+                                    }
+                                  } catch (e) {
+                                    // จัดการข้อผิดพลาดเงียบ
+                                  }
+                                },
+                                icon: Icon(
+                                  incomeToEdit != null ? Icons.check_rounded : Icons.add_rounded,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                                label: Text(
+                                  incomeToEdit != null
+                                      ? 'บันทึกการแก้ไข'
+                                      : 'เพิ่มรายรับประจำ',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ],
@@ -1000,9 +1158,13 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                                     };
                                     final response = await _apiClient.post('/user_categories', body: body);
                                     if (response.statusCode == 201 || response.statusCode == 200) {
-                                      Navigator.pop(context); // ปิด bottom sheet
+                                      if (context.mounted) {
+                                        Navigator.pop(context); // ปิด bottom sheet
+                                      }
                                       await _fetchData();
-                                      _showAddIncomeBottomSheet();
+                                      if (mounted) {
+                                        _showAddIncomeBottomSheet();
+                                      }
                                     } else {
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
@@ -1057,13 +1219,14 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
     final hasReceived = receivedAmount > 0;
     const accent = Color(0xFF10B981);
     return SplitListCard(
-      height: 122,
-      leadingWidth: 86,
-      iconContainerSize: 48,
-      iconSize: 25,
+      height: 140,
+      leadingWidth: 94,
+      iconContainerSize: 56,
+      iconSize: 26,
       icon: _getIconForCategory(category),
       accentColor: accent,
-      leadingColor: const Color(0xFFDDF8ED),
+      leadingColor: const Color(0xFFE6F7F0),
+      borderColor: const Color(0xFFE2E8F0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1075,9 +1238,10 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 15.5,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF0F172A),
+                    letterSpacing: -0.2,
                   ),
                 ),
               ),
@@ -1087,55 +1251,101 @@ class _RecurringIncomeScreenState extends State<RecurringIncomeScreen> {
               ),
             ],
           ),
-          Text(
-            '$category • ครบวันที่ $dueDay',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8)),
+          const SizedBox(height: 3),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '$category • ครบวันที่ $dueDay',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: accent,
+              ),
+            ),
           ),
           const Spacer(),
           Row(
             children: [
               Expanded(
-                child: Text(
-                  '฿${receivedAmount.toStringAsFixed(0)} / ฿${amount.toStringAsFixed(0)}',
+                child: RichText(
                   maxLines: 1,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A),
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      color: Color(0xFF0F172A),
+                    ),
+                    children: [
+                      TextSpan(
+                        text: '฿${formatMoney(receivedAmount)}',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      TextSpan(
+                        text: ' / ฿${formatMoney(amount)}',
+                        style: const TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              Text(
-                '${(progress * 100).toStringAsFixed(0)}%',
-                style: const TextStyle(
-                  fontSize: 10.5,
-                  color: Color(0xFF64748B),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${(progress * 100).toStringAsFixed(0)}%',
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 7),
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(99),
             child: LinearProgressIndicator(
               value: progress,
-              minHeight: 6,
-              backgroundColor: const Color(0xFFEFF1F5),
+              minHeight: 7,
+              backgroundColor: const Color(0xFFF1F5F9),
               valueColor: const AlwaysStoppedAnimation<Color>(accent),
             ),
           ),
-          const SizedBox(height: 7),
-          Text(
-            hasReceived
-                ? 'รับแล้ว ฿${receivedAmount.toStringAsFixed(0)}'
-                : 'ยังไม่ได้รับเดือนนี้',
-            style: TextStyle(
-              fontSize: 9.5,
-              fontWeight: FontWeight.w700,
-              color: hasReceived ? accent : const Color(0xFF64748B),
-            ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: hasReceived ? accent : const Color(0xFF94A3B8),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                hasReceived
+                    ? 'รับแล้ว ฿${formatMoney(receivedAmount)}'
+                    : 'ยังไม่ได้รับเดือนนี้',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: hasReceived ? accent : const Color(0xFF64748B),
+                ),
+              ),
+            ],
           ),
         ],
       ),

@@ -42,7 +42,7 @@ func SetupRouter() *gin.Engine {
 	// for every request that reaches user data.
 	r.Use(func(c *gin.Context) {
 		path := c.Request.URL.Path
-		if path == "/ping" || !strings.HasPrefix(path, "/api/v1/") || strings.HasPrefix(path, "/api/v1/auth/") {
+		if path == "/ping" || !strings.HasPrefix(path, "/api/v1/") || strings.HasPrefix(path, "/api/v1/auth/") || strings.HasPrefix(path, "/api/v1/bank-logos/") {
 			c.Next()
 			return
 		}
@@ -164,6 +164,10 @@ func SetupRouter() *gin.Engine {
 		v1.GET("/feature-requests", handleListFeatureRequests)
 		v1.POST("/feature-requests", handleCreateFeatureRequest)
 
+		// อัปโหลดและดาวน์โหลดรูปสลิปผ่าน Cloudflare R2 (แยกตาม User ID)
+		v1.POST("/transactions/slip/upload", handleUploadSlipImage)
+		v1.GET("/transactions/slip/file", handleGetSlipImageFile)
+
 		// Proxy การจัดเก็บข้อมูลธุรกรรมไปยังฐานข้อมูล Supabase PostgreSQL
 		v1.GET("/transactions", func(c *gin.Context) {
 			handleSupabaseProxy(c, "GET", "/rest/v1/transactions")
@@ -220,6 +224,11 @@ func SetupRouter() *gin.Engine {
 		v1.PATCH("/recurring/sources", func(c *gin.Context) {
 			handleSupabaseProxy(c, "PATCH", "/rest/v1/income_sources")
 		})
+
+		// Dynamic bank album detection rules & Cloudflare R2 logos
+		v1.GET("/bank-rules", HandleGetBankRules)
+		v1.POST("/bank-rules", HandleSaveBankRules)
+		v1.GET("/bank-logos/:name", HandleGetBankLogo)
 	}
 
 	return r
