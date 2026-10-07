@@ -206,7 +206,6 @@ class _SlipScanDialogState extends State<SlipScanDialog>
         daysBack: widget.daysBack,
         startDate: widget.startDate,
         endDate: widget.endDate,
-        limit: 50,
         forceAll: true,
         albumName: widget.albumName,
       );
@@ -853,7 +852,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                         ),
                         const SizedBox(width: 8),
                         Tooltip(
-                          message: context.tr('เลือกช่วงวันย้อนหลัง (สูงสุด 30 วัน)', 'Select date range (max 30 days)'),
+                          message: context.tr('เลือกช่วงวันย้อนหลัง (สูงสุด 365 วัน)', 'Select date range (max 365 days)'),
                           child: GestureDetector(
                             onTap: _isScanning
                                 ? null

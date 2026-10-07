@@ -166,7 +166,7 @@ class SlipScannerBridge {
     int daysBack = 30,
     DateTime? startDate,
     DateTime? endDate,
-    int limit = 50,
+    int? limit,
     bool forceAll = false,
     String? albumName = 'ALL_BANKS',
   }) async {
@@ -187,6 +187,14 @@ class SlipScannerBridge {
         effectiveStartDate = null;
       }
 
+      // คำนวณขีดจำกัดการสแกนตามช่วงเวลา (หากสแกนหลายเดือน/1 ปี ให้รองรับได้สูงสุดถึง 1000 รูป)
+      final int effectiveLimit = limit ?? (
+        effectiveDaysBack >= 180 ? 1000 :
+        effectiveDaysBack >= 90 ? 600 :
+        effectiveDaysBack >= 30 ? 300 :
+        effectiveDaysBack >= 7 ? 150 : 80
+      );
+
       _activeScanStartDate = effectiveStartDate;
       final startMs = effectiveStartDate != null
           ? effectiveStartDate.millisecondsSinceEpoch.toDouble()
@@ -197,7 +205,7 @@ class SlipScannerBridge {
         'daysBack': effectiveDaysBack,
         'startTimestamp': startMs,
         'endTimestamp': endMs,
-        'limit': limit,
+        'limit': effectiveLimit,
         'lastScanTimestamp': lastScan,
         'albumName': albumName,
       });
@@ -554,12 +562,18 @@ class SlipScannerBridge {
         return 0;
       }
 
-      final lastScan = prefs.getDouble(_prefLastScanTimestamp) ?? 0.0;
       final savedDaysBack = prefs.getInt('pref_slip_scan_selected_days_back') ?? 30;
+      final effectiveDays = (savedDaysBack > 0) ? savedDaysBack.clamp(1, 365) : 30;
+      final startDate = DateTime.now().subtract(Duration(days: effectiveDays));
+      final startMs = startDate.millisecondsSinceEpoch.toDouble();
+      final endMs = DateTime.now().millisecondsSinceEpoch.toDouble();
+
       final dynamic result = await _channel.invokeMethod('scanRecentSlips', {
-        'daysBack': savedDaysBack > 0 ? savedDaysBack : 30,
-        'limit': 50,
-        'lastScanTimestamp': lastScan,
+        'daysBack': effectiveDays,
+        'startTimestamp': startMs,
+        'endTimestamp': endMs,
+        'limit': effectiveDays >= 180 ? 1000 : 300,
+        'lastScanTimestamp': 0.0,
         'albumName': 'ALL_BANKS',
       });
 

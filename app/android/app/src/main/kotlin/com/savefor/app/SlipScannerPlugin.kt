@@ -650,14 +650,16 @@ class SlipScannerPlugin(private val activity: MainActivity) : MethodChannel.Meth
                 selectionList.add("${MediaStore.Images.Media.DATE_ADDED} <= ?")
                 selectionArgs.add(endSec.toString())
             }
-        } else if (lastScanTimestamp > 0) {
-            val lastSec = lastScanTimestamp.toLong()
-            selectionList.add("${MediaStore.Images.Media.DATE_ADDED} > ?")
-            selectionArgs.add(lastSec.toString())
         } else if (daysBack > 0) {
             val cutoffSec = (System.currentTimeMillis() / 1000) - (daysBack * 86400L)
             selectionList.add("${MediaStore.Images.Media.DATE_ADDED} >= ?")
             selectionArgs.add(cutoffSec.toString())
+        }
+
+        if (lastScanTimestamp > 0) {
+            val lastSec = lastScanTimestamp.toLong()
+            selectionList.add("${MediaStore.Images.Media.DATE_ADDED} > ?")
+            selectionArgs.add(lastSec.toString())
         }
 
         val specificTarget = if (!albumName.isNullOrBlank() && albumName != "ALL_BANKS") {
@@ -668,6 +670,9 @@ class SlipScannerPlugin(private val activity: MainActivity) : MethodChannel.Meth
 
         val selection = if (selectionList.isNotEmpty()) selectionList.joinToString(" AND ") else null
         val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
+
+        val effectiveLimit = maxOf(limit, 50)
+        val maxCursorScan = maxOf(effectiveLimit * 3, 1000)
 
         val uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         activity.contentResolver.query(
@@ -682,7 +687,6 @@ class SlipScannerPlugin(private val activity: MainActivity) : MethodChannel.Meth
             val bucketColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
 
             var scanned = 0
-            val maxCursorScan = 300
 
             while (cursor.moveToNext() && scanned < maxCursorScan) {
                 scanned++
@@ -716,7 +720,7 @@ class SlipScannerPlugin(private val activity: MainActivity) : MethodChannel.Meth
 
                 if (isBankAlbum) {
                     bankAssets.add(asset)
-                    if (bankAssets.size >= limit) {
+                    if (bankAssets.size >= effectiveLimit) {
                         break
                     }
                 }

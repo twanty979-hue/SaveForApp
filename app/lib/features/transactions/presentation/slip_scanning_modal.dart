@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app/core/localization/app_material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
@@ -139,9 +140,11 @@ class _SlipScanningModalState extends State<SlipScanningModal>
     });
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedDays = prefs.getInt('pref_slip_scan_selected_days_back') ?? 30;
+
       final slips = await SlipScannerBridge.instance.scanRecentSlips(
-        daysBack: 0,
-        limit: 50,
+        daysBack: savedDays,
         forceAll: true,
         albumName: 'ALL_BANKS',
       );
@@ -512,8 +515,8 @@ class _SlipScanningModalState extends State<SlipScanningModal>
                   const SizedBox(height: 6),
                   Text(
                     context.tr(
-                      'ไม่มีสลิปใหม่ในช่วง 30 วัน หรือรายการถูกบันทึกไปแล้ว',
-                      'No unrecorded slips found in the past 30 days',
+                      'ไม่มีสลิปใหม่ในช่วงเวลาที่เลือก หรือรายการถูกบันทึกไปแล้ว',
+                      'No unrecorded slips found in the selected period',
                     ),
                     textAlign: TextAlign.center,
                     style: const TextStyle(

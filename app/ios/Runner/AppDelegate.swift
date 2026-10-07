@@ -239,7 +239,7 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
       let fetchOptions = PHFetchOptions()
       var predicates: [NSPredicate] = []
 
-      // When startTimestamp is provided, filter precisely within date range
+      // Date filtering: support custom start/end timestamp, daysBack, and lastScanTimestamp
       if startTimestamp > 0 {
         let startDate = Date(timeIntervalSince1970: startTimestamp / 1000.0)
         predicates.append(NSPredicate(format: "creationDate >= %@", startDate as NSDate))
@@ -247,13 +247,15 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
           let endDate = Date(timeIntervalSince1970: endTimestamp / 1000.0)
           predicates.append(NSPredicate(format: "creationDate <= %@", endDate as NSDate))
         }
-      } else if lastScanTimestamp > 0 {
-        let lastDate = Date(timeIntervalSince1970: lastScanTimestamp)
-        predicates.append(NSPredicate(format: "creationDate > %@", lastDate as NSDate))
       } else if daysBack > 0 {
         if let cutoffDate = Calendar.current.date(byAdding: .day, value: -daysBack, to: Date()) {
           predicates.append(NSPredicate(format: "creationDate >= %@", cutoffDate as NSDate))
         }
+      }
+
+      if lastScanTimestamp > 0 {
+        let lastDate = Date(timeIntervalSince1970: lastScanTimestamp)
+        predicates.append(NSPredicate(format: "creationDate > %@", lastDate as NSDate))
       }
 
       if !predicates.isEmpty {
@@ -296,13 +298,16 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
       userAlbums.enumerateObjects { col, _, _ in checkCollection(col) }
       smartAlbums.enumerateObjects { col, _, _ in checkCollection(col) }
 
-      // Collect assets ONLY from the 4 dedicated bank albums (K PLUS, SCB EASY, Krungsri, TrueMoney)
+      // Collect assets from target bank albums up to the requested scan limit
       var candidateAssets: [(asset: PHAsset, tag: String, albumTitle: String)] = []
       var seenIds = Set<String>()
 
+      // Allow adequate candidates depending on limit (supports up to 1000 for 1-year scans)
+      let effectiveScanLimit = max(limit, 50)
+
       for item in targetCollections {
         let resultAssets = PHAsset.fetchAssets(in: item.collection, options: fetchOptions)
-        let count = min(resultAssets.count, 50)
+        let count = min(resultAssets.count, effectiveScanLimit)
         for i in 0..<count {
           let asset = resultAssets.object(at: i)
           if !seenIds.contains(asset.localIdentifier) {
@@ -319,13 +324,11 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
         return dateA > dateB
       }
 
-      // Safe limit cap (allow up to 100 candidates per scan)
-      let safeCap = min(max(limit, 30), 100)
-      if candidateAssets.count > safeCap {
-        candidateAssets = Array(candidateAssets.prefix(safeCap))
+      if candidateAssets.count > effectiveScanLimit {
+        candidateAssets = Array(candidateAssets.prefix(effectiveScanLimit))
       }
 
-      print("[SlipScanner] Inspecting \(candidateAssets.count) candidate photos from 4 bank albums: \(targetCollections.map { $0.tag })...")
+      print("[SlipScanner] Inspecting \(candidateAssets.count) candidate photos (limit: \(effectiveScanLimit), daysBack: \(daysBack)) from bank albums: \(targetCollections.map { $0.tag })...")
 
       var detectedSlips: [[String: Any]] = []
       let imageManager = PHImageManager.default()

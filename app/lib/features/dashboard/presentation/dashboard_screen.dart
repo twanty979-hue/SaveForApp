@@ -98,9 +98,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (permission != 'authorized' && permission != 'limited') return;
       }
 
+      final prefs = await SharedPreferences.getInstance();
+      final savedDaysBack = prefs.getInt('pref_slip_scan_selected_days_back') ?? 30;
+
       final slips = await SlipScannerBridge.instance.scanRecentSlips(
-        daysBack: 30,
-        limit: 20,
+        daysBack: savedDaysBack,
         forceAll: false,
         albumName: 'ALL_BANKS',
       );

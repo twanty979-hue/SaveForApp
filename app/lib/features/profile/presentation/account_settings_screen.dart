@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app/core/localization/app_material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/localization/app_localizations.dart';
@@ -38,6 +39,15 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   void initState() {
     super.initState();
     _loadProfile();
+    _loadSlipSettings();
+  }
+
+  Future<void> _loadSlipSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getInt('pref_slip_scan_selected_days_back') ?? 30;
+      if (mounted) setState(() => _slipLookbackDays = saved);
+    } catch (_) {}
   }
 
   Future<void> _loadProfile() async {
@@ -420,12 +430,28 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   }
 
   void _chooseLookbackPeriod() {
+    final periods = [
+      {'days': 1, 'th': '1 วัน (วันนี้)', 'en': '1 Day (Today)'},
+      {'days': 3, 'th': 'ย้อนหลัง 3 วัน', 'en': 'Past 3 Days'},
+      {'days': 7, 'th': 'ย้อนหลัง 7 วัน', 'en': 'Past 7 Days'},
+      {'days': 15, 'th': 'ย้อนหลัง 15 วัน', 'en': 'Past 15 Days'},
+      {'days': 30, 'th': 'ย้อนหลัง 30 วัน (แนะนำ)', 'en': 'Past 30 Days (Recommended)'},
+      {'days': 60, 'th': 'ย้อนหลัง 60 วัน (2 เดือน)', 'en': 'Past 60 Days (2 Months)'},
+      {'days': 90, 'th': 'ย้อนหลัง 90 วัน (3 เดือน)', 'en': 'Past 90 Days (3 Months)'},
+      {'days': 180, 'th': 'ย้อนหลัง 180 วัน (6 เดือน)', 'en': 'Past 180 Days (6 Months)'},
+      {'days': 365, 'th': 'ย้อนหลัง 365 วัน (1 ปี)', 'en': 'Past 365 Days (1 Year)'},
+    ];
+
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (sheetContext) {
         final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
         return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.75,
+          ),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF1E293B) : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -435,42 +461,43 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               Text(
                 sheetContext.tr('เลือกระยะเวลาย้อนหลัง', 'Select Lookback Period'),
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              ListTile(
-                title: Text(sheetContext.tr('ย้อนหลัง 7 วัน', 'Past 7 Days')),
-                trailing: _slipLookbackDays == 7 ? Icon(Icons.check, color: AppTheme.primaryColor) : null,
-                onTap: () {
-                  setState(() => _slipLookbackDays = 7);
-                  Navigator.pop(sheetContext);
-                },
-              ),
-              ListTile(
-                title: Text(sheetContext.tr('ย้อนหลัง 30 วัน (แนะนำ)', 'Past 30 Days (Recommended)')),
-                trailing: _slipLookbackDays == 30 ? Icon(Icons.check, color: AppTheme.primaryColor) : null,
-                onTap: () {
-                  setState(() => _slipLookbackDays = 30);
-                  Navigator.pop(sheetContext);
-                },
-              ),
-              ListTile(
-                title: Text(sheetContext.tr('ย้อนหลัง 90 วัน', 'Past 90 Days')),
-                trailing: _slipLookbackDays == 90 ? Icon(Icons.check, color: AppTheme.primaryColor) : null,
-                onTap: () {
-                  setState(() => _slipLookbackDays = 90);
-                  Navigator.pop(sheetContext);
-                },
-              ),
-              ListTile(
-                title: Text(sheetContext.tr('ทั้งหมดที่มีในเครื่อง', 'All available in device')),
-                trailing: _slipLookbackDays == 0 ? Icon(Icons.check, color: AppTheme.primaryColor) : null,
-                onTap: () {
-                  setState(() => _slipLookbackDays = 0);
-                  Navigator.pop(sheetContext);
-                },
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: periods.map((p) {
+                    final d = p['days'] as int;
+                    final isSelected = _slipLookbackDays == d;
+                    return ListTile(
+                      title: Text(sheetContext.tr(p['th'] as String, p['en'] as String)),
+                      trailing: isSelected ? Icon(Icons.check, color: AppTheme.primaryColor) : null,
+                      onTap: () async {
+                        setState(() => _slipLookbackDays = d);
+                        try {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setInt('pref_slip_scan_selected_days_back', d);
+                          SlipScannerBridge.instance.refreshUnscannedCount();
+                        } catch (_) {}
+                        if (sheetContext.mounted) Navigator.pop(sheetContext);
+                      },
+                    );
+                  }).toList(),
+                ),
               ),
             ],
           ),
