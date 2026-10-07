@@ -45,8 +45,15 @@ class BankRulesService {
               .map((e) => BankRuleConfig.fromJson(Map<String, dynamic>.from(e as Map)))
               .toList();
           if (loaded.isNotEmpty) {
-            rulesNotifier.value = loaded;
-            _applyToAppSettings(loaded);
+            final existingIds = loaded.map((e) => e.id.toLowerCase()).toSet();
+            final merged = List<BankRuleConfig>.from(loaded);
+            for (final def in BankRuleConfig.defaultRules) {
+              if (!existingIds.contains(def.id.toLowerCase())) {
+                merged.add(def);
+              }
+            }
+            rulesNotifier.value = merged;
+            _applyToAppSettings(merged);
             return;
           }
         }
@@ -118,7 +125,16 @@ class BankRulesService {
         final prefs = await SharedPreferences.getInstance();
         final disabledBanks = (prefs.getStringList(_prefDisabledKey) ?? []).toSet();
 
-        final updatedRules = cloudRules.map((r) {
+        // Merge default rules so new default banks are never omitted
+        final cloudIds = cloudRules.map((e) => e.id.toLowerCase()).toSet();
+        final allRules = List<BankRuleConfig>.from(cloudRules);
+        for (final def in BankRuleConfig.defaultRules) {
+          if (!cloudIds.contains(def.id.toLowerCase())) {
+            allRules.add(def);
+          }
+        }
+
+        final updatedRules = allRules.map((r) {
           final bankId = r.id.toLowerCase();
           final bankType = r.bankType.name.toLowerCase();
           // Only disable if user explicitly turned it off on this device

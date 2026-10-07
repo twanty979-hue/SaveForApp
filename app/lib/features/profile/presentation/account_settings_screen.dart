@@ -339,8 +339,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         SnackBar(
           content: Text(
             context.tr(
-              'ฟีเจอร์นี้รองรับบน iPhone ในเวอร์ชันนี้ครับ',
-              'This feature is supported on iPhone in this version',
+              'ฟีเจอร์นี้รองรับบนมือถือ (iOS / Android) ครับ',
+              'This feature is supported on mobile devices (iOS / Android)',
             ),
           ),
         ),

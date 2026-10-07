@@ -25,6 +25,18 @@ class AppSettings {
     'krungsri',
     'truemoney',
     'ktb',
+    'bbl',
+    'ttb',
+    'gsb',
+    'kkp',
+    'baac',
+    'uob',
+    'cimb',
+    'lhb',
+    'tisco',
+    'thaicredit',
+    'shopeepay',
+    'other',
   });
 
   static Future<void> init() async {
@@ -44,12 +56,16 @@ class AppSettings {
     analyticsEnabled = prefs.getBool('analyticsEnabled') ?? true;
     final banks = prefs.getStringList('enabledAutoScanBanks');
     if (banks != null) {
-      enabledAutoScanBanks.value = banks.toSet();
+      final set = banks.toSet();
+      set.addAll(['bbl', 'ttb', 'gsb', 'kkp', 'baac', 'uob', 'cimb', 'lhb', 'tisco', 'thaicredit', 'shopeepay', 'other']);
+      enabledAutoScanBanks.value = set;
     }
   }
 
   static bool isAutoScanBankEnabled(String bankKey) {
-    return enabledAutoScanBanks.value.contains(bankKey.toLowerCase());
+    final lower = bankKey.toLowerCase();
+    if (lower == 'other') return true;
+    return enabledAutoScanBanks.value.contains(lower);
   }
 
   static Future<void> setAutoScanBankEnabled(String bankKey, bool enabled) async {
@@ -66,7 +82,7 @@ class AppSettings {
 
   static Future<void> setAllAutoScanBanksEnabled(bool enabled) async {
     final updated = enabled
-        ? {'kbank', 'scb', 'krungsri', 'truemoney'}
+        ? {'kbank', 'scb', 'krungsri', 'truemoney', 'kkp'}
         : <String>{};
     enabledAutoScanBanks.value = updated;
     final prefs = await SharedPreferences.getInstance();

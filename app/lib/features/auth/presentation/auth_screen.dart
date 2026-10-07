@@ -48,11 +48,15 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void initState() {
     super.initState();
-    SignInWithApple.isAvailable().then((available) {
-      if (mounted) {
-        setState(() => _appleSignInAvailable = available);
-      }
-    }).catchError((_) {});
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.macOS)) {
+      SignInWithApple.isAvailable().then((available) {
+        if (mounted) {
+          setState(() => _appleSignInAvailable = available);
+        }
+      }).catchError((_) {});
+    }
 
     // ตรวจสอบข้อมูลล็อกอินขากลับจาก URL Fragment หรือ Query Parameters
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -788,22 +792,24 @@ class _AuthScreenState extends State<AuthScreen> {
                             ),
                             const SizedBox(height: 14),
 
-                            // Social Logins: Apple & Google Side-by-Side (Icon Buttons)
+                            // Social Logins: Apple (iOS/macOS only) & Google
                             Builder(
                               builder: (context) {
-                                final showApple = _appleSignInAvailable ||
-                                    (!kIsWeb &&
+                                final isApplePlatform = !kIsWeb &&
+                                    (defaultTargetPlatform ==
+                                            TargetPlatform.iOS ||
                                         defaultTargetPlatform ==
-                                            TargetPlatform.iOS);
+                                            TargetPlatform.macOS);
+                                final showApple = isApplePlatform;
                                 final isAppleLoading = _isLoading &&
                                     _successMessage?.contains('Apple') == true;
                                 final isGoogleLoading = _isLoading &&
                                     _successMessage?.contains('Google') == true;
 
-                                return Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    if (showApple) ...[
+                                if (showApple) {
+                                  return Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
                                       _buildSocialIconButton(
                                         key: const ValueKey('apple_sign_in_button'),
                                         icon: const Icon(
@@ -820,20 +826,92 @@ class _AuthScreenState extends State<AuthScreen> {
                                             : _handleAppleSignIn,
                                       ),
                                       const SizedBox(width: 16),
+                                      _buildSocialIconButton(
+                                        key: const ValueKey('google_sign_in_button'),
+                                        icon: const GoogleLogo(size: 24),
+                                        backgroundColor: Colors.white,
+                                        borderColor: const Color(0xFFE2E8F0),
+                                        tooltip: 'Google',
+                                        semanticsLabel: 'เข้าสู่ระบบด้วย Google',
+                                        isLoading: isGoogleLoading,
+                                        onTap: _isLoading
+                                            ? null
+                                            : _handleGoogleSignIn,
+                                      ),
                                     ],
-                                    _buildSocialIconButton(
+                                  );
+                                }
+
+                                // Android / Non-Apple platforms: Single prominent Google button
+                                return SizedBox(
+                                  width: double.infinity,
+                                  height: 52,
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
                                       key: const ValueKey('google_sign_in_button'),
-                                      icon: const GoogleLogo(size: 24),
-                                      backgroundColor: Colors.white,
-                                      borderColor: const Color(0xFFE2E8F0),
-                                      tooltip: 'Google',
-                                      semanticsLabel: 'เข้าสู่ระบบด้วย Google',
-                                      isLoading: isGoogleLoading,
                                       onTap: _isLoading
                                           ? null
                                           : _handleGoogleSignIn,
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Ink(
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: const Color(0xFFE2E8F0),
+                                            width: 1.2,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.05,
+                                              ),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Center(
+                                          child: isGoogleLoading
+                                              ? SizedBox(
+                                                  width: 22,
+                                                  height: 22,
+                                                  child: CircularProgressIndicator(
+                                                    color: AppTheme.primaryColor,
+                                                    strokeWidth: 2.2,
+                                                  ),
+                                                )
+                                              : Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: const [
+                                                    GoogleLogo(size: 22),
+                                                    SizedBox(width: 10),
+                                                    Flexible(
+                                                      child: Text(
+                                                        'เข้าสู่ระบบด้วย Google',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          color:
+                                                              Color(0xFF1E293B),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                        ),
+                                      ),
                                     ),
-                                  ],
+                                  ),
                                 );
                               },
                             ),

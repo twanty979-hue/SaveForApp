@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -9,15 +10,54 @@ import 'slip_parser_service.dart';
 export 'slip_parser_service.dart';
 
 class SlipScannerBridge {
+  final StreamController<ParsedSlip> _liveSlipStreamController = StreamController<ParsedSlip>.broadcast();
+  Stream<ParsedSlip> get onLiveSlipDetected => _liveSlipStreamController.stream;
+
+  final StreamController<Map<String, int>> _scanProgressStreamController = StreamController<Map<String, int>>.broadcast();
+  Stream<Map<String, int>> get onScanProgress => _scanProgressStreamController.stream;
+
+  DateTime? _activeScanStartDate;
+
   SlipScannerBridge._() {
     SlipParserService.loadLearnedOwnData();
     refreshUnscannedCount();
+    _channel.setMethodCallHandler(_handleNativeMethodCall);
   }
   static final SlipScannerBridge instance = SlipScannerBridge._();
 
   static const MethodChannel _channel = MethodChannel('com.savefor.app/slip_scanner');
   static const String _prefSavedSlipKeys = 'saved_slip_dedup_keys';
   static const String _prefLastScanTimestamp = 'last_slip_scan_timestamp';
+
+  Future<dynamic> _handleNativeMethodCall(MethodCall call) async {
+    try {
+      if (call.method == 'onSlipDetected') {
+        final args = call.arguments;
+        if (args is Map) {
+          final prefs = await SharedPreferences.getInstance();
+          final savedKeys = prefs.getStringList(_prefSavedSlipKeys)?.toSet() ?? <String>{};
+          final parsed = parseRawSlipMap(
+            args,
+            effectiveStartDate: _activeScanStartDate,
+            savedKeys: savedKeys,
+          );
+          if (parsed != null) {
+            _liveSlipStreamController.add(parsed);
+          }
+        }
+      } else if (call.method == 'onScanProgress') {
+        final args = call.arguments;
+        if (args is Map) {
+          final cur = (args['current'] as num?)?.toInt() ?? 0;
+          final tot = (args['total'] as num?)?.toInt() ?? 0;
+          _scanProgressStreamController.add({'current': cur, 'total': tot});
+        }
+      }
+    } catch (e) {
+      debugPrint('[SlipScannerBridge] _handleNativeMethodCall error: $e');
+    }
+    return null;
+  }
 
   /// จำนวนสลิปที่ตรวจพบและยังไม่ได้บันทึก (สำหรับแสดง Badge บนปุ่มสแกน)
   final ValueNotifier<int> unscannedCount = ValueNotifier<int>(0);
@@ -131,23 +171,21 @@ class SlipScannerBridge {
     String? albumName = 'ALL_BANKS',
   }) async {
     if (!isSupported) return [];
-
     try {
       await SlipParserService.loadLearnedOwnData();
       final prefs = await SharedPreferences.getInstance();
       final lastScan = forceAll ? 0.0 : (prefs.getDouble(_prefLastScanTimestamp) ?? 0.0);
 
-      // คำนวณวันย้อนหลัง (จำกัดไม่ให้เกิน 30 วันตามเงื่อนไขผู้ใช้)
-      int effectiveDaysBack = daysBack.clamp(1, 30);
+      // คำนวณวันย้อนหลัง (ถ้าส่ง 0 หรือน้อยกว่า ให้ใช้ 30 วันเป็นค่าเริ่มต้น)
+      final int effectiveDaysBack = (daysBack <= 0) ? 30 : daysBack.clamp(1, 30);
       final DateTime effectiveStartDate;
       if (startDate != null) {
         effectiveStartDate = startDate;
-        final diff = DateTime.now().difference(effectiveStartDate).inDays + 1;
-        effectiveDaysBack = diff.clamp(1, 30);
       } else {
         effectiveStartDate = DateTime.now().subtract(Duration(days: effectiveDaysBack));
       }
 
+      _activeScanStartDate = effectiveStartDate;
       final startMs = effectiveStartDate.millisecondsSinceEpoch.toDouble();
       final endMs = (endDate ?? DateTime.now()).millisecondsSinceEpoch.toDouble();
 
@@ -161,53 +199,20 @@ class SlipScannerBridge {
       });
 
       if (result is! List) return [];
-      debugPrint('[SlipScannerBridge] Received ${result.length} candidate slips from native iOS');
+      debugPrint('[SlipScannerBridge] Received ${result.length} candidate slips from native');
 
       final savedKeys = prefs.getStringList(_prefSavedSlipKeys)?.toSet() ?? <String>{};
       final List<ParsedSlip> parsedList = [];
 
       for (var item in result) {
         if (item is! Map) continue;
-        final id = item['id']?.toString() ?? '';
-        final creationMs = (item['creationDate'] as num?)?.toDouble() ?? 0.0;
-        final fallbackDate = creationMs > 0
-            ? DateTime.fromMillisecondsSinceEpoch(creationMs.toInt())
-            : null;
-
-        final rawLines = (item['lines'] as List?)?.map((e) => e.toString()).toList() ?? [];
-        final fullText = item['fullText']?.toString() ?? '';
-        final imagePath = item['imagePath']?.toString();
-        final albumName = item['albumName']?.toString();
-
-        final parsed = SlipParserService.instance.parse(
-          id: id,
-          lines: rawLines,
-          fullText: fullText,
-          fallbackDate: fallbackDate,
-          imagePath: imagePath,
-          albumName: albumName,
+        final parsed = parseRawSlipMap(
+          item,
+          effectiveStartDate: effectiveStartDate,
+          savedKeys: savedKeys,
         );
-
         if (parsed != null) {
-          // ตรวจสอบว่าวันที่ของสลิปต้องไม่อยู่ก่อน startDate
-          final cutoff = DateTime(effectiveStartDate.year, effectiveStartDate.month, effectiveStartDate.day);
-          if (parsed.date.isBefore(cutoff)) {
-            debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped: date ${parsed.date} is before cutoff $cutoff');
-            continue;
-          }
-
-          // ตรวจสอบว่าธนาคารนี้ถูกเปิดใช้งานในหน้าตั้งค่าหรือไม่ (ผู้ใช้สามารถติ๊กเปิด/ปิดได้)
-          if (!AppSettings.isAutoScanBankEnabled(parsed.bank.name)) {
-            debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped (bank ${parsed.bank.name} is disabled by user)');
-            continue;
-          }
-
-          // คัดกรองรายการที่เคยบันทึกไปแล้วออกอย่างเด็ดขาด (ห้ามอ่านสลิปซ้ำเด็ดขาด)
-          if (!_isSlipSaved(parsed, savedKeys)) {
-            parsedList.add(parsed);
-          } else {
-            debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped (already saved: ${parsed.deduplicationKey})');
-          }
+          parsedList.add(parsed);
         }
       }
 
@@ -216,7 +221,62 @@ class SlipScannerBridge {
     } catch (e) {
       debugPrint('Error scanning recent slips on device: $e');
       return [];
+    } finally {
+      _activeScanStartDate = null;
     }
+  }
+
+  /// แปลงข้อมูล Raw Slip จาก Native เป็น ParsedSlip พร้อมตัวกรองความถูกต้อง
+  ParsedSlip? parseRawSlipMap(
+    Map<dynamic, dynamic> item, {
+    DateTime? effectiveStartDate,
+    Set<String>? savedKeys,
+  }) {
+    final id = item['id']?.toString() ?? '';
+    final creationMs = (item['creationDate'] as num?)?.toDouble() ?? 0.0;
+    final fallbackDate = creationMs > 0
+        ? DateTime.fromMillisecondsSinceEpoch(creationMs.toInt())
+        : null;
+
+    final rawLines = (item['lines'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final fullText = item['fullText']?.toString() ?? '';
+    final imagePath = item['imagePath']?.toString();
+    final albumName = item['albumName']?.toString();
+
+    final parsed = SlipParserService.instance.parse(
+      id: id,
+      lines: rawLines,
+      fullText: fullText,
+      fallbackDate: fallbackDate,
+      imagePath: imagePath,
+      albumName: albumName,
+    );
+
+    if (parsed != null) {
+      // ตรวจสอบว่าวันที่ของสลิปต้องไม่อยู่ก่อน startDate (เผื่อหย่อน 1 วันสำหรับ timezone)
+      if (effectiveStartDate != null) {
+        final cutoff = DateTime(effectiveStartDate.year, effectiveStartDate.month, effectiveStartDate.day)
+            .subtract(const Duration(days: 1));
+        if (parsed.date.isBefore(cutoff)) {
+          debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped: date ${parsed.date} is before cutoff $cutoff');
+          return null;
+        }
+      }
+
+      // ตรวจสอบว่าธนาคารนี้ถูกเปิดใช้งานในหน้าตั้งค่าหรือไม่ (ผู้ใช้สามารถติ๊กเปิด/ปิดได้)
+      if (!AppSettings.isAutoScanBankEnabled(parsed.bank.name)) {
+        debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped (bank ${parsed.bank.name} is disabled by user)');
+        return null;
+      }
+
+      // คัดกรองรายการที่เคยบันทึกไปแล้วออกอย่างเด็ดขาด (ห้ามอ่านสลิปซ้ำเด็ดขาด)
+      if (savedKeys != null && _isSlipSaved(parsed, savedKeys)) {
+        debugPrint('[SlipScannerBridge] Slip ${parsed.id} skipped (already saved: ${parsed.deduplicationKey})');
+        return null;
+      }
+    }
+
+    return parsed;
   }
 
   /// สแกนภาพเดี่ยวจาก Path (เช่น นำเข้าจาก ImagePicker)

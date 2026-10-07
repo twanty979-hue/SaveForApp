@@ -11,6 +11,14 @@ enum BankType {
   ttb,
   gsb,
   truemoney,
+  kkp,
+  baac,
+  uob,
+  cimb,
+  lhb,
+  tisco,
+  thaicredit,
+  shopeepay,
   other;
 
   String get displayName {
@@ -31,6 +39,22 @@ enum BankType {
         return 'ออมสิน (GSB)';
       case BankType.truemoney:
         return 'ทรูมันนี่ (TrueMoney)';
+      case BankType.kkp:
+        return 'เกียรตินาคินภัทร (KKP / Dime)';
+      case BankType.baac:
+        return 'ธ.ก.ส. (BAAC)';
+      case BankType.uob:
+        return 'ยูโอบี (UOB)';
+      case BankType.cimb:
+        return 'ซีไอเอ็มบี (CIMB)';
+      case BankType.lhb:
+        return 'แลนด์ แอนด์ เฮ้าส์ (LH Bank)';
+      case BankType.tisco:
+        return 'ทิสโก้ (TISCO)';
+      case BankType.thaicredit:
+        return 'ไทยเครดิต (Thai Credit)';
+      case BankType.shopeepay:
+        return 'ช้อปปี้เพย์ (ShopeePay)';
       case BankType.other:
         return 'สลิปธนาคาร';
     }
@@ -54,6 +78,22 @@ enum BankType {
         return 0xFFEB1985;
       case BankType.truemoney:
         return 0xFFFF6600;
+      case BankType.kkp:
+        return 0xFF652D86;
+      case BankType.baac:
+        return 0xFF006F3C;
+      case BankType.uob:
+        return 0xFF0B2265;
+      case BankType.cimb:
+        return 0xFF7D001E;
+      case BankType.lhb:
+        return 0xFF008080;
+      case BankType.tisco:
+        return 0xFF003399;
+      case BankType.thaicredit:
+        return 0xFF005A9C;
+      case BankType.shopeepay:
+        return 0xFFEE4D2D;
       case BankType.other:
         return 0xFF00A88F;
     }
@@ -61,31 +101,67 @@ enum BankType {
 
   static BankType? detectFromText(String text) {
     final lower = text.toLowerCase();
-    if (lower.contains('กสิกร') || lower.contains('kbank') || lower.contains('k plus') || lower.contains('k+') || lower.contains('kbiz')) {
+    final compact = lower.replaceAll(RegExp(r'\s+'), '');
+    if (lower.contains('กสิกร') || compact.contains('กสิกร') || lower.contains('kbank') || compact.contains('kbank') || lower.contains('k plus') || compact.contains('kplus') || lower.contains('k+') || lower.contains('kbiz') || lower.contains('kasikorn')) {
       return BankType.kbank;
     }
-    if (lower.contains('ไทยพาณิชย์') || lower.contains('scb') || lower.contains('แม่มณี') || lower.contains('easy')) {
+    if (lower.contains('ไทยพาณิชย์') || compact.contains('ไทยพาณิชย์') || lower.contains('scb') || lower.contains('แม่มณี') || compact.contains('แม่มณี') || lower.contains('easy')) {
       return BankType.scb;
     }
-    if (lower.contains('กรุงศรี') || lower.contains('krungsri') || lower.contains('bay') || lower.contains('kma')) {
+    if (lower.contains('กรุงศรี') || compact.contains('กรุงศรี') || lower.contains('krungsri') || compact.contains('krungsri') || lower.contains('bay') || lower.contains('kma')) {
       return BankType.krungsri;
     }
-    if (lower.contains('กรุงไทย') || lower.contains('krungthai') || lower.contains('ktb') || lower.contains('เป๋าตัง') || lower.contains('next')) {
+    if (lower.contains('กรุงไทย') || compact.contains('กรุงไทย') || lower.contains('krungthai') || compact.contains('krungthai') || lower.contains('ktb') || lower.contains('เป๋าตัง') || compact.contains('เป๋าตัง') || lower.contains('next')) {
       return BankType.ktb;
     }
-    if (lower.contains('กรุงเทพ') || lower.contains('bangkok bank') || lower.contains('bualuang') || lower.contains('bbl')) {
+    if (lower.contains('กรุงเทพ') || compact.contains('กรุงเทพ') || lower.contains('bangkok bank') || compact.contains('bangkokbank') || lower.contains('bualuang') || lower.contains('bbl')) {
       return BankType.bbl;
     }
-    if (lower.contains('ทหารไทย') || lower.contains('ttb') || lower.contains('tmb') || lower.contains('ธนชาต')) {
+    if (lower.contains('ทหารไทย') || compact.contains('ทหารไทย') || lower.contains('ttb') || lower.contains('tmb') || lower.contains('ธนชาต') || compact.contains('ธนชาต') || lower.contains('ทีทีบี') || compact.contains('ทีทีบี')) {
       return BankType.ttb;
     }
-    if (lower.contains('ออมสิน') || lower.contains('gsb') || lower.contains('mymo')) {
+    if (lower.contains('ออมสิน') || compact.contains('ออมสิน') || lower.contains('gsb') || lower.contains('mymo')) {
       return BankType.gsb;
     }
-    if (lower.contains('truemoney') || lower.contains('ทรูมันนี่') || lower.contains('true money') || lower.contains('tmn')) {
+    if (lower.contains('truemoney') || compact.contains('truemoney') || lower.contains('ทรูมันนี่') || compact.contains('ทรูมันนี่') || lower.contains('true money') || lower.contains('tmn')) {
       return BankType.truemoney;
     }
-    if (lower.contains('สลิป') || lower.contains('slip') || lower.contains('พร้อมเพย์') || lower.contains('promptpay') || lower.contains('prompt')) {
+    if (lower.contains('เกียรตินาคิน') ||
+        compact.contains('เกียรตินาคิน') ||
+        lower.contains('kkp') ||
+        compact.contains('kkp') ||
+        lower.contains('dime') ||
+        compact.contains('dime') ||
+        lower.contains('ไดม์') ||
+        compact.contains('ไดม์') ||
+        lower.contains('kiatnakin') ||
+        compact.contains('kiatnakin') ||
+        lower.contains('phatra') ||
+        compact.contains('phatra')) {
+      return BankType.kkp;
+    }
+    if (lower.contains('baac') || compact.contains('baac') || lower.contains('ธกส') || compact.contains('ธกส') || lower.contains('ธ.ก.ส') || lower.contains('a-mobile') || lower.contains('amobile')) {
+      return BankType.baac;
+    }
+    if (lower.contains('uob') || compact.contains('uob') || lower.contains('ยูโอบี') || compact.contains('ยูโอบี') || lower.contains('tmrw')) {
+      return BankType.uob;
+    }
+    if (lower.contains('cimb') || compact.contains('cimb') || lower.contains('octo') || lower.contains('ซีไอเอ็มบี') || compact.contains('ซีไอเอ็มบี')) {
+      return BankType.cimb;
+    }
+    if (lower.contains('lh bank') || compact.contains('lhbank') || lower.contains('lhb') || compact.contains('lhb') || lower.contains('แลนด์ แอนด์ เฮ้าส์') || compact.contains('แลนด์แอนด์เฮ้าส์')) {
+      return BankType.lhb;
+    }
+    if (lower.contains('tisco') || compact.contains('tisco') || lower.contains('ทิสโก้') || compact.contains('ทิสโก้')) {
+      return BankType.tisco;
+    }
+    if (lower.contains('thai credit') || compact.contains('thaicredit') || lower.contains('ไทยเครดิต') || compact.contains('ไทยเครดิต') || lower.contains('alpha')) {
+      return BankType.thaicredit;
+    }
+    if (lower.contains('shopeepay') || compact.contains('shopeepay') || lower.contains('shopee pay') || lower.contains('ช้อปปี้เพย์') || compact.contains('ช้อปปี้เพย์')) {
+      return BankType.shopeepay;
+    }
+    if (lower.contains('สลิป') || compact.contains('สลิป') || lower.contains('slip') || lower.contains('พร้อมเพย์') || compact.contains('พร้อมเพย์') || lower.contains('promptpay') || compact.contains('promptpay') || lower.contains('prompt')) {
       return BankType.other;
     }
     return null;
@@ -353,6 +429,8 @@ class SlipParserService {
         finalDestBank = BankType.gsb;
       } else if (lower.contains('truemoney') || lower.contains('ทรูมันนี่')) {
         finalDestBank = BankType.truemoney;
+      } else if (lower.contains('kkp') || lower.contains('dime') || lower.contains('เกียรตินาคิน') || lower.contains('kiatnakin') || lower.contains('ไดม์')) {
+        finalDestBank = BankType.kkp;
       } else {
         finalDestBank = bank == BankType.kbank ? BankType.scb : BankType.kbank;
       }
@@ -474,6 +552,35 @@ class SlipParserService {
     if (lower.contains('truemoney') || lower.contains('ทรูมันนี่') || lower.contains('true money') || lower.contains('tmn')) {
       return BankType.truemoney;
     }
+    if (lower.contains('เกียรตินาคิน') ||
+        lower.contains('kkp') ||
+        lower.contains('dime') ||
+        lower.contains('ไดม์') ||
+        lower.contains('kiatnakin') ||
+        lower.contains('phatra')) {
+      return BankType.kkp;
+    }
+    if (lower.contains('baac') || lower.contains('ธกส') || lower.contains('ธ.ก.ส') || lower.contains('a-mobile')) {
+      return BankType.baac;
+    }
+    if (lower.contains('uob') || lower.contains('ยูโอบี') || lower.contains('tmrw')) {
+      return BankType.uob;
+    }
+    if (lower.contains('cimb') || lower.contains('octo') || lower.contains('ซีไอเอ็มบี')) {
+      return BankType.cimb;
+    }
+    if (lower.contains('lh bank') || lower.contains('lhb') || lower.contains('แลนด์ แอนด์ เฮ้าส์')) {
+      return BankType.lhb;
+    }
+    if (lower.contains('tisco') || lower.contains('ทิสโก้')) {
+      return BankType.tisco;
+    }
+    if (lower.contains('thai credit') || lower.contains('ไทยเครดิต') || lower.contains('alpha')) {
+      return BankType.thaicredit;
+    }
+    if (lower.contains('shopeepay') || lower.contains('shopee pay') || lower.contains('ช้อปปี้เพย์')) {
+      return BankType.shopeepay;
+    }
     if (lower.contains('พร้อมเพย์') || lower.contains('promptpay')) {
       return BankType.other;
     }
@@ -486,6 +593,26 @@ class SlipParserService {
   }
 
   double? _extractAmount(List<String> lines, String fullText) {
+    // 0. ตรวจสอบจาก Mini QR Code (PromptPay / EMVCo Tag 54 - แม่นยำ 100%)
+    if (fullText.contains('[QR]:')) {
+      final qrMatch = RegExp(r'\[QR\]:\s*(000201[^\n\r]+)').firstMatch(fullText);
+      if (qrMatch != null) {
+        final qrStr = qrMatch.group(1) ?? '';
+        final amtMatch = RegExp(r'54(\d{2})([0-9]+(?:\.[0-9]{1,2})?)').firstMatch(qrStr);
+        if (amtMatch != null) {
+          final len = int.tryParse(amtMatch.group(1) ?? '0') ?? 0;
+          final valStr = amtMatch.group(2) ?? '';
+          if (len > 0 && valStr.length >= len) {
+            final amt = double.tryParse(valStr.substring(0, len));
+            if (amt != null && amt > 0 && amt < 50000000) {
+              debugPrint('[SlipParser] Extracted amount from QR Tag 54: $amt');
+              return amt;
+            }
+          }
+        }
+      }
+    }
+
     // 1. ระดับความมั่นใจสูงสุด (High Priority): มองหาข้อความระบุยอดเงินชัดเจน พร้อมทศนิยม 2 ตำแหน่ง
     // เช่น "ยอดชำระทั้งหมด ฿ 82.00", "จำนวนเงิน 1,500.00 บาท", "ยอดเงิน: 250.00"
     // สำคัญ: ห้ามรวมคำว่า "ชำระเงิน" เดี่ยวๆ เพราะเป็นชื่อฟิลด์ผู้รับ เช่น "ชำระเงิน 7-Eleven"
@@ -506,9 +633,22 @@ class SlipParserService {
     // 2. ป้ายกำกับยอดเงินอยู่คนละบรรทัดกับตัวเลขทศนิยม (เช่น K PLUS / SCB บรรทัดถัดไป)
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i].trim().toLowerCase();
-      if (_isFeeLine(line)) continue;
+      final compactLine = line.replaceAll(RegExp(r'\s+'), '');
+      if (_isFeeLine(line) || _isFeeLine(compactLine)) continue;
 
-      final isAmountLabel = line == 'จำนวนเงิน' ||
+      final isAmountLabel = compactLine == 'จำนวนเงิน' ||
+          compactLine == 'จํานวนเงิน' ||
+          compactLine.startsWith('จำนวนเงิน') ||
+          compactLine.startsWith('จํานวนเงิน') ||
+          compactLine.startsWith('ยอดเงิน') ||
+          compactLine.startsWith('ยอดโอน') ||
+          compactLine.startsWith('ยอดชำระทั้งหมด') ||
+          compactLine.startsWith('ยอดชำระสุทธิ') ||
+          compactLine.startsWith('ยอดชำระ') ||
+          compactLine == 'amount' ||
+          compactLine.startsWith('amount') ||
+          compactLine.startsWith('totalamount') ||
+          line == 'จำนวนเงิน' ||
           line == 'จํานวนเงิน' ||
           line.startsWith('จำนวนเงิน') ||
           line.startsWith('จํานวนเงิน') ||
@@ -690,6 +830,24 @@ class SlipParserService {
         lower.contains('bay') ||
         lower.contains('gsb') ||
         lower.contains('truemoney') ||
+        lower.contains('kkp') ||
+        lower.contains('dime') ||
+        lower.contains('เกียรตินาคิน') ||
+        lower.contains('kiatnakin') ||
+        lower.contains('phatra') ||
+        lower.contains('ไดม์') ||
+        lower.contains('baac') ||
+        lower.contains('ธกส') ||
+        lower.contains('ธ.ก.ส') ||
+        lower.contains('uob') ||
+        lower.contains('ยูโอบี') ||
+        lower.contains('tmrw') ||
+        lower.contains('cimb') ||
+        lower.contains('lh bank') ||
+        lower.contains('lhb') ||
+        lower.contains('tisco') ||
+        lower.contains('ทิสโก้') ||
+        lower.contains('ไทยเครดิต') ||
         lower.startsWith('ธ.') ||
         lower.startsWith('ธนาคาร')) {
       return true;

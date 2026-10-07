@@ -34,12 +34,15 @@ extension CGImagePropertyOrientation {
 }
 
 class SlipScannerPlugin: NSObject, FlutterPlugin {
+  var channel: FlutterMethodChannel?
+
   static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(
       name: "com.savefor.app/slip_scanner",
       binaryMessenger: registrar.messenger()
     )
     let instance = SlipScannerPlugin()
+    instance.channel = channel
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
 
@@ -141,10 +144,22 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
   }
 
   private static var bankRules: [BankAlbumRule] = [
-    BankAlbumRule(name: "K PLUS", keywords: ["k plus", "kplus", "k-plus", "kasikorn", "กสิกร"], bankTag: "K PLUS กสิกรไทย"),
+    BankAlbumRule(name: "K PLUS", keywords: ["k plus", "kplus", "k-plus", "kasikorn", "kbank", "กสิกร"], bankTag: "K PLUS กสิกรไทย"),
     BankAlbumRule(name: "SCB EASY", keywords: ["scb easy", "scbeasy", "scb", "แม่มณี", "ไทยพาณิชย์"], bankTag: "SCB EASY ไทยพาณิชย์"),
     BankAlbumRule(name: "Krungsri", keywords: ["krungsri", "kma", "bay", "กรุงศรี"], bankTag: "Krungsri กรุงศรี"),
     BankAlbumRule(name: "TrueMoney", keywords: ["truemoney", "true money", "ทรูมันนี่", "tmn"], bankTag: "TrueMoney ทรูมันนี่"),
+    BankAlbumRule(name: "Krungthai NEXT", keywords: ["krungthai", "ktb", "เป๋าตัง", "next", "กรุงไทย"], bankTag: "Krungthai กรุงไทย"),
+    BankAlbumRule(name: "ttb touch", keywords: ["ttb", "ttb touch", "ttbtouch", "tmb", "ธนชาต", "ทีทีบี"], bankTag: "ttb ทีทีบี"),
+    BankAlbumRule(name: "Bangkok Bank", keywords: ["bangkok bank", "bangkokbank", "bbl", "bualuang", "กรุงเทพ"], bankTag: "Bangkok Bank กรุงเทพ"),
+    BankAlbumRule(name: "MyMo", keywords: ["mymo", "gsb", "ออมสิน"], bankTag: "MyMo ออมสิน"),
+    BankAlbumRule(name: "Dime! / KKP", keywords: ["dime", "kkp", "เกียรตินาคิน", "kiatnakin", "phatra", "ไดม์"], bankTag: "Dime เกียรตินาคินภัทร"),
+    BankAlbumRule(name: "BAAC", keywords: ["baac", "a-mobile", "amobile", "ธกส", "ธ.ก.ส"], bankTag: "BAAC ธกส"),
+    BankAlbumRule(name: "UOB TMRW", keywords: ["uob", "tmrw", "ยูโอบี"], bankTag: "UOB ยูโอบี"),
+    BankAlbumRule(name: "CIMB", keywords: ["cimb", "octo", "cimb thai"], bankTag: "CIMB ซีไอเอ็มบี"),
+    BankAlbumRule(name: "LHB You", keywords: ["lh bank", "lhb you", "lhb", "แลนด์ แอนด์ เฮ้าส์"], bankTag: "LH Bank แลนด์ แอนด์ เฮ้าส์"),
+    BankAlbumRule(name: "TISCO", keywords: ["tisco", "ทิสโก้"], bankTag: "TISCO ทิสโก้"),
+    BankAlbumRule(name: "Thai Credit", keywords: ["thai credit", "alpha", "ไทยเครดิต"], bankTag: "Thai Credit ไทยเครดิต"),
+    BankAlbumRule(name: "ShopeePay", keywords: ["shopeepay", "shopee pay"], bankTag: "ShopeePay ช้อปปี้เพย์"),
   ]
 
   private func updateBankRules(rulesList: [[String: Any]], result: @escaping FlutterResult) {
@@ -183,7 +198,8 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
               "isKPlus": rule.name == "K PLUS",
               "isSCB": rule.name == "SCB EASY",
               "isKrungsri": rule.name == "Krungsri",
-              "isTrueMoney": rule.name == "TrueMoney"
+              "isTrueMoney": rule.name == "TrueMoney",
+              "isKKP": rule.name.contains("KKP") || rule.name.contains("Dime")
             ])
             break
           }
@@ -321,7 +337,10 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
 
       let targetSize = CGSize(width: 1080, height: 1920)
 
-      for item in candidateAssets {
+      for (index, item) in candidateAssets.enumerated() {
+        DispatchQueue.main.async { [weak self] in
+          self?.channel?.invokeMethod("onScanProgress", arguments: ["current": index + 1, "total": candidateAssets.count])
+        }
         autoreleasepool {
           let asset = item.asset
           let tag = item.tag
@@ -360,6 +379,9 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
                 }
 
                 detectedSlips.append(slipMap)
+                DispatchQueue.main.async { [weak self] in
+                  self?.channel?.invokeMethod("onSlipDetected", arguments: slipMap)
+                }
               }
             }
           }
@@ -519,7 +541,7 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
     let hasBAAC = lower.contains("ธ.ก.ส") || lower.contains("ธกส") || lower.contains("baac")
     let hasUOB = lower.contains("uob") || lower.contains("ยูโอบี") || lower.contains("tmrw")
     let hasCIMB = lower.contains("cimb") || lower.contains("octo")
-    let hasKKP = lower.contains("kkp") || lower.contains("dime") || lower.contains("เกียรตินาคิน")
+    let hasKKP = lower.contains("kkp") || lower.contains("dime") || lower.contains("เกียรตินาคิน") || lower.contains("kiatnakin") || lower.contains("phatra") || lower.contains("ไดม์")
     let hasLHB = lower.contains("lh bank") || lower.contains("lhb") || lower.contains("แลนด์ แอนด์ เฮ้าส์")
     let hasPromptPay = lower.contains("พร้อมเพย์") || lower.contains("promptpay") || lower.contains("prompt pay")
     let hasTrueMoney = lower.contains("truemoney") || lower.contains("ทรูมันนี่") || lower.contains("true money") || lower.contains("tmn")

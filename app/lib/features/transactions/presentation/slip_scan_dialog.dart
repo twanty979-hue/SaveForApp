@@ -13,15 +13,26 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/bank_logo_icon.dart';
 import '../../auth/domain/auth_session.dart';
 import 'slip_scan_date_sheet.dart';
+import 'no_slips_found_sheet.dart';
 
 class SlipScanDialog extends StatefulWidget {
   final List<ParsedSlip> slips;
   final VoidCallback? onTransactionsSaved;
+  final bool isLiveScanning;
+  final int daysBack;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final String albumName;
 
   const SlipScanDialog({
     super.key,
     required this.slips,
     this.onTransactionsSaved,
+    this.isLiveScanning = false,
+    this.daysBack = 30,
+    this.startDate,
+    this.endDate,
+    this.albumName = 'ALL_BANKS',
   });
 
   /// แสดงผลเป็นการ์ดสลิปธนาคารทรงสี่เหลี่ยมกะทัดรัด ลอย 3D กลางจอ สไตล์การ์ตูน
@@ -39,6 +50,48 @@ class SlipScanDialog extends StatefulWidget {
       pageBuilder: (context, animation, secondaryAnimation) {
         return SlipScanDialog(
           slips: slips,
+          onTransactionsSaved: onTransactionsSaved,
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+        );
+        return ScaleTransition(
+          scale: Tween<double>(begin: 0.8, end: 1.0).animate(curved),
+          child: FadeTransition(
+            opacity: animation,
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  /// แสดงผลแบบสแกนสดทันที (Live Scanning): เปิด Dialog ทันทีที่กด พร้อมแอนิเมชันเลเซอร์สแกนสด
+  static Future<void> showLive(
+    BuildContext context, {
+    int daysBack = 30,
+    DateTime? startDate,
+    DateTime? endDate,
+    String albumName = 'ALL_BANKS',
+    VoidCallback? onTransactionsSaved,
+  }) {
+    return showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black.withValues(alpha: 0.60),
+      transitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return SlipScanDialog(
+          slips: const [],
+          isLiveScanning: true,
+          daysBack: daysBack,
+          startDate: startDate,
+          endDate: endDate,
+          albumName: albumName,
           onTransactionsSaved: onTransactionsSaved,
         );
       },
@@ -81,7 +134,12 @@ class _SlipScanDialogState extends State<SlipScanDialog>
 
   // สถานะการนับสลิปทีละใบระหว่างสแกน
   bool _isScanning = true;
-  int _scannedCount = 1;
+  int _scannedCount = 0;
+
+  StreamSubscription<ParsedSlip>? _liveSlipSub;
+  StreamSubscription<Map<String, int>>? _scanProgressSub;
+  int _progressCurrent = 0;
+  int _progressTotal = 0;
 
   void _initAnimation() {
     if (_floatController != null) return;
@@ -102,6 +160,114 @@ class _SlipScanDialogState extends State<SlipScanDialog>
     _beamAnimation = Tween<double>(begin: 0.05, end: 0.95).animate(
       CurvedAnimation(parent: _beamController, curve: Curves.easeInOut),
     );
+  }
+
+  void _startLiveScan() async {
+    setState(() {
+      _isScanning = true;
+      _scannedCount = 0;
+      _currentIndex = 0;
+    });
+
+    _liveSlipSub = SlipScannerBridge.instance.onLiveSlipDetected.listen((slip) {
+      if (!mounted) return;
+      HapticFeedback.lightImpact();
+
+      // ป้องกันการแอดสลิปซ้ำ
+      final isDuplicate = _slips.any((s) => s.id == slip.id || s.deduplicationKey == slip.deduplicationKey);
+      if (isDuplicate) return;
+
+      setState(() {
+        _slips.add(slip);
+        _scannedCount = _slips.length;
+      });
+
+      // ถ้าเป็นการ์ดใบแรกหรือถัดไป เลื่อนหน้ามายังใบที่ตรวจพบล่าสุดสดๆ ทันที
+      final newIndex = _slips.length - 1;
+      if (_pageController.hasClients && _pageController.positions.length == 1) {
+        _pageController.animateToPage(
+          newIndex,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
+
+    _scanProgressSub = SlipScannerBridge.instance.onScanProgress.listen((prog) {
+      if (!mounted) return;
+      setState(() {
+        _progressCurrent = prog['current'] ?? 0;
+        _progressTotal = prog['total'] ?? 0;
+      });
+    });
+
+    try {
+      final results = await SlipScannerBridge.instance.scanRecentSlips(
+        daysBack: widget.daysBack,
+        startDate: widget.startDate,
+        endDate: widget.endDate,
+        limit: 50,
+        forceAll: true,
+        albumName: widget.albumName,
+      );
+
+      if (!mounted) return;
+
+      // เผื่อมีสลิปที่อาจหลุดจาก stream
+      for (final s in results) {
+        if (!_slips.any((existing) => existing.id == s.id || existing.deduplicationKey == s.deduplicationKey)) {
+          _slips.add(s);
+        }
+      }
+
+      if (_slips.isEmpty) {
+        setState(() => _isScanning = false);
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (!mounted) return;
+        final nav = Navigator.of(context);
+        nav.pop();
+        if (!mounted) return;
+        NoSlipsFoundSheet.show(
+          context,
+          onPickImage: () async {
+            final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+            if (picked == null || !mounted) return;
+            final slip = await SlipScannerBridge.instance.scanSingleImage(picked.path);
+            if (slip != null && mounted) {
+              SlipScanDialog.show(
+                context,
+                slips: [slip],
+                onTransactionsSaved: widget.onTransactionsSaved,
+              );
+            }
+          },
+        );
+        return;
+      }
+
+      // หน่วงเวลาให้ผู้ใช้ชมใบสุดท้าย 500ms
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+
+      final summaryIndex = _slips.length;
+      if (_pageController.hasClients && _pageController.positions.length == 1) {
+        _pageController.animateToPage(
+          summaryIndex,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOutCubic,
+        );
+      }
+
+      setState(() {
+        _currentIndex = summaryIndex;
+        _isScanning = false;
+        _scannedCount = _slips.length;
+      });
+      HapticFeedback.mediumImpact();
+    } catch (e) {
+      debugPrint('[SlipScanDialog] Live scan error: $e');
+      if (mounted) setState(() => _isScanning = false);
+    }
   }
 
   void _startScanningSequence() async {
@@ -193,6 +359,12 @@ class _SlipScanDialogState extends State<SlipScanDialog>
 
   void _skipScanning() {
     if (!_isScanning) return;
+    if (_slips.isEmpty) {
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
     final summaryIndex = _slips.length;
     if (_pageController.hasClients && _pageController.positions.length == 1) {
       _pageController.jumpToPage(summaryIndex);
@@ -254,13 +426,18 @@ class _SlipScanDialogState extends State<SlipScanDialog>
   @override
   void initState() {
     super.initState();
-    _slips = widget.slips;
+    _slips = List.from(widget.slips);
     _pageController = PageController(
       viewportFraction: 0.72,
       initialPage: 0,
     );
     _initAnimation();
-    _startScanningSequence();
+
+    if (widget.isLiveScanning) {
+      _startLiveScan();
+    } else {
+      _startScanningSequence();
+    }
 
     final userId = AuthSession.userId;
     if (userId != null) {
@@ -285,6 +462,8 @@ class _SlipScanDialogState extends State<SlipScanDialog>
 
   @override
   void dispose() {
+    _liveSlipSub?.cancel();
+    _scanProgressSub?.cancel();
     _beamController.dispose();
     try {
       _pageController.dispose();
@@ -508,60 +687,100 @@ class _SlipScanDialogState extends State<SlipScanDialog>
   List<Color> _getBankGradient(BankType bank) {
     switch (bank) {
       case BankType.kbank:
-        // กสิกรไทย (K PLUS): สีเขียวสว่างนุ่มนวล พาสเทลมรกต จางลงสบายตา ไม่เข้มทึบ
         return const [
           Color(0xFF269D64),
           Color(0xFF38B97C),
           Color(0xFF6EDFA8),
         ];
       case BankType.scb:
-        // ไทยพาณิชย์ (SCB EASY): ม่วงสว่างพาสเทล ละมุนตา
         return const [
           Color(0xFF7346C9),
           Color(0xFF8F5FE0),
           Color(0xFFB188F3),
         ];
       case BankType.krungsri:
-        // กรุงศรี (Krungsri): เหลืองทองสว่างละมุน
         return const [
           Color(0xFFD4A325),
           Color(0xFFE5B53C),
           Color(0xFFF7D472),
         ];
       case BankType.truemoney:
-        // ทรูมันนี่ (TrueMoney): ส้มสว่างละมุนสดใส
         return const [
           Color(0xFFF07038),
           Color(0xFFFA8752),
           Color(0xFFFFB085),
         ];
       case BankType.ktb:
-        // กรุงไทย (KTB NEXT): ฟ้าสว่างละมุน
         return const [
           Color(0xFF0EA5E9),
           Color(0xFF38BDF8),
           Color(0xFF7DD3FC),
         ];
       case BankType.bbl:
-        // กรุงเทพ (BBL): น้ำเงินสว่างสดใส
         return const [
           Color(0xFF3B82F6),
           Color(0xFF60A5FA),
           Color(0xFF93C5FD),
         ];
       case BankType.ttb:
-        // ทีทีบี (ttb): น้ำเงินสว่างสดใส
         return const [
           Color(0xFF2563EB),
           Color(0xFF3B82F6),
           Color(0xFF60A5FA),
         ];
       case BankType.gsb:
-        // ออมสิน (GSB): ชมพูสว่างสดใส
         return const [
           Color(0xFFDB2777),
           Color(0xFFF43F5E),
           Color(0xFFFB7185),
+        ];
+      case BankType.kkp:
+        return const [
+          Color(0xFF652D86),
+          Color(0xFF8B5CF6),
+          Color(0xFFA78BFA),
+        ];
+      case BankType.baac:
+        return const [
+          Color(0xFF006F3C),
+          Color(0xFF10B981),
+          Color(0xFF34D399),
+        ];
+      case BankType.uob:
+        return const [
+          Color(0xFF0B2265),
+          Color(0xFF2563EB),
+          Color(0xFF60A5FA),
+        ];
+      case BankType.cimb:
+        return const [
+          Color(0xFF7D001E),
+          Color(0xFFDC2626),
+          Color(0xFFF87171),
+        ];
+      case BankType.lhb:
+        return const [
+          Color(0xFF008080),
+          Color(0xFF06B6D4),
+          Color(0xFF67E8F9),
+        ];
+      case BankType.tisco:
+        return const [
+          Color(0xFF003399),
+          Color(0xFF3B82F6),
+          Color(0xFF93C5FD),
+        ];
+      case BankType.thaicredit:
+        return const [
+          Color(0xFF005A9C),
+          Color(0xFF0284C7),
+          Color(0xFF7DD3FC),
+        ];
+      case BankType.shopeepay:
+        return const [
+          Color(0xFFEE4D2D),
+          Color(0xFFF97316),
+          Color(0xFFFDBA74),
         ];
       case BankType.other:
         return const [
@@ -578,11 +797,13 @@ class _SlipScanDialogState extends State<SlipScanDialog>
     final screenWidth = MediaQuery.of(context).size.width;
     final cardWidth = math.min(screenWidth * 0.78, 295.0);
     const cardHeight = 315.0;
-    final bool isSummaryPage = _currentIndex == _slips.length;
-    final currentSlip = _slips[_currentIndex.clamp(0, _slips.length - 1)];
+    final bool isSummaryPage = _slips.isNotEmpty && _currentIndex == _slips.length;
+    final currentSlip = _slips.isNotEmpty ? _slips[_currentIndex.clamp(0, _slips.length - 1)] : null;
     final gradientColors = isSummaryPage
         ? [palette.primary, palette.strong]
-        : _getBankGradient(currentSlip.bank);
+        : (currentSlip != null
+            ? _getBankGradient(currentSlip.bank)
+            : const [Color(0xFF0F172A), Color(0xFF064E3B)]);
     final anim = _floatAnimation ?? const AlwaysStoppedAnimation(0.0);
 
     return Center(
@@ -721,14 +942,15 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                 width: screenWidth,
                 child: PageView.builder(
                   controller: _pageController,
-                  itemCount: _slips.length + 1,
+                  itemCount: _slips.isEmpty ? 1 : (_slips.length + 1),
                   onPageChanged: (index) {
                     setState(() {
                       _currentIndex = index;
                     });
                   },
                   itemBuilder: (context, index) {
-                    final bool isSummary = index == _slips.length;
+                    final bool isPlaceholder = _slips.isEmpty;
+                    final bool isSummary = _slips.isNotEmpty && index == _slips.length;
                     return AnimatedBuilder(
                       animation: Listenable.merge([
                         _pageController,
@@ -781,17 +1003,19 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                           ),
                         );
                       },
-                      child: isSummary
-                          ? _buildSummaryTotalCard(
-                              context,
-                              isActive: index == _currentIndex,
-                            )
-                          : _buildCompactRectangularCard(
-                              context,
-                              _slips[index],
-                              isActive: index == _currentIndex,
-                              index: index,
-                            ),
+                      child: isPlaceholder
+                          ? _buildLiveScanningPlaceholderCard(context, cardWidth, cardHeight)
+                          : (isSummary
+                              ? _buildSummaryTotalCard(
+                                  context,
+                                  isActive: index == _currentIndex,
+                                )
+                              : _buildCompactRectangularCard(
+                                  context,
+                                  _slips[index],
+                                  isActive: index == _currentIndex,
+                                  index: index,
+                                )),
                     );
                   },
                 ),
@@ -799,7 +1023,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
 
               // จุดหรือแถบบอกตำแหน่งสลิป (Progress Pill & Dots Indicator)
               const SizedBox(height: 8),
-              if (_slips.length <= 10)
+              if (_slips.isNotEmpty && _slips.length <= 10)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(_slips.length + 1, (idx) {
@@ -821,7 +1045,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                     );
                   }),
                 )
-              else
+              else if (_slips.isNotEmpty)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
@@ -849,6 +1073,47 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: isSummaryPage ? const Color(0xFFFDE68A) : Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF064E3B).withValues(alpha: 0.75),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFF34D399).withValues(alpha: 0.5),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF34D399),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0xFF34D399),
+                              blurRadius: 4,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        context.tr('กำลังสแกนค้นหาสลิปสด...', 'Live Scanning Slips...'),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF6EE7B7),
                         ),
                       ),
                     ],
@@ -885,7 +1150,11 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'กำลังนับสลิปใบที่ $_scannedCount จาก ${_slips.length} ใบ...',
+                        _slips.isEmpty
+                            ? (_progressTotal > 0
+                                ? 'กำลังสแกนรูปที่ $_progressCurrent จาก $_progressTotal...'
+                                : 'กำลังสแกนหาไฟล์สลิปในเครื่อง...')
+                            : 'สแกนสดใบที่ $_scannedCount (พบแล้ว ${_slips.length} ใบ)...',
                         style: const TextStyle(
                           fontSize: 11.5,
                           color: Colors.white,
@@ -1022,6 +1291,218 @@ class _SlipScanDialogState extends State<SlipScanDialog>
           ),
         ),
       );
+  }
+
+  // การ์ดแสดงสถานะกำลังสแกนค้นหาสลิปในเครื่องสดๆ (Live Scanning Radar Card)
+  Widget _buildLiveScanningPlaceholderCard(
+    BuildContext context,
+    double cardWidth,
+    double cardHeight,
+  ) {
+    return Container(
+      width: cardWidth,
+      height: cardHeight,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF0F172A),
+            Color(0xFF1E293B),
+            Color(0xFF064E3B),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: const Color(0xFF10B981).withValues(alpha: 0.50),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF059669).withValues(alpha: 0.35),
+            blurRadius: 18,
+            spreadRadius: 2,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.40),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(21),
+        child: Stack(
+          children: [
+            // Ambient halo background
+            Positioned(
+              top: -30,
+              right: -30,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -20,
+              left: -20,
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF064E3B).withValues(alpha: 0.25),
+                ),
+              ),
+            ),
+
+            // ลำแสงเลเซอร์สแกนเนอร์วิ่งขึ้นลงสดๆ
+            AnimatedBuilder(
+              animation: _beamAnimation,
+              builder: (context, child) {
+                return Positioned(
+                  top: _beamAnimation.value * (cardHeight - 10),
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: 3.5,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0.0),
+                          const Color(0xFF6EE7B7),
+                          Colors.white,
+                          const Color(0xFF6EE7B7),
+                          Colors.white.withValues(alpha: 0.0),
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF34D399).withValues(alpha: 0.95),
+                          blurRadius: 10,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            // Card center content
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Radar animated icon
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                        border: Border.all(
+                          color: const Color(0xFF34D399).withValues(alpha: 0.6),
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF34D399).withValues(alpha: 0.3),
+                            blurRadius: 14,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.qr_code_scanner_rounded,
+                          size: 36,
+                          color: Color(0xFF6EE7B7),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Badge: LIVE SCANNING
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFF34D399).withValues(alpha: 0.5),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xFF34D399),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Color(0xFF34D399),
+                                  blurRadius: 4,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'LIVE SCANNING',
+                            style: TextStyle(
+                              color: Color(0xFF6EE7B7),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    Text(
+                      context.tr('กำลังสแกนค้นหาสลิป...', 'Searching for slips...'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+
+                    Text(
+                      _progressTotal > 0
+                          ? context.tr('กำลังตรวจรูปที่ $_progressCurrent จาก $_progressTotal รูป', 'Scanning photo $_progressCurrent of $_progressTotal')
+                          : context.tr('กำลังอ่าน OCR จากคลังรูปภาพสด...', 'Reading OCR from photo library...'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.72),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // การ์ดใบสุดท้าย: สรุปยอดรวมทั้งหมด พร้อมปุ่มบันทึกทีเดียวจบ
