@@ -415,13 +415,22 @@ class _SupportedBanksScreenState extends State<SupportedBanksScreen> {
           // Logos row preview
           Row(
             children: [
-              ...rules.take(5).map((r) => Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: _buildHeroLogo(r.bankType, r.isEnabled),
-              )),
-              const Spacer(),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: rules.take(5).map((r) => Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: _buildHeroLogo(r.bankType, r.isEnabled),
+                    )).toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: allOff
                       ? Colors.grey.withValues(alpha: 0.12)
@@ -439,8 +448,8 @@ class _SupportedBanksScreenState extends State<SupportedBanksScreen> {
                     const SizedBox(width: 4),
                     Text(
                       allOff
-                          ? context.tr('ปิดอ่านทั้งหมด', 'All Disabled')
-                          : context.tr('เปิดอ่าน $activeCount/$totalCount ธนาคาร', 'Active $activeCount/$totalCount'),
+                          ? context.tr('ปิดทั้งหมด', 'All Disabled')
+                          : context.tr('เปิดอ่าน $activeCount/$totalCount', 'Active $activeCount/$totalCount'),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,

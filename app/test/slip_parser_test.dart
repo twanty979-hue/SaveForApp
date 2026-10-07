@@ -149,24 +149,25 @@ truemoney
       expect(slip.recipient, equals('นาย ประเสริฐ มีสุข'));
     });
 
-    test('date range calculations strictly clamp daysBack between 1 and 30 days', () {
-      // เมื่อผู้ใช้เลือกย้อนหลังเกิน 30 วัน ต้องโดนจำกัดไม่เกิน 30 วัน
-      int clampDays(int input) => input.clamp(1, 30);
-      expect(clampDays(45), equals(30));
-      expect(clampDays(100), equals(30));
+    test('date range calculations strictly clamp daysBack between 1 and 365 days', () {
+      // เมื่อผู้ใช้เลือกย้อนหลังเกิน 365 วัน ต้องโดนจำกัดไม่เกิน 365 วัน
+      int clampDays(int input) => input.clamp(1, 365);
+      expect(clampDays(400), equals(365));
+      expect(clampDays(100), equals(100));
       expect(clampDays(0), equals(1));
       expect(clampDays(7), equals(7));
       expect(clampDays(30), equals(30));
+      expect(clampDays(365), equals(365));
 
       // เมื่อคำนวณจากวันที่ย้อนหลัง
       final now = DateTime(2026, 9, 7);
-      final start40DaysAgo = now.subtract(const Duration(days: 40));
-      final diff = now.difference(start40DaysAgo).inDays + 1;
-      expect(diff.clamp(1, 30), equals(30));
+      final start400DaysAgo = now.subtract(const Duration(days: 400));
+      final diff = now.difference(start400DaysAgo).inDays + 1;
+      expect(diff.clamp(1, 365), equals(365));
 
       final start5DaysAgo = now.subtract(const Duration(days: 5));
       final diff5 = now.difference(start5DaysAgo).inDays + 1;
-      expect(diff5.clamp(1, 30), equals(6));
+      expect(diff5.clamp(1, 365), equals(6));
     });
 
     test('detects destination bank and self-transfer correctly', () {

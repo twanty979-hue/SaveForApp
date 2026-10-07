@@ -3,11 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/localization/app_localizations.dart';
-import '../../../core/models/bank_rule_model.dart';
-import '../../../core/services/bank_rules_service.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
-import '../../../core/widgets/bank_logo_icon.dart';
 import 'slip_scan_dialog.dart';
+
 
 class SlipScanDateRequest {
   final int daysBack;
@@ -21,19 +19,20 @@ class SlipScanDateRequest {
   });
 }
 
-/// Modal Sheet สำหรับเลือกช่วงวันที่ต้องการอ่านสลิปย้อนหลังจากอัลบั้ม (สูงสุด 30 วัน)
+/// Modal Sheet สำหรับเลือกช่วงวันที่ต้องการอ่านสลิปย้อนหลังจากอัลบั้ม (สูงสุด 365 วัน / 1 ปี)
 /// พร้อมปฏิทินที่ออกแบบเข้ากับระบบธีมของ SaveForApp อย่างสมบูรณ์แบบ
 class SlipScanDateSheet extends StatefulWidget {
   final VoidCallback? onTransactionsSaved;
   final int initialDaysBack;
+
+  static const int maxDays = 365;
+  static const String _prefDaysBackKey = 'pref_slip_scan_selected_days_back';
 
   const SlipScanDateSheet({
     super.key,
     this.onTransactionsSaved,
     this.initialDaysBack = 30,
   });
-
-  static const String _prefDaysBackKey = 'pref_slip_scan_selected_days_back';
 
   static Future<void> show(
     BuildContext context, {
@@ -50,7 +49,7 @@ class SlipScanDateSheet extends StatefulWidget {
       backgroundColor: Colors.transparent,
       builder: (ctx) => SlipScanDateSheet(
         onTransactionsSaved: onTransactionsSaved,
-        initialDaysBack: savedDays.clamp(1, 30),
+        initialDaysBack: savedDays.clamp(1, maxDays),
       ),
     );
 
@@ -89,13 +88,13 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
   late int _calendarYear;
   late int _calendarMonth;
 
-
-  final List<int> _presetDays = [1, 3, 7, 15, 30];
+  final List<int> _presetDaysRow1 = [1, 3, 7, 15, 30];
+  final List<int> _presetDaysRow2 = [60, 90, 180, 365];
 
   @override
   void initState() {
     super.initState();
-    _daysBack = widget.initialDaysBack.clamp(1, 30);
+    _daysBack = widget.initialDaysBack.clamp(1, SlipScanDateSheet.maxDays);
     final now = DateTime.now();
     _endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
     _startDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: _daysBack - 1));
@@ -107,7 +106,7 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
     HapticFeedback.selectionClick();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final clamped = days.clamp(1, 30);
+    final clamped = days.clamp(1, SlipScanDateSheet.maxDays);
     setState(() {
       _daysBack = clamped;
       _endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
@@ -116,6 +115,57 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
       _calendarMonth = _startDate.month;
     });
     _persistDaysBack(clamped);
+  }
+
+  Widget _buildPresetButton(int days, bool isThai) {
+    final isSelected = _daysBack == days;
+    final label = days == 1
+        ? (isThai ? 'วันนี้' : 'Today')
+        : '$days ${isThai ? 'วัน' : 'days'}';
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2.5),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _selectPreset(days),
+            borderRadius: BorderRadius.circular(12),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? AppTheme.primaryColor : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected ? AppTheme.primaryColor : const Color(0xFFE2E8F0),
+                  width: isSelected ? 1.5 : 1.0,
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Center(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'SukhumvitSet',
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                    color: isSelected ? Colors.white : const Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _persistDaysBack(int days) async {
@@ -158,7 +208,7 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
   void _onDateCellTapped(DateTime cellDate) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final minDate = today.subtract(const Duration(days: 30));
+    final minDate = today.subtract(const Duration(days: SlipScanDateSheet.maxDays));
     final normalized = DateTime(cellDate.year, cellDate.month, cellDate.day);
 
     if (normalized.isBefore(minDate) || normalized.isAfter(today)) {
@@ -167,7 +217,7 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
 
     HapticFeedback.selectionClick();
     final diff = today.difference(normalized).inDays + 1;
-    final clampedDays = diff.clamp(1, 30);
+    final clampedDays = diff.clamp(1, SlipScanDateSheet.maxDays);
 
     setState(() {
       _startDate = normalized;
@@ -328,7 +378,7 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
     final isThai = Localizations.localeOf(context).languageCode == 'th';
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final minDate = today.subtract(const Duration(days: 30));
+    final minDate = today.subtract(const Duration(days: SlipScanDateSheet.maxDays));
     final cells = _generateCalendarCells();
 
     final canGoPrev = DateTime(_calendarYear, _calendarMonth, 1)
@@ -422,8 +472,8 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
                       const SizedBox(height: 2),
                       Text(
                         context.tr(
-                          'เลือกวันย้อนหลัง (สูงสุด 30 วัน)',
-                          'Select date range (max 30 days)',
+                          'เลือกวันย้อนหลัง (สูงสุด 365 วัน / 1 ปี)',
+                          'Select date range (up to 1 year)',
                         ),
                         style: TextStyle(
                           fontFamily: 'SukhumvitSet',
@@ -464,58 +514,17 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
 
             const SizedBox(height: 16),
 
-            // Quick preset chips
+            // Quick preset chips (Row 1: Recent, Row 2: Extended)
             Row(
-              children: _presetDays.map((days) {
-                final isSelected = _daysBack == days;
-                final label = days == 1
-                    ? (isThai ? 'วันนี้' : 'Today')
-                    : '$days ${isThai ? 'วัน' : 'days'}';
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2.5),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => _selectPreset(days),
-                        borderRadius: BorderRadius.circular(12),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppTheme.primaryColor : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isSelected ? AppTheme.primaryColor : const Color(0xFFE2E8F0),
-                              width: isSelected ? 1.5 : 1.0,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Center(
-                            child: Text(
-                              label,
-                              style: TextStyle(
-                                fontFamily: 'SukhumvitSet',
-                                fontSize: 12,
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                                color: isSelected ? Colors.white : const Color(0xFF475569),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
+              children: _presetDaysRow1
+                  .map((days) => _buildPresetButton(days, isThai))
+                  .toList(),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: _presetDaysRow2
+                  .map((days) => _buildPresetButton(days, isThai))
+                  .toList(),
             ),
 
             const SizedBox(height: 14),
@@ -782,37 +791,8 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
               ),
             ),
 
-            const SizedBox(height: 12),
-
-            // Supported Bank tags row (with official bank logo icons)
-            ValueListenableBuilder<List<BankRuleConfig>>(
-              valueListenable: BankRulesService.rulesNotifier,
-              builder: (context, rules, _) {
-                final displayRules = rules.isNotEmpty ? rules : BankRuleConfig.defaultRules;
-                final count = displayRules.length;
-
-                return Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 4.5,
-                  runSpacing: 4,
-                  children: [
-                    Text(
-                      context.tr('รองรับอัลบั้ม $count ธนาคาร:', 'Supports $count bank albums:'),
-                      style: TextStyle(
-                        fontFamily: 'SukhumvitSet',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                    ...displayRules.map((r) => _buildBankLogoChip(r)),
-                  ],
-                );
-              },
-            ),
-
             const SizedBox(height: 16),
+
 
             // Scan Action Button
             SizedBox(
@@ -1037,64 +1017,6 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
     );
   }
 
-  String _getBankShortName(BankRuleConfig rule) {
-    switch (rule.bankType) {
-      case BankType.kbank:
-        return 'K PLUS';
-      case BankType.scb:
-        return 'SCB';
-      case BankType.krungsri:
-        return 'กรุงศรี';
-      case BankType.truemoney:
-        return 'TrueMoney';
-      case BankType.ktb:
-        return 'กรุงไทย';
-      case BankType.kkp:
-        return 'KKP Dime';
-      default:
-        return rule.name;
-    }
-  }
-
-  Widget _buildBankLogoChip(BankRuleConfig rule) {
-    final color = rule.colorHex != null
-        ? Color(int.parse(rule.colorHex!.replaceFirst('#', '0xFF')))
-        : AppTheme.primaryColor;
-    final shortName = _getBankShortName(rule);
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(4, 2, 6, 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: color.withValues(alpha: 0.25),
-          width: 0.8,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          BankLogoIcon(
-            bank: rule.bankType,
-            size: 14,
-            isCircle: true,
-            showShadow: false,
-            showBorder: false,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            shortName,
-            style: TextStyle(
-              fontFamily: 'SukhumvitSet',
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
+
 

@@ -157,8 +157,8 @@ class SlipScannerBridge {
   }
 
   /// สแกนหาภาพสลิปย้อนหลังจากอัลบั้มรูปภาพ
-  /// [daysBack]: จำนวนวันที่ต้องการย้อนหลัง (สูงสุด 30 วัน)
-  /// [startDate]: วันที่เริ่มต้นที่ต้องการสแกนย้อนหลัง (ต้องไม่เกิน 30 วัน)
+  /// [daysBack]: จำนวนวันที่ต้องการย้อนหลัง (สูงสุด 365 วัน, หรือ 0 สำหรับทั้งหมด)
+  /// [startDate]: วันที่เริ่มต้นที่ต้องการสแกนย้อนหลัง
   /// [endDate]: วันที่สิ้นสุด (ดีฟอลต์คือปัจจุบัน)
   /// [forceAll]: บังคับสแกนทั้งหมดโดยไม่สน lastScanTimestamp
   /// [albumName]: ระบุชื่ออัลบั้มที่ต้องการสแกน (ค่าเริ่มต้น: 'ALL_BANKS' สแกน 4 ธนาคาร)
@@ -176,17 +176,21 @@ class SlipScannerBridge {
       final prefs = await SharedPreferences.getInstance();
       final lastScan = forceAll ? 0.0 : (prefs.getDouble(_prefLastScanTimestamp) ?? 0.0);
 
-      // คำนวณวันย้อนหลัง (ถ้าส่ง 0 หรือน้อยกว่า ให้ใช้ 30 วันเป็นค่าเริ่มต้น)
-      final int effectiveDaysBack = (daysBack <= 0) ? 30 : daysBack.clamp(1, 30);
-      final DateTime effectiveStartDate;
+      // คำนวณวันย้อนหลัง (ถ้าส่ง 0 หรือน้อยกว่า และไม่ระบุ startDate จะค้นหาทั้งหมดโดยไม่จำกัดวัน)
+      final int effectiveDaysBack = (daysBack <= 0) ? 0 : daysBack.clamp(1, 365);
+      final DateTime? effectiveStartDate;
       if (startDate != null) {
         effectiveStartDate = startDate;
-      } else {
+      } else if (effectiveDaysBack > 0) {
         effectiveStartDate = DateTime.now().subtract(Duration(days: effectiveDaysBack));
+      } else {
+        effectiveStartDate = null;
       }
 
       _activeScanStartDate = effectiveStartDate;
-      final startMs = effectiveStartDate.millisecondsSinceEpoch.toDouble();
+      final startMs = effectiveStartDate != null
+          ? effectiveStartDate.millisecondsSinceEpoch.toDouble()
+          : 0.0;
       final endMs = (endDate ?? DateTime.now()).millisecondsSinceEpoch.toDouble();
 
       final dynamic result = await _channel.invokeMethod('scanRecentSlips', {
@@ -551,8 +555,9 @@ class SlipScannerBridge {
       }
 
       final lastScan = prefs.getDouble(_prefLastScanTimestamp) ?? 0.0;
+      final savedDaysBack = prefs.getInt('pref_slip_scan_selected_days_back') ?? 30;
       final dynamic result = await _channel.invokeMethod('scanRecentSlips', {
-        'daysBack': 30,
+        'daysBack': savedDaysBack > 0 ? savedDaysBack : 30,
         'limit': 50,
         'lastScanTimestamp': lastScan,
         'albumName': 'ALL_BANKS',

@@ -27,9 +27,19 @@ export const BANK_LOGO_MAP: Record<string, string> = {
   bbl: "/images/banks/bbl.png",
   ttb: "/images/banks/ttb.png",
   gsb: "/images/banks/gsb.png",
+  kkp: "/images/banks/kkp.png",
+  baac: "/images/banks/baac.png",
+  uob: "/images/banks/uob.png",
+  cimb: "/images/banks/cimb.png",
+  lhb: "/images/banks/lhb.png",
+  tisco: "/images/banks/tisco.png",
+  thaicredit: "/images/banks/thaicredit.png",
+  tcrb: "/images/banks/tcrb.png",
+  shopeepay: "/images/banks/shopeepay.png",
   other: "/images/banks/promptpay.png",
   promptpay: "/images/banks/promptpay.png",
 };
+
 
 export const DEFAULT_RULES: BankRule[] = [
   {
