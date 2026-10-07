@@ -526,6 +526,136 @@ xxx-x-x5678-x
       await SlipParserService.loadLearnedOwnData('user_somchai');
       expect(SlipParserService.learnedOwnAccounts.contains('7788'), isTrue);
     });
+
+    test('parses Dime! (KKP) slip correctly with amount, recipient, date, and BankType.kkp', () {
+      const fullText = '''
+Dime!
+รายการสำเร็จ
+07 ต.ค. 2569 11:30 น.
+จาก
+บัญชี Dime! Save
+นาย กิตติพงษ์ ใจมั่น
+xxx-x-12345-6
+ไปยัง
+นาย ประเสริฐ ยิ่งดี
+ธ.กสิกรไทย
+xxx-x-98765-4
+จำนวนเงิน
+1,250.00 บาท
+รหัสอ้างอิง: 20261007DIMEO019283
+''';
+      final lines = fullText.split('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'dime_test_slip',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.bank, equals(BankType.kkp));
+      expect(slip.bank.displayName, contains('KKP / Dime'));
+      expect(slip.amount, equals(1250.0));
+      expect(slip.recipient, equals('นาย ประเสริฐ ยิ่งดี'));
+      expect(slip.referenceNo, equals('20261007DIMEO019283'));
+      expect(slip.destinationBank, equals(BankType.kbank));
+      expect(slip.date.year, equals(2026));
+      expect(slip.date.month, equals(10));
+      expect(slip.date.day, equals(7));
+    });
+
+    test('parses KKP Mobile slip correctly with BankType.kkp', () {
+      const fullText = '''
+KKP Mobile
+ธนาคารเกียรตินาคินภัทร
+โอนเงินสำเร็จ
+07 ต.ค. 69 14:15
+จาก
+นาย สมชาย สายชล
+ธ.เกียรตินาคินภัทร
+xxx-x-55443-2
+ไปยัง
+พร้อมเพย์
+นาง สมศรี สดใส
+081-xxx-9999
+จำนวนเงิน
+350.50 บาท
+เลขที่รายการ: KKP20261007998811
+''';
+      final lines = fullText.split('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'kkp_mobile_test',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.bank, equals(BankType.kkp));
+      expect(slip.amount, equals(350.50));
+      expect(slip.recipient, equals('นาง สมศรี สดใส'));
+      expect(slip.referenceNo, equals('KKP20261007998811'));
+    });
+
+    test('parses BAAC (ธ.ก.ส. A-Mobile) slip correctly without confusing bank name for recipient', () {
+      const fullText = '''
+BAAC A-Mobile
+ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร
+โอนเงินสำเร็จ
+07 ต.ค. 2569 09:30 น.
+จาก
+นาย สมหวัง ร่ำรวย
+ธ.ก.ส.
+xxx-x-11223-4
+ไปยัง
+นาย จำลอง ยิ้มแย้ม
+ธ.ไทยพาณิชย์
+xxx-x-44556-7
+จำนวนเงิน
+5,000.00 บาท
+รหัสอ้างอิง: BAAC20261007001122
+''';
+      final lines = fullText.split('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'baac_test',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.amount, equals(5000.0));
+      expect(slip.recipient, equals('นาย จำลอง ยิ้มแย้ม'));
+      expect(slip.referenceNo, equals('BAAC20261007001122'));
+      expect(slip.destinationBank, equals(BankType.scb));
+    });
+
+    test('parses UOB TMRW slip correctly with recipient and amount', () {
+      const fullText = '''
+UOB TMRW
+โอนเงินสำเร็จ
+07 ต.ค. 2026 18:45
+จาก
+นาย อานนท์ แดนสวรรค์
+UOB
+xxx-xxx-1234
+ไปยัง
+นาย ธีรภัทร ชาญชัย
+ธ.กสิกรไทย
+xxx-xxx-9876
+จำนวนเงิน: 890.00 THB
+Ref: UOB202610079911
+''';
+      final lines = fullText.split('\n');
+      final slip = SlipParserService.instance.parse(
+        id: 'uob_test',
+        lines: lines,
+        fullText: fullText,
+      );
+
+      expect(slip, isNotNull);
+      expect(slip!.amount, equals(890.0));
+      expect(slip.recipient, equals('นาย ธีรภัทร ชาญชัย'));
+      expect(slip.referenceNo, equals('UOB202610079911'));
+      expect(slip.destinationBank, equals(BankType.kbank));
+    });
   });
 }
 

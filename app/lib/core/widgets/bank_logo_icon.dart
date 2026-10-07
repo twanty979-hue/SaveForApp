@@ -36,6 +36,22 @@ class BankLogoIcon extends StatelessWidget {
         return 'assets/images/banks/ttb.png';
       case BankType.gsb:
         return 'assets/images/banks/gsb.png';
+      case BankType.kkp:
+        return 'assets/images/banks/kkp.png';
+      case BankType.baac:
+        return 'assets/images/banks/baac.png';
+      case BankType.uob:
+        return 'assets/images/banks/uob.png';
+      case BankType.cimb:
+        return 'assets/images/banks/cimb.png';
+      case BankType.lhb:
+        return 'assets/images/banks/lhb.png';
+      case BankType.tisco:
+        return 'assets/images/banks/tisco.png';
+      case BankType.thaicredit:
+        return 'assets/images/banks/thaicredit.png';
+      case BankType.shopeepay:
+        return 'assets/images/banks/shopeepay.png';
       case BankType.other:
         return 'assets/images/banks/promptpay.png';
     }
@@ -137,6 +153,22 @@ class BankLogoIcon extends StatelessWidget {
         return [const Color(0xFFEB1985), const Color(0xFFB50A61)];
       case BankType.truemoney:
         return [const Color(0xFFFF6A00), const Color(0xFFFF3D00)];
+      case BankType.kkp:
+        return [const Color(0xFF652D86), const Color(0xFF4A1E65)];
+      case BankType.baac:
+        return [const Color(0xFF006F3C), const Color(0xFF004D2A)];
+      case BankType.uob:
+        return [const Color(0xFF0B2265), const Color(0xFF06133B)];
+      case BankType.cimb:
+        return [const Color(0xFF7D001E), const Color(0xFF550014)];
+      case BankType.lhb:
+        return [const Color(0xFF008080), const Color(0xFF005555)];
+      case BankType.tisco:
+        return [const Color(0xFF003399), const Color(0xFF002266)];
+      case BankType.thaicredit:
+        return [const Color(0xFF005A9C), const Color(0xFF003D6B)];
+      case BankType.shopeepay:
+        return [const Color(0xFFEE4D2D), const Color(0xFFC03214)];
       case BankType.other:
         return [const Color(0xFF003B6F), const Color(0xFF00A88F)];
     }
@@ -320,6 +352,113 @@ class BankLogoIcon extends StatelessWidget {
               ),
             ),
           ],
+        );
+
+      case BankType.kkp:
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'KKP',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 9.5 * scale,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.2,
+                height: 1.0,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              'Dime!',
+              style: TextStyle(
+                color: const Color(0xFFD4FB44),
+                fontSize: 7.0 * scale,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.2,
+                height: 1.0,
+              ),
+            ),
+          ],
+        );
+
+      case BankType.baac:
+        return Text(
+          'BAAC',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 9.0 * scale,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.3,
+            height: 1.0,
+          ),
+        );
+
+      case BankType.uob:
+        return Text(
+          'UOB',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 10.5 * scale,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.5,
+            height: 1.0,
+          ),
+        );
+
+      case BankType.cimb:
+        return Text(
+          'CIMB',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 9.0 * scale,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.3,
+            height: 1.0,
+          ),
+        );
+
+      case BankType.lhb:
+        return Text(
+          'LHB',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 10.0 * scale,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.3,
+            height: 1.0,
+          ),
+        );
+
+      case BankType.tisco:
+        return Text(
+          'TISCO',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 8.5 * scale,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.2,
+            height: 1.0,
+          ),
+        );
+
+      case BankType.thaicredit:
+        return Text(
+          'TCRB',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 9.0 * scale,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.3,
+            height: 1.0,
+          ),
+        );
+
+      case BankType.shopeepay:
+        return Icon(
+          Icons.shopping_bag_rounded,
+          color: Colors.white,
+          size: 16 * scale,
         );
 
       case BankType.other:

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/models/bank_rule_model.dart';
@@ -9,7 +8,18 @@ import '../../../core/services/bank_rules_service.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
 import '../../../core/widgets/bank_logo_icon.dart';
 import 'slip_scan_dialog.dart';
-import 'no_slips_found_sheet.dart';
+
+class SlipScanDateRequest {
+  final int daysBack;
+  final DateTime startDate;
+  final DateTime endDate;
+
+  const SlipScanDateRequest({
+    required this.daysBack,
+    required this.startDate,
+    required this.endDate,
+  });
+}
 
 /// Modal Sheet สำหรับเลือกช่วงวันที่ต้องการอ่านสลิปย้อนหลังจากอัลบั้ม (สูงสุด 30 วัน)
 /// พร้อมปฏิทินที่ออกแบบเข้ากับระบบธีมของ SaveForApp อย่างสมบูรณ์แบบ
@@ -34,7 +44,7 @@ class SlipScanDateSheet extends StatefulWidget {
 
     if (!context.mounted) return;
 
-    final result = await showModalBottomSheet<List<ParsedSlip>?>(
+    final request = await showModalBottomSheet<SlipScanDateRequest?>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -44,41 +54,16 @@ class SlipScanDateSheet extends StatefulWidget {
       ),
     );
 
-    if (!context.mounted) return;
-    if (result == null) return;
+    if (!context.mounted || request == null) return;
 
-    if (result.isNotEmpty) {
-      SlipScanDialog.show(
-        context,
-        slips: result,
-        onTransactionsSaved: onTransactionsSaved,
-      );
-    } else {
-      NoSlipsFoundSheet.show(
-        context,
-        onPickImage: () async {
-          final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-          if (picked == null || !context.mounted) return;
-          final slip = await SlipScannerBridge.instance.scanSingleImage(picked.path);
-          if (!context.mounted) return;
-          if (slip != null) {
-            SlipScanDialog.show(
-              context,
-              slips: [slip],
-              onTransactionsSaved: onTransactionsSaved,
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  context.tr('ไม่พบข้อมูลสลิปในรูปที่เลือกครับ', 'No slip found in selected image'),
-                ),
-              ),
-            );
-          }
-        },
-      );
-    }
+    // เปิดหน้าต่างสแกนสดทันที (Live Scanning) พร้อม Animation แสงเลเซอร์และการนับสลิปสดๆ
+    SlipScanDialog.showLive(
+      context,
+      daysBack: request.daysBack,
+      startDate: request.startDate,
+      endDate: request.endDate,
+      onTransactionsSaved: onTransactionsSaved,
+    );
   }
 
   @override
@@ -256,24 +241,17 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
         }
       }
 
-      final slips = await SlipScannerBridge.instance.scanRecentSlips(
+      // ปิด BottomSheet และส่งคำขอสแกน เพื่อเปิดหน้าจอ Live Scanning พร้อมแอนิเมชันสดทันที
+      nav.pop(SlipScanDateRequest(
         daysBack: _daysBack,
         startDate: _startDate,
         endDate: _endDate,
-        limit: 50,
-        forceAll: true,
-        albumName: 'ALL_BANKS',
-      );
-
-      if (!mounted) return;
-      setState(() => _isScanning = false);
-
-      nav.pop(slips); // ปิด BottomSheet และส่งผลลัพธ์กลับไปยัง show() อย่างปลอดภัย
+      ));
     } catch (e) {
       if (!mounted) return;
       setState(() => _isScanning = false);
       messenger.showSnackBar(
-        SnackBar(content: Text('เกิดข้อผิดพลาดในการสแกน: $e')),
+        SnackBar(content: Text('เกิดข้อผิดพลาดในการขอสิทธิ์: $e')),
       );
     }
   }
@@ -1071,6 +1049,8 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
         return 'TrueMoney';
       case BankType.ktb:
         return 'กรุงไทย';
+      case BankType.kkp:
+        return 'KKP Dime';
       default:
         return rule.name;
     }

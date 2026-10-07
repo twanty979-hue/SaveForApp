@@ -17,6 +17,17 @@ void main() {
       'krungsri',
       'truemoney',
       'ktb',
+      'ttb',
+      'bbl',
+      'gsb',
+      'kkp',
+      'baac',
+      'uob',
+      'cimb',
+      'lhb',
+      'tisco',
+      'thaicredit',
+      'shopeepay',
     };
     BankRulesService.rulesNotifier.value = BankRuleConfig.defaultRules;
   });
@@ -41,10 +52,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
-    // Verify tile exists on profile settings screen with correct 5/5 count
+    // Verify tile exists on profile settings screen with correct 16/16 count
     expect(find.text('ธนาคารที่อ่านสลิป'), findsOneWidget);
-    expect(find.text('เลือกเปิด-ปิดธนาคารที่ต้องการให้อ่านสลิป (5/5 ธนาคาร)'), findsOneWidget);
-    expect(find.text('5/5'), findsOneWidget);
+    expect(find.text('เลือกเปิด-ปิดธนาคารที่ต้องการให้อ่านสลิป (16/16 ธนาคาร)'), findsOneWidget);
+    expect(find.text('16/16'), findsOneWidget);
 
     // Tap tile to navigate
     await tester.tap(find.text('ธนาคารที่อ่านสลิป'));
