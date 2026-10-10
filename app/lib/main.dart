@@ -8,6 +8,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'core/theme/app_theme.dart';
 import 'core/settings/app_settings.dart';
 import 'core/services/bank_rules_service.dart';
+import 'core/services/subscription_service.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/network/api_client.dart';
 import 'features/auth/domain/auth_session.dart';
@@ -111,6 +112,12 @@ void main() async {
   unawaited(
     BankRulesService.init().catchError((e) {
       debugPrint('BankRulesService init error: $e');
+    }),
+  );
+
+  unawaited(
+    SubscriptionService.instance.initialize(userId: AuthSession.userId).catchError((e) {
+      debugPrint('SubscriptionService init error: $e');
     }),
   );
 

@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
+import '../../../core/services/subscription_service.dart';
+import '../../subscription/presentation/subscription_paywall_sheet.dart';
 import 'slip_scan_dialog.dart';
 
 
@@ -19,13 +21,13 @@ class SlipScanDateRequest {
   });
 }
 
-/// Modal Sheet สำหรับเลือกช่วงวันที่ต้องการอ่านสลิปย้อนหลังจากอัลบั้ม (สูงสุด 365 วัน / 1 ปี)
+/// Modal Sheet สำหรับเลือกช่วงวันที่ต้องการอ่านสลิปย้อนหลังจากอัลบั้ม (สูงสุด 60 วัน)
 /// พร้อมปฏิทินที่ออกแบบเข้ากับระบบธีมของ SaveForApp อย่างสมบูรณ์แบบ
 class SlipScanDateSheet extends StatefulWidget {
   final VoidCallback? onTransactionsSaved;
   final int initialDaysBack;
 
-  static const int maxDays = 365;
+  static const int maxDays = 60;
   static const String _prefDaysBackKey = 'pref_slip_scan_selected_days_back';
 
   const SlipScanDateSheet({
@@ -88,8 +90,8 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
   late int _calendarYear;
   late int _calendarMonth;
 
-  final List<int> _presetDaysRow1 = [1, 3, 7, 15, 30];
-  final List<int> _presetDaysRow2 = [60, 90, 180, 365];
+  final List<int> _presetDaysRow1 = [1, 3, 7];
+  final List<int> _presetDaysRow2 = [15, 30, 60];
 
   @override
   void initState() {
@@ -102,8 +104,18 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
     _calendarMonth = _startDate.month;
   }
 
-  void _selectPreset(int days) {
+  void _selectPreset(int days) async {
     HapticFeedback.selectionClick();
+    if (days > 30 && !SubscriptionService.instance.isPro) {
+      final isThai = Localizations.localeOf(context).languageCode == 'th';
+      final upgraded = await SubscriptionPaywallSheet.show(
+        context,
+        reason: isThai
+            ? 'ปลดล็อกการสแกนสลิปย้อนหลังสูงสุด 60 วัน ด้วย SaveFor PRO'
+            : 'Unlock scanning slips up to 60 days with SaveFor PRO',
+      );
+      if (!upgraded) return;
+    }
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final clamped = days.clamp(1, SlipScanDateSheet.maxDays);
@@ -119,6 +131,7 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
 
   Widget _buildPresetButton(int days, bool isThai) {
     final isSelected = _daysBack == days;
+    final isProFeature = days > 30;
     final label = days == 1
         ? (isThai ? 'วันนี้' : 'Today')
         : '$days ${isThai ? 'วัน' : 'days'}';
@@ -151,14 +164,37 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
                     : null,
               ),
               child: Center(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontFamily: 'SukhumvitSet',
-                    fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                    color: isSelected ? Colors.white : const Color(0xFF475569),
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'SukhumvitSet',
+                        fontSize: 12,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                        color: isSelected ? Colors.white : const Color(0xFF475569),
+                      ),
+                    ),
+                    if (isProFeature) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.white : const Color(0xFFF59E0B),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text(
+                          'PRO',
+                          style: TextStyle(
+                            fontSize: 7.5,
+                            fontWeight: FontWeight.w900,
+                            color: isSelected ? AppTheme.primaryColor : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
@@ -472,8 +508,8 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
                       const SizedBox(height: 2),
                       Text(
                         context.tr(
-                          'เลือกวันย้อนหลัง (สูงสุด 365 วัน / 1 ปี)',
-                          'Select date range (up to 1 year)',
+                          'เลือกวันย้อนหลัง (สูงสุด 60 วัน)',
+                          'Select date range (up to 60 days)',
                         ),
                         style: TextStyle(
                           fontFamily: 'SukhumvitSet',

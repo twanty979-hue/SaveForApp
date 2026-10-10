@@ -157,7 +157,7 @@ class SlipScannerBridge {
   }
 
   /// สแกนหาภาพสลิปย้อนหลังจากอัลบั้มรูปภาพ
-  /// [daysBack]: จำนวนวันที่ต้องการย้อนหลัง (สูงสุด 365 วัน, หรือ 0 สำหรับทั้งหมด)
+  /// [daysBack]: จำนวนวันที่ต้องการย้อนหลัง (สูงสุด 60 วัน)
   /// [startDate]: วันที่เริ่มต้นที่ต้องการสแกนย้อนหลัง
   /// [endDate]: วันที่สิ้นสุด (ดีฟอลต์คือปัจจุบัน)
   /// [forceAll]: บังคับสแกนทั้งหมดโดยไม่สน lastScanTimestamp
@@ -176,8 +176,8 @@ class SlipScannerBridge {
       final prefs = await SharedPreferences.getInstance();
       final lastScan = forceAll ? 0.0 : (prefs.getDouble(_prefLastScanTimestamp) ?? 0.0);
 
-      // คำนวณวันย้อนหลัง (ถ้าส่ง 0 หรือน้อยกว่า และไม่ระบุ startDate จะค้นหาทั้งหมดโดยไม่จำกัดวัน)
-      final int effectiveDaysBack = (daysBack <= 0) ? 0 : daysBack.clamp(1, 365);
+      // คำนวณวันย้อนหลัง (สูงสุด 60 วัน)
+      final int effectiveDaysBack = (daysBack <= 0) ? 0 : daysBack.clamp(1, 60);
       final DateTime? effectiveStartDate;
       if (startDate != null) {
         effectiveStartDate = startDate;
@@ -187,12 +187,11 @@ class SlipScannerBridge {
         effectiveStartDate = null;
       }
 
-      // คำนวณขีดจำกัดการสแกนตามช่วงเวลา (หากสแกนหลายเดือน/1 ปี ให้รองรับได้สูงสุดถึง 1000 รูป)
+      // คำนวณขีดจำกัดการสแกนตามช่วงเวลา (สูงสุด 60 วัน รองรับ 1,000 รูป สบายๆ ไม่ค้าง)
       final int effectiveLimit = limit ?? (
-        effectiveDaysBack >= 180 ? 1000 :
-        effectiveDaysBack >= 90 ? 600 :
-        effectiveDaysBack >= 30 ? 300 :
-        effectiveDaysBack >= 7 ? 150 : 80
+        effectiveDaysBack >= 60 ? 1000 :
+        effectiveDaysBack >= 30 ? 600 :
+        effectiveDaysBack >= 15 ? 400 : 200
       );
 
       _activeScanStartDate = effectiveStartDate;
@@ -563,7 +562,7 @@ class SlipScannerBridge {
       }
 
       final savedDaysBack = prefs.getInt('pref_slip_scan_selected_days_back') ?? 30;
-      final effectiveDays = (savedDaysBack > 0) ? savedDaysBack.clamp(1, 365) : 30;
+      final effectiveDays = (savedDaysBack > 0) ? savedDaysBack.clamp(1, 60) : 30;
       final startDate = DateTime.now().subtract(Duration(days: effectiveDays));
       final startMs = startDate.millisecondsSinceEpoch.toDouble();
       final endMs = DateTime.now().millisecondsSinceEpoch.toDouble();
@@ -572,7 +571,7 @@ class SlipScannerBridge {
         'daysBack': effectiveDays,
         'startTimestamp': startMs,
         'endTimestamp': endMs,
-        'limit': effectiveDays >= 180 ? 1000 : 300,
+        'limit': 1000,
         'lastScanTimestamp': 0.0,
         'albumName': 'ALL_BANKS',
       });

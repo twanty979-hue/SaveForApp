@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:app/core/localization/app_material.dart';
-import 'package:app/core/theme/app_theme.dart';
 
 class MonthlyFinancePoint {
   final DateTime month;

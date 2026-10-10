@@ -324,8 +324,8 @@ class SlipScannerPlugin(private val activity: MainActivity) : MethodChannel.Meth
             "requestPermission" -> requestPermission(result)
             "getAvailableBankAlbums" -> getAvailableBankAlbums(result)
             "scanRecentSlips" -> {
-                val daysBack = call.argument<Int>("daysBack") ?: 30
-                val limit = call.argument<Int>("limit") ?: 100
+                val daysBack = call.argument<Int>("daysBack") ?: 60
+                val limit = call.argument<Int>("limit") ?: 1000
                 val lastScanTimestamp = call.argument<Double>("lastScanTimestamp") ?: 0.0
                 val startTimestamp = call.argument<Double>("startTimestamp") ?: 0.0
                 val endTimestamp = call.argument<Double>("endTimestamp") ?: 0.0
@@ -671,8 +671,8 @@ class SlipScannerPlugin(private val activity: MainActivity) : MethodChannel.Meth
         val selection = if (selectionList.isNotEmpty()) selectionList.joinToString(" AND ") else null
         val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
 
-        val effectiveLimit = maxOf(limit, 50)
-        val maxCursorScan = maxOf(effectiveLimit * 3, 1000)
+        val effectiveLimit = if (limit > 0) maxOf(limit, 50) else 1000
+        val maxCursorScan = maxOf(effectiveLimit * 3, 2000)
 
         val uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         activity.contentResolver.query(

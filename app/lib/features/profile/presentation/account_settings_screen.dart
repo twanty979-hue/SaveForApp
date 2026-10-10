@@ -14,6 +14,8 @@ import '../../auth/presentation/auth_screen.dart';
 import '../../transactions/presentation/slip_scan_dialog.dart';
 import '../../transactions/presentation/no_slips_found_sheet.dart';
 import '../../transactions/presentation/slip_scan_date_sheet.dart';
+import '../../../core/services/subscription_service.dart';
+import '../../subscription/presentation/subscription_paywall_sheet.dart';
 import 'supported_banks_screen.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
@@ -436,10 +438,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       {'days': 7, 'th': 'ย้อนหลัง 7 วัน', 'en': 'Past 7 Days'},
       {'days': 15, 'th': 'ย้อนหลัง 15 วัน', 'en': 'Past 15 Days'},
       {'days': 30, 'th': 'ย้อนหลัง 30 วัน (แนะนำ)', 'en': 'Past 30 Days (Recommended)'},
-      {'days': 60, 'th': 'ย้อนหลัง 60 วัน (2 เดือน)', 'en': 'Past 60 Days (2 Months)'},
-      {'days': 90, 'th': 'ย้อนหลัง 90 วัน (3 เดือน)', 'en': 'Past 90 Days (3 Months)'},
-      {'days': 180, 'th': 'ย้อนหลัง 180 วัน (6 เดือน)', 'en': 'Past 180 Days (6 Months)'},
-      {'days': 365, 'th': 'ย้อนหลัง 365 วัน (1 ปี)', 'en': 'Past 365 Days (1 Year)'},
+      {'days': 60, 'th': 'ย้อนหลัง 60 วัน (สูงสุด)', 'en': 'Past 60 Days (Max)'},
     ];
 
     showModalBottomSheet<void>(
@@ -563,6 +562,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                         : ListView(
                             padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
                             children: [
+                              const _ProSubscriptionBanner(),
                               _SectionLabel(
                                 context.tr('ข้อมูลส่วนตัว', 'Profile Information'),
                               ),
@@ -852,6 +852,139 @@ class _SettingsTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ProSubscriptionBanner extends StatelessWidget {
+  const _ProSubscriptionBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: SubscriptionService.instance.isProNotifier,
+      builder: (context, isPro, _) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isPro
+                  ? [
+                      const Color(0xFF1E293B),
+                      const Color(0xFF0F172A),
+                    ]
+                  : [
+                      AppTheme.primaryColor.withValues(alpha: isDark ? 0.18 : 0.08),
+                      const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.15 : 0.06),
+                    ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isPro ? const Color(0xFFF59E0B) : AppTheme.primaryColor.withValues(alpha: 0.3),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: (isPro ? const Color(0xFFF59E0B) : AppTheme.primaryColor)
+                    .withValues(alpha: 0.12),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.stars_rounded, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'SaveFor PRO',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w900,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: isPro ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            isPro ? 'ACTIVE' : '35฿/เดือน',
+                            style: const TextStyle(
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isPro
+                          ? context.tr('สมาชิก PRO ปลดล็อกทุกฟีเจอร์แล้ว', 'Pro Member: All features unlocked')
+                          : context.tr(
+                              'สแกนสลิปย้อนหลัง แดชบอร์ด 12 เดือน และไม่จำกัด',
+                              'Unlock historical scan, 12-mo stats & unlimited dreams',
+                            ),
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  SubscriptionPaywallSheet.show(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isPro ? const Color(0xFF334155) : AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  isPro ? context.tr('ดูสิทธิ์', 'Manage') : context.tr('อัปเกรด', 'Upgrade'),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

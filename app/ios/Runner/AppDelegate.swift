@@ -59,8 +59,8 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "INVALID_ARGS", message: "Arguments must be a Map", details: nil))
         return
       }
-      let daysBack = args["daysBack"] as? Int ?? 30
-      let limit = args["limit"] as? Int ?? 100
+      let daysBack = args["daysBack"] as? Int ?? 60
+      let limit = args["limit"] as? Int ?? 1000
       let lastScanTimestamp = args["lastScanTimestamp"] as? Double ?? 0.0
       let startTimestamp = (args["startTimestamp"] as? Double) ?? 0.0
       let endTimestamp = (args["endTimestamp"] as? Double) ?? 0.0
@@ -302,8 +302,8 @@ class SlipScannerPlugin: NSObject, FlutterPlugin {
       var candidateAssets: [(asset: PHAsset, tag: String, albumTitle: String)] = []
       var seenIds = Set<String>()
 
-      // Allow adequate candidates depending on limit (supports up to 1000 for 1-year scans)
-      let effectiveScanLimit = max(limit, 50)
+      // Allow adequate candidates depending on limit (supports up to 1,000 for 60-day scans)
+      let effectiveScanLimit = limit > 0 ? max(limit, 50) : 1000
 
       for item in targetCollections {
         let resultAssets = PHAsset.fetchAssets(in: item.collection, options: fetchOptions)

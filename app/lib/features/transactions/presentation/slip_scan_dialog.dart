@@ -852,7 +852,7 @@ class _SlipScanDialogState extends State<SlipScanDialog>
                         ),
                         const SizedBox(width: 8),
                         Tooltip(
-                          message: context.tr('เลือกช่วงวันย้อนหลัง (สูงสุด 365 วัน)', 'Select date range (max 365 days)'),
+                          message: context.tr('เลือกช่วงวันย้อนหลัง (สูงสุด 60 วัน)', 'Select date range (max 60 days)'),
                           child: GestureDetector(
                             onTap: _isScanning
                                 ? null
