@@ -35,15 +35,25 @@ export async function POST(request: NextRequest) {
       });
 
       let calculatedTier = "free";
+      let calculatedExpiry: string | null = null;
+      let calculatedPlan = "free";
+      let calculatedStore: string | null = null;
+
       if (rcRes.ok) {
         const rcData = await rcRes.json();
         const sub = rcData?.subscriber;
         const entitlements = sub?.entitlements || {};
+        const subscriptions = sub?.subscriptions || {};
         const now = Date.now();
-        for (const [, val] of Object.entries<any>(entitlements)) {
+
+        for (const [key, val] of Object.entries<any>(entitlements)) {
           const expiresAt = val?.expires_date ? new Date(val.expires_date).getTime() : null;
           if (expiresAt ? expiresAt > now : true) {
             calculatedTier = "pro";
+            calculatedExpiry = val?.expires_date || null;
+            const pid = (val?.product_identifier || "").toLowerCase();
+            calculatedPlan = pid.includes("year") || pid.includes("annual") ? "yearly" : "monthly";
+            calculatedStore = subscriptions[val?.product_identifier]?.store || "app_store";
             break;
           }
         }
@@ -55,6 +65,9 @@ export async function POST(request: NextRequest) {
         headers,
         body: JSON.stringify({
           tier: calculatedTier,
+          subscription_expires_at: calculatedExpiry,
+          subscription_plan: calculatedPlan,
+          subscription_store: calculatedTier === "pro" ? calculatedStore : null,
           updated_at: new Date().toISOString(),
         }),
       });
@@ -68,6 +81,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: `ซิงก์ข้อมูลสำเร็จ: ปรับ Database ของผู้ใช้เป็น ${calculatedTier.toUpperCase()} ตาม RevenueCat แล้ว`,
         syncedTier: calculatedTier,
+        subscriptionExpiresAt: calculatedExpiry,
       });
     }
 
@@ -91,12 +105,23 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `RevenueCat promo grant failed: ${err}` }, { status: promoRes.status });
       }
 
-      // Also ensure Supabase DB is pro
+      // Compute expiry date for DB
+      const promoExpiry = new Date();
+      if (duration === "annual") {
+        promoExpiry.setFullYear(promoExpiry.getFullYear() + 1);
+      } else {
+        promoExpiry.setMonth(promoExpiry.getMonth() + 1);
+      }
+
+      // Update Supabase DB
       await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
         method: "PATCH",
         headers,
         body: JSON.stringify({
           tier: "pro",
+          subscription_expires_at: promoExpiry.toISOString(),
+          subscription_plan: duration === "annual" ? "yearly" : "monthly",
+          subscription_store: "promotional",
           updated_at: new Date().toISOString(),
         }),
       });
@@ -109,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     // ACTION 3: Revoke Promotional Entitlement in RevenueCat
     if (action === "revoke_rc_entitlement") {
-      const revokeRes = await fetch(
+      await fetch(
         `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}/entitlements/pro/revoke_promotionals`,
         {
           method: "POST",
@@ -126,6 +151,9 @@ export async function POST(request: NextRequest) {
         headers,
         body: JSON.stringify({
           tier: "free",
+          subscription_expires_at: null,
+          subscription_plan: "free",
+          subscription_store: null,
           updated_at: new Date().toISOString(),
         }),
       });
@@ -138,7 +166,7 @@ export async function POST(request: NextRequest) {
 
     // ACTION 4: Delete Subscriber in RevenueCat (Reset testing data)
     if (action === "delete_rc_subscriber") {
-      const delRes = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, {
+      await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${REVENUECAT_SECRET}`,
@@ -151,6 +179,9 @@ export async function POST(request: NextRequest) {
         headers,
         body: JSON.stringify({
           tier: "free",
+          subscription_expires_at: null,
+          subscription_plan: "free",
+          subscription_store: null,
           updated_at: new Date().toISOString(),
         }),
       });
@@ -164,11 +195,16 @@ export async function POST(request: NextRequest) {
     // ACTION 5: Direct update DB tier
     if (action === "set_db_tier") {
       const tier = targetTier === "pro" ? "pro" : "free";
+      const expiry = tier === "pro" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null;
+
       const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
         method: "PATCH",
         headers,
         body: JSON.stringify({
           tier,
+          subscription_expires_at: expiry,
+          subscription_plan: tier === "pro" ? "monthly" : "free",
+          subscription_store: tier === "pro" ? "admin_grant" : null,
           updated_at: new Date().toISOString(),
         }),
       });

@@ -96,6 +96,9 @@ export async function GET() {
         createdAt: createdAtStr,
         lastSignInAt: u.last_sign_in_at || null,
         hasCompletedTutorial: p.has_completed_tutorial ?? false,
+        subscriptionExpiresAt: p.subscription_expires_at || null,
+        subscriptionPlan: p.subscription_plan || (tier === "pro" ? "monthly" : "free"),
+        subscriptionStore: p.subscription_store || null,
       });
     }
 
@@ -121,6 +124,9 @@ export async function GET() {
           createdAt: createdAtStr,
           lastSignInAt: null,
           hasCompletedTutorial: p.has_completed_tutorial ?? false,
+          subscriptionExpiresAt: p.subscription_expires_at || null,
+          subscriptionPlan: p.subscription_plan || (tier === "pro" ? "monthly" : "free"),
+          subscriptionStore: p.subscription_store || null,
         });
       }
     }

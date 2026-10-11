@@ -18,7 +18,7 @@ export async function POST() {
     };
 
     // 1. Fetch profiles
-    const profileRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,tier`, {
+    const profileRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,tier,subscription_expires_at`, {
       headers,
       cache: "no-store",
     });
@@ -27,7 +27,7 @@ export async function POST() {
       return NextResponse.json({ error: "Failed to fetch profiles" }, { status: 500 });
     }
 
-    const profiles: Array<{ id: string; tier: string | null }> = await profileRes.json();
+    const profiles: Array<{ id: string; tier: string | null; subscription_expires_at: string | null }> = await profileRes.json();
     let syncedCount = 0;
     const now = Date.now();
 
@@ -45,13 +45,24 @@ export async function POST() {
         );
 
         let isRcPro = false;
+        let rcExpiry: string | null = null;
+        let rcPlan = "free";
+        let rcStore: string | null = null;
+
         if (rcRes.ok) {
           const rcData = await rcRes.json();
-          const entitlements = rcData?.subscriber?.entitlements || {};
+          const sub = rcData?.subscriber;
+          const entitlements = sub?.entitlements || {};
+          const subscriptions = sub?.subscriptions || {};
+
           for (const [, val] of Object.entries<any>(entitlements)) {
             const exp = val?.expires_date ? new Date(val.expires_date).getTime() : null;
             if (exp ? exp > now : true) {
               isRcPro = true;
+              rcExpiry = val?.expires_date || null;
+              const pid = (val?.product_identifier || "").toLowerCase();
+              rcPlan = pid.includes("year") || pid.includes("annual") ? "yearly" : "monthly";
+              rcStore = subscriptions[val?.product_identifier]?.store || "app_store";
               break;
             }
           }
@@ -60,13 +71,16 @@ export async function POST() {
         const expectedTier = isRcPro ? "pro" : "free";
         const currentTier = (p.tier || "free").toLowerCase() === "pro" ? "pro" : "free";
 
-        if (expectedTier !== currentTier) {
-          // Update DB to match RevenueCat
+        if (expectedTier !== currentTier || (isRcPro && rcExpiry !== p.subscription_expires_at)) {
+          // Update DB to match RevenueCat with exact online expiration
           await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(p.id)}`, {
             method: "PATCH",
             headers,
             body: JSON.stringify({
               tier: expectedTier,
+              subscription_expires_at: rcExpiry,
+              subscription_plan: rcPlan,
+              subscription_store: isRcPro ? rcStore : null,
               updated_at: new Date().toISOString(),
             }),
           });

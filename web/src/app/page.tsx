@@ -13,6 +13,9 @@ interface UserItem {
   createdAt: string;
   lastSignInAt: string | null;
   hasCompletedTutorial: boolean;
+  subscriptionExpiresAt?: string | null;
+  subscriptionPlan?: string | null;
+  subscriptionStore?: string | null;
 }
 
 interface Stats {
@@ -46,6 +49,9 @@ interface AuditUserItem {
   provider: string;
   createdAt: string;
   dbTier: "free" | "pro";
+  dbExpiresAt?: string | null;
+  dbPlan?: string | null;
+  dbStore?: string | null;
   rcData: RCSubscriberData;
   isDbPro: boolean;
   isRcPro: boolean;
@@ -877,10 +883,17 @@ export default function AdminDashboardPage() {
                           {/* Tier Status Badge */}
                           <td className="py-4 px-5">
                             {isPro ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                SaveFor PRO ⭐
-                              </span>
+                              <div>
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                  SaveFor PRO ⭐
+                                </span>
+                                {user.subscriptionExpiresAt && (
+                                  <p className="text-[10px] text-emerald-400/80 mt-1 font-mono">
+                                    หมดอายุ: {formatDate(user.subscriptionExpiresAt)}
+                                  </p>
+                                )}
+                              </div>
                             ) : (
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">
                                 Free Plan
@@ -1013,10 +1026,17 @@ export default function AdminDashboardPage() {
                           {/* Supabase DB Tier */}
                           <td className="py-4 px-5">
                             {item.isDbPro ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                PRO ⭐
-                              </span>
+                              <div>
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                  PRO ⭐
+                                </span>
+                                {item.dbExpiresAt && (
+                                  <p className="text-[10px] text-emerald-400/80 mt-1 font-mono">
+                                    หมดอายุ: {formatDate(item.dbExpiresAt)}
+                                  </p>
+                                )}
+                              </div>
                             ) : (
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">
                                 Free 👤
@@ -1170,6 +1190,24 @@ export default function AdminDashboardPage() {
                   }
                 >
                   {((selectedUser as any).tier || (selectedUser as any).dbTier || "free").toUpperCase()}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-800/50">
+                <span className="text-slate-500 font-sans">วันหมดอายุใน DB:</span>
+                <span className="text-slate-300">
+                  {formatDate((selectedUser as any).subscriptionExpiresAt || (selectedUser as any).dbExpiresAt)}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-800/50">
+                <span className="text-slate-500 font-sans">แผนการสมัครใน DB:</span>
+                <span className="text-slate-300">
+                  {((selectedUser as any).subscriptionPlan || (selectedUser as any).dbPlan || "free").toUpperCase()}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-800/50">
+                <span className="text-slate-500 font-sans">ช่องทางชำระเงิน (Store):</span>
+                <span className="text-slate-300">
+                  {(selectedUser as any).subscriptionStore || (selectedUser as any).dbStore || "-"}
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-800/50">

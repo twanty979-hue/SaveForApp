@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +21,8 @@ class SubscriptionService {
   static const String entitlementId = 'pro';
   static const String monthlyProductId = 'savefor_pro_monthly';
   static const String yearlyProductId = 'savefor_pro_yearly';
+
+  // Legacy local keys kept solely to purge any old cache from device
   static const String _prefIsProKey = 'pref_savefor_is_pro_active';
   static const String _prefTierKey = 'pref_savefor_pro_tier';
   static const String _prefExpiryKey = 'pref_savefor_pro_expiry';
@@ -41,8 +44,18 @@ class SubscriptionService {
 
   /// Call during app initialization or login
   Future<void> initialize({String? userId}) async {
-    // 1. Load locally cached status immediately for instant UI response
-    await _loadCachedStatus();
+    // 1. Purge any legacy local storage cache completely (Online-Only requirement)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefIsProKey);
+      await prefs.remove(_prefTierKey);
+      await prefs.remove(_prefExpiryKey);
+    } catch (_) {}
+
+    // 2. Fetch real-time online status from Supabase
+    if (userId != null && userId.isNotEmpty) {
+      await syncFromOnline();
+    }
 
     // Skip native RevenueCat initialization on web
     if (kIsWeb) return;
@@ -70,7 +83,7 @@ class SubscriptionService {
       // Listen to customer info changes in real-time
       Purchases.addCustomerInfoUpdateListener(_updateCustomerInfo);
 
-      // Fetch latest customer info and offerings
+      // Fetch latest customer info online from RevenueCat
       final customerInfo = await Purchases.getCustomerInfo();
       _updateCustomerInfo(customerInfo);
       await fetchOfferings();
@@ -81,6 +94,7 @@ class SubscriptionService {
 
   /// Call when user logs into Supabase
   Future<void> logIn(String userId) async {
+    await syncFromOnline();
     if (!_initialized || kIsWeb) return;
     try {
       final result = await Purchases.logIn(userId);
@@ -93,6 +107,12 @@ class SubscriptionService {
 
   /// Call when user logs out
   Future<void> logOut() async {
+    _isPro = false;
+    _activeTier = SubscriptionTier.free;
+    _expiryDate = null;
+    isProNotifier.value = false;
+    tierNotifier.value = SubscriptionTier.free;
+
     if (!_initialized || kIsWeb) return;
     try {
       final customerInfo = await Purchases.logOut();
@@ -102,67 +122,106 @@ class SubscriptionService {
     }
   }
 
-  Future<void> _loadCachedStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    _isPro = prefs.getBool(_prefIsProKey) ?? false;
-    final tierStr = prefs.getString(_prefTierKey) ?? 'free';
-    _activeTier = tierStr == 'yearly'
-        ? SubscriptionTier.yearly
-        : tierStr == 'monthly'
-        ? SubscriptionTier.monthly
-        : SubscriptionTier.free;
-    final expiryMillis = prefs.getInt(_prefExpiryKey);
-    if (expiryMillis != null) {
-      _expiryDate = DateTime.fromMillisecondsSinceEpoch(expiryMillis);
-      if (_expiryDate != null && DateTime.now().isAfter(_expiryDate!)) {
-        _isPro = false;
-        _activeTier = SubscriptionTier.free;
+  /// Fetch subscription status directly from Supabase Database online
+  Future<void> syncFromOnline() async {
+    final userId = AuthSession.userId;
+    if (userId == null || userId.isEmpty) return;
+
+    try {
+      final response = await ApiClient().get(
+        '/profile?id=eq.$userId&select=tier,subscription_expires_at,subscription_plan,subscription_store',
+        forceRefresh: true,
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final dynamic decoded = jsonDecode(response.body);
+        final List<dynamic> list = decoded is List ? decoded : [];
+        if (list.isNotEmpty) {
+          final profile = list[0] as Map<String, dynamic>;
+          final tierStr = (profile['tier'] ?? 'free').toString().toLowerCase();
+          final expiresAtStr = profile['subscription_expires_at']?.toString();
+          final planStr = (profile['subscription_plan'] ?? 'free').toString().toLowerCase();
+
+          DateTime? expiresAt;
+          if (expiresAtStr != null && expiresAtStr.isNotEmpty) {
+            expiresAt = DateTime.tryParse(expiresAtStr);
+          }
+
+          // Verify if expired by timestamp
+          bool activePro = tierStr == 'pro';
+          if (activePro && expiresAt != null && DateTime.now().toUtc().isAfter(expiresAt.toUtc())) {
+            activePro = false;
+          }
+
+          _isPro = activePro;
+          _expiryDate = expiresAt;
+          _activeTier = activePro
+              ? (planStr == 'yearly' ? SubscriptionTier.yearly : SubscriptionTier.monthly)
+              : SubscriptionTier.free;
+
+          isProNotifier.value = _isPro;
+          tierNotifier.value = _activeTier;
+          debugPrint('[SubscriptionService] Online status loaded: isPro=$_isPro, expiresAt=$_expiryDate, tier=$_activeTier');
+        }
       }
+    } catch (e) {
+      debugPrint('[SubscriptionService] Error syncing subscription online from database: $e');
     }
-    isProNotifier.value = _isPro;
-    tierNotifier.value = _activeTier;
   }
 
-  Future<void> _saveCachedStatus({
+  /// Update in-memory state and sync directly to online database (No local storage)
+  void _updateMemoryAndSyncOnline({
     required bool isPro,
     required SubscriptionTier tier,
     DateTime? expiry,
-  }) async {
+    String? store,
+  }) {
     _isPro = isPro;
     _activeTier = tier;
     _expiryDate = expiry;
     isProNotifier.value = isPro;
     tierNotifier.value = tier;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefIsProKey, isPro);
-    await prefs.setString(_prefTierKey, tier == SubscriptionTier.yearly ? 'yearly' : tier == SubscriptionTier.monthly ? 'monthly' : 'free');
-    if (expiry != null) {
-      await prefs.setInt(_prefExpiryKey, expiry.millisecondsSinceEpoch);
-    } else {
-      await prefs.remove(_prefExpiryKey);
-    }
-
-    // Sync to Supabase Database profile table
-    _syncToDatabase(isPro);
+    // Persist strictly online in Supabase Database
+    _syncToDatabase(
+      isPro: isPro,
+      tier: tier,
+      expiry: expiry,
+      store: store,
+    );
   }
 
-  void _syncToDatabase(bool isPro) {
+  /// Sync subscription details online to Supabase Database (profiles table)
+  void _syncToDatabase({
+    required bool isPro,
+    required SubscriptionTier tier,
+    DateTime? expiry,
+    String? store,
+  }) {
     final userId = AuthSession.userId;
     if (userId == null || userId.isEmpty) return;
 
     final tierStr = isPro ? 'pro' : 'free';
+    final planStr = isPro
+        ? (tier == SubscriptionTier.yearly ? 'yearly' : 'monthly')
+        : 'free';
+
     ApiClient().patch(
       '/profile?id=eq.$userId',
-      body: {'tier': tierStr},
+      body: {
+        'tier': tierStr,
+        'subscription_expires_at': expiry?.toUtc().toIso8601String(),
+        'subscription_plan': planStr,
+        'subscription_store': isPro ? (store ?? (Platform.isIOS ? 'app_store' : 'play_store')) : null,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
     ).then((response) {
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        debugPrint('[SubscriptionService] Successfully synced tier=$tierStr to database');
+        debugPrint('[SubscriptionService] Successfully synced online to Supabase: tier=$tierStr, expires=$expiry, plan=$planStr');
       } else {
-        debugPrint('[SubscriptionService] Failed to sync tier to database: ${response.statusCode} ${response.body}');
+        debugPrint('[SubscriptionService] Failed to sync to Supabase: ${response.statusCode} ${response.body}');
       }
     }).catchError((e) {
-      debugPrint('[SubscriptionService] Error syncing tier to database: $e');
+      debugPrint('[SubscriptionService] Error syncing subscription to Supabase: $e');
     });
   }
 
@@ -172,6 +231,7 @@ class SubscriptionService {
 
     SubscriptionTier tier = SubscriptionTier.free;
     DateTime? expiry;
+    String? store;
 
     if (active) {
       final pid = entitlement?.productIdentifier.toLowerCase() ?? '';
@@ -184,9 +244,15 @@ class SubscriptionService {
       if (expString != null) {
         expiry = DateTime.tryParse(expString);
       }
+      store = entitlement?.store.name;
     }
 
-    _saveCachedStatus(isPro: active, tier: tier, expiry: expiry);
+    _updateMemoryAndSyncOnline(
+      isPro: active,
+      tier: tier,
+      expiry: expiry,
+      store: store ?? (Platform.isIOS ? 'app_store' : 'play_store'),
+    );
   }
 
   Future<Offerings?> fetchOfferings() async {
