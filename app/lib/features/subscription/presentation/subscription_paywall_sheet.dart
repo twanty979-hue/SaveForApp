@@ -187,8 +187,23 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
       }
     }
 
-    final monthlyPrice = monthlyPkg?.storeProduct.priceString ?? '฿35';
-    final yearlyPrice = yearlyPkg?.storeProduct.priceString ?? '฿350';
+    String formatPrice(Package? pkg, String fallbackThai) {
+      if (pkg == null) return fallbackThai;
+      final p = pkg.storeProduct;
+      if (p.currencyCode == 'THB') {
+        if (p.price == p.price.roundToDouble()) {
+          return '฿${p.price.toInt()}';
+        }
+        return p.priceString;
+      }
+      if (!context.l10n.isEnglish) {
+        return fallbackThai;
+      }
+      return p.priceString;
+    }
+
+    final monthlyPrice = formatPrice(monthlyPkg, '฿35');
+    final yearlyPrice = formatPrice(yearlyPkg, '฿350');
 
     return Container(
       constraints: BoxConstraints(
