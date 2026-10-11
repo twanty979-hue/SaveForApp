@@ -18,7 +18,7 @@ class SubscriptionService {
   SubscriptionService._();
   static final SubscriptionService instance = SubscriptionService._();
 
-  static const String entitlementId = 'pro';
+  static const String entitlementId = 'savefor_pro';
   static const String monthlyProductId = 'savefor_pro_monthly';
   static const String yearlyProductId = 'savefor_pro_yearly';
 
@@ -227,7 +227,9 @@ class SubscriptionService {
 
   void _updateCustomerInfo(CustomerInfo customerInfo) {
     // Official RevenueCat standard: Entitlement is the single source of truth
-    final entitlement = customerInfo.entitlements.all[entitlementId];
+    final entitlement = customerInfo.entitlements.all[entitlementId] ??
+        customerInfo.entitlements.all['pro'] ??
+        (customerInfo.entitlements.active.isNotEmpty ? customerInfo.entitlements.active.values.first : null);
     final active = entitlement?.isActive ?? false;
 
     SubscriptionTier tier = SubscriptionTier.free;

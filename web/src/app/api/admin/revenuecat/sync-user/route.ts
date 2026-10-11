@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     if (action === "grant_rc_promo") {
       const duration = body.duration || "monthly"; // "monthly", "annual", "lifetime"
       const promoRes = await fetch(
-        `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}/entitlements/pro/promotional`,
+        `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}/entitlements/savefor_pro/promotional`,
         {
           method: "POST",
           headers: {
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     // ACTION 3: Revoke Promotional Entitlement in RevenueCat
     if (action === "revoke_rc_entitlement") {
       await fetch(
-        `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}/entitlements/pro/revoke_promotionals`,
+        `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}/entitlements/savefor_pro/revoke_promotionals`,
         {
           method: "POST",
           headers: {

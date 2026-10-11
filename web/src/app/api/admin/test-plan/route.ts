@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
     if (action === "grant_rc_promo") {
       const duration = body.duration || "monthly";
       const promoRes = await fetch(
-        `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}/entitlements/pro/promotional`,
+        `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}/entitlements/savefor_pro/promotional`,
         {
           method: "POST",
           headers: {
