@@ -499,6 +499,14 @@ export default function AdminDashboardPage() {
 
           <div className="flex items-center gap-2.5">
             <Link
+              href="/admin/test-plan"
+              className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 shadow-sm transition-all"
+            >
+              <span>🧪</span>
+              <span>ทดสอบแผน (Test Plan)</span>
+            </Link>
+
+            <Link
               href="/bank-rules"
               className="hidden md:flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60 transition-all"
             >
