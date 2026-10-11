@@ -227,20 +227,33 @@ class SubscriptionService {
 
   void _updateCustomerInfo(CustomerInfo customerInfo) {
     final entitlement = customerInfo.entitlements.all[entitlementId];
-    final active = entitlement?.isActive ?? false;
+    final bool hasActiveEntitlement = entitlement?.isActive ?? false;
+
+    // Check active subscriptions fallback (if entitlement was not attached on RevenueCat Dashboard)
+    final bool hasActiveSubscription = customerInfo.activeSubscriptions.isNotEmpty ||
+        customerInfo.allPurchasedProductIdentifiers.any((id) =>
+            id == monthlyProductId || id == yearlyProductId || id.contains('pro'));
+
+    final active = hasActiveEntitlement || hasActiveSubscription;
 
     SubscriptionTier tier = SubscriptionTier.free;
     DateTime? expiry;
     String? store;
 
     if (active) {
-      final pid = entitlement?.productIdentifier.toLowerCase() ?? '';
-      if (pid.contains('year') || pid.contains('annual')) {
+      final activeProductIds = [
+        if (entitlement != null) entitlement.productIdentifier,
+        ...customerInfo.activeSubscriptions,
+        ...customerInfo.allPurchasedProductIdentifiers,
+      ].map((e) => e.toLowerCase()).toList();
+
+      if (activeProductIds.any((id) => id.contains('year') || id.contains('annual'))) {
         tier = SubscriptionTier.yearly;
       } else {
         tier = SubscriptionTier.monthly;
       }
-      final expString = entitlement?.expirationDate;
+
+      final expString = entitlement?.expirationDate ?? customerInfo.latestExpirationDate;
       if (expString != null) {
         expiry = DateTime.tryParse(expString);
       }

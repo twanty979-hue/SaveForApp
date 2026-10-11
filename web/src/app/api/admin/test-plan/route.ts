@@ -17,7 +17,23 @@ export async function GET() {
       "Content-Type": "application/json",
     };
 
-    // Fetch all profiles
+    // 1. Fetch Auth Users for real email & provider
+    const authRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?per_page=1000`, {
+      headers,
+      cache: "no-store",
+    });
+    let authUsers: any[] = [];
+    if (authRes.ok) {
+      const authData = await authRes.json();
+      authUsers = Array.isArray(authData) ? authData : authData.users || [];
+    }
+
+    const authMap = new Map<string, any>();
+    for (const u of authUsers) {
+      if (u.id) authMap.set(u.id, u);
+    }
+
+    // 2. Fetch all profiles
     const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=*`, {
       headers,
       cache: "no-store",
@@ -28,7 +44,39 @@ export async function GET() {
     }
 
     const profiles: any[] = await res.json();
-    return NextResponse.json({ success: true, users: profiles });
+
+    // 3. Map into clean, easily readable user items with email
+    const users = profiles.map((p) => {
+      const authUser = authMap.get(p.id) || {};
+      const email = authUser.email || (p.display_name?.includes("@") ? p.display_name : "");
+      const displayName =
+        p.display_name ||
+        authUser.user_metadata?.full_name ||
+        authUser.user_metadata?.name ||
+        (email ? email.split("@")[0] : "ผู้ใช้งาน SaveFor");
+
+      return {
+        id: p.id,
+        email: email || "ไม่มีอีเมล",
+        displayName,
+        display_name: displayName,
+        avatar_url: p.avatar_url || authUser.user_metadata?.avatar_url || null,
+        tier: (p.tier || "free").toLowerCase(),
+        subscription_expires_at: p.subscription_expires_at || null,
+        subscription_plan: p.subscription_plan || (p.tier === "pro" ? "monthly" : "free"),
+        subscription_store: p.subscription_store || null,
+        created_at: p.created_at || authUser.created_at || "",
+      };
+    });
+
+    // Sort: PRO users first, then by display name / email
+    users.sort((a, b) => {
+      if (a.tier === "pro" && b.tier !== "pro") return -1;
+      if (b.tier === "pro" && a.tier !== "pro") return 1;
+      return a.displayName.localeCompare(b.displayName);
+    });
+
+    return NextResponse.json({ success: true, users });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

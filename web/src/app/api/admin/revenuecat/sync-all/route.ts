@@ -66,6 +66,21 @@ export async function POST() {
               break;
             }
           }
+
+          if (!isRcPro) {
+            for (const [productId, subVal] of Object.entries<any>(subscriptions)) {
+              const exp = subVal?.expires_date ? new Date(subVal.expires_date).getTime() : null;
+              const isSubActive = !subVal?.refunded_at && (exp ? exp > now : true);
+              if (isSubActive) {
+                isRcPro = true;
+                rcExpiry = subVal?.expires_date || null;
+                const pid = productId.toLowerCase();
+                rcPlan = pid.includes("year") || pid.includes("annual") ? "yearly" : "monthly";
+                rcStore = subVal?.store || "app_store";
+                break;
+              }
+            }
+          }
         }
 
         const expectedTier = isRcPro ? "pro" : "free";

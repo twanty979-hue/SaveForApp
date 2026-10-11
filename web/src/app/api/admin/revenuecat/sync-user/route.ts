@@ -57,6 +57,22 @@ export async function POST(request: NextRequest) {
             break;
           }
         }
+
+        // Fallback: Check active subscriptions directly (if product is not mapped to an entitlement in RC)
+        if (calculatedTier !== "pro") {
+          for (const [productId, subVal] of Object.entries<any>(subscriptions)) {
+            const expiresAt = subVal?.expires_date ? new Date(subVal.expires_date).getTime() : null;
+            const isSubActive = !subVal?.refunded_at && (expiresAt ? expiresAt > now : true);
+            if (isSubActive) {
+              calculatedTier = "pro";
+              calculatedExpiry = subVal?.expires_date || null;
+              const pid = productId.toLowerCase();
+              calculatedPlan = pid.includes("year") || pid.includes("annual") ? "yearly" : "monthly";
+              calculatedStore = subVal?.store || "app_store";
+              break;
+            }
+          }
+        }
       }
 
       // Update Supabase

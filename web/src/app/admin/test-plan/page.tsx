@@ -5,6 +5,8 @@ import Link from "next/link";
 
 interface UserProfile {
   id: string;
+  email: string;
+  displayName: string;
   display_name: string;
   tier: "free" | "pro";
   subscription_expires_at: string | null;
@@ -17,8 +19,10 @@ interface UserProfile {
 export default function AdminTestPlanPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [userSearch, setUserSearch] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSyncingRC, setIsSyncingRC] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Custom Form State
@@ -51,6 +55,7 @@ export default function AdminTestPlanPage() {
       if (data.success && Array.isArray(data.users)) {
         setUsers(data.users);
         if (data.users.length > 0 && !selectedUserId) {
+          // Default to the first PRO or first user
           setSelectedUserId(data.users[0].id);
         }
       }
@@ -61,9 +66,44 @@ export default function AdminTestPlanPage() {
     }
   };
 
+  const filteredUsers = useMemo(() => {
+    if (!userSearch.trim()) return users;
+    const q = userSearch.toLowerCase().trim();
+    return users.filter(
+      (u) =>
+        (u.displayName || "").toLowerCase().includes(q) ||
+        (u.email || "").toLowerCase().includes(q) ||
+        u.id.toLowerCase().includes(q)
+    );
+  }, [users, userSearch]);
+
   const selectedUser = useMemo(() => {
     return users.find((u) => u.id === selectedUserId) || null;
   }, [users, selectedUserId]);
+
+  // Sync selected user directly with RevenueCat API
+  const handleSyncWithRC = async () => {
+    if (!selectedUserId) return;
+    setIsSyncingRC(true);
+    try {
+      const res = await fetch("/api/admin/revenuecat/sync-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedUserId, action: "sync_db_with_rc" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`⚡ ซิงก์กับ RevenueCat สำเร็จ! สถานะใน DB คือ: ${data.syncedTier?.toUpperCase()}`);
+        await fetchUsers();
+      } else {
+        alert("ซิงก์ไม่สำเร็จ: " + (data.error || "Unknown error"));
+      }
+    } catch (e: any) {
+      alert("Error: " + e.message);
+    } finally {
+      setIsSyncingRC(false);
+    }
+  };
 
   const handleApplyPreset = async (presetType: string) => {
     if (!selectedUserId) {
@@ -292,7 +332,7 @@ export default function AdminTestPlanPage() {
             </Link>
             <Link
               href="/bank-rules"
-              className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60 transition-all"
+              className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60 transition-all"
             >
               <span>⚙️</span>
               <span>กฎธนาคาร</span>
@@ -333,15 +373,28 @@ export default function AdminTestPlanPage() {
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
                 1. เลือกบัญชีผู้ใช้งานที่ต้องการทดสอบ
               </label>
+
+              {/* Search Box */}
+              <div className="mb-3">
+                <input
+                  type="text"
+                  placeholder="พิมพ์ค้นหาชื่อ หรืออีเมล..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              {/* User Dropdown */}
               <select
                 value={selectedUserId}
                 onChange={(e) => setSelectedUserId(e.target.value)}
                 disabled={isLoading}
-                className="w-full bg-slate-950 border border-slate-700 text-white rounded-2xl p-3.5 text-sm focus:outline-none focus:border-purple-500 transition-all font-sans"
+                className="w-full bg-slate-950 border border-slate-700 text-white rounded-2xl p-3.5 text-xs focus:outline-none focus:border-purple-500 transition-all font-sans"
               >
-                {users.map((u) => (
+                {filteredUsers.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.display_name} ({u.tier.toUpperCase()}) - {u.id.substring(0, 8)}...
+                    {u.displayName} ({u.email}) • {u.tier === "pro" ? "⭐ PRO" : "👤 Free"}
                   </option>
                 ))}
               </select>
@@ -351,18 +404,19 @@ export default function AdminTestPlanPage() {
                 <span className="text-[11px] text-slate-500 block mb-2 font-semibold">
                   เลือกด่วนจากบัญชีทดสอบ:
                 </span>
-                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
-                  {users.slice(0, 6).map((u) => (
+                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
+                  {users.slice(0, 8).map((u) => (
                     <button
                       key={u.id}
                       onClick={() => setSelectedUserId(u.id)}
-                      className={`text-xs px-2.5 py-1.5 rounded-xl border transition-all text-left ${
+                      className={`text-[11px] px-2.5 py-1.5 rounded-xl border transition-all text-left flex items-center gap-1.5 ${
                         selectedUserId === u.id
                           ? "bg-purple-600 text-white border-purple-500 font-bold shadow-md shadow-purple-600/30"
-                          : "bg-slate-950 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700"
+                          : "bg-slate-950 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700"
                       }`}
                     >
-                      {u.display_name}
+                      <span>{u.tier === "pro" ? "⭐" : "👤"}</span>
+                      <span className="font-medium truncate max-w-[120px]">{u.displayName}</span>
                     </button>
                   ))}
                 </div>
@@ -378,29 +432,40 @@ export default function AdminTestPlanPage() {
           {/* Col 2 & 3: Live Inspector Card */}
           <div className="lg:col-span-2 bg-gradient-to-br from-slate-900/90 to-slate-950 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                   {selectedUser?.avatar_url ? (
                     <img
                       src={selectedUser.avatar_url}
-                      alt={selectedUser.display_name}
+                      alt={selectedUser.displayName}
                       className="w-12 h-12 rounded-2xl object-cover border border-slate-700"
                     />
                   ) : (
                     <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white text-lg font-black">
-                      {selectedUser?.display_name?.substring(0, 1).toUpperCase() || "?"}
+                      {selectedUser?.displayName?.substring(0, 1).toUpperCase() || "?"}
                     </div>
                   )}
                   <div>
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      {selectedUser?.display_name || "กำลังโหลด..."}
+                      {selectedUser?.displayName || "กำลังโหลด..."}
                     </h3>
-                    <p className="text-xs text-slate-400 font-mono">User ID: {selectedUser?.id}</p>
+                    <p className="text-xs text-purple-300 font-mono">{selectedUser?.email}</p>
+                    <p className="text-[10px] text-slate-500 font-mono">User ID: {selectedUser?.id}</p>
                   </div>
                 </div>
 
-                {/* Big Live Badge */}
-                <div>
+                {/* Big Live Badge & Sync Button */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSyncWithRC}
+                    disabled={isSyncingRC}
+                    title="ดึงสถานะการซื้อสดๆ จาก RevenueCat มาอัปเดตลง DB เดี๋ยวนี้"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 transition-all disabled:opacity-50"
+                  >
+                    <span>🔄</span>
+                    <span>{isSyncingRC ? "กำลังซิงก์..." : "ซิงก์กับ RevenueCat สดๆ"}</span>
+                  </button>
+
                   {isProActive ? (
                     <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-black bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-300 border border-emerald-500/40 shadow-lg shadow-emerald-500/10">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -418,7 +483,7 @@ export default function AdminTestPlanPage() {
               {/* Status details grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950/70 p-4 rounded-2xl border border-slate-800/80 text-xs">
                 <div>
-                  <span className="text-slate-500 block text-[11px]">สถานะในฐานข้อมูล:</span>
+                  <span className="text-slate-500 block text-[11px]">สถานะใน Supabase DB:</span>
                   <span className={`font-bold mt-0.5 block ${isProActive ? "text-emerald-400" : "text-slate-300"}`}>
                     {selectedUser?.tier?.toUpperCase()}
                   </span>
@@ -735,7 +800,7 @@ export default function AdminTestPlanPage() {
             <span>📱</span> วิธีการทดสอบกับแอปพลิเคชันมือถือ (Flutter / TestFlight)
           </div>
           <p>
-            1. <strong>เลือกบัญชีและกดจำลองแผน</strong> ในหน้านี้ เช่น กด <em>"⏱️ หมดอายุใน 2 นาที"</em>
+            1. <strong>เลือกบัญชีและกดจำลองแผน</strong> ในหน้านี้ เช่น กด <em>"⏱️ หมดอายุใน 2 นาที"</em> หรือกด <em>"🔄 ซิงก์กับ RevenueCat สดๆ"</em>
           </p>
           <p>
             2. <strong>เปิดแอป SaveFor บนมือถือ</strong>: สิทธิ์ PRO จะถูกโหลดจาก Supabase ออนไลน์ทันที ไม่มีการค้างแคชในเครื่อง
