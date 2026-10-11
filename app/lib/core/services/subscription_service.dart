@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../features/auth/domain/auth_session.dart';
+import '../network/api_client.dart';
 
 enum SubscriptionTier {
   free,
@@ -77,6 +79,29 @@ class SubscriptionService {
     }
   }
 
+  /// Call when user logs into Supabase
+  Future<void> logIn(String userId) async {
+    if (!_initialized || kIsWeb) return;
+    try {
+      final result = await Purchases.logIn(userId);
+      _updateCustomerInfo(result.customerInfo);
+      await fetchOfferings();
+    } catch (e) {
+      debugPrint('[SubscriptionService] Error logging in to RevenueCat: $e');
+    }
+  }
+
+  /// Call when user logs out
+  Future<void> logOut() async {
+    if (!_initialized || kIsWeb) return;
+    try {
+      final customerInfo = await Purchases.logOut();
+      _updateCustomerInfo(customerInfo);
+    } catch (e) {
+      debugPrint('[SubscriptionService] Error logging out of RevenueCat: $e');
+    }
+  }
+
   Future<void> _loadCachedStatus() async {
     final prefs = await SharedPreferences.getInstance();
     _isPro = prefs.getBool(_prefIsProKey) ?? false;
@@ -117,6 +142,28 @@ class SubscriptionService {
     } else {
       await prefs.remove(_prefExpiryKey);
     }
+
+    // Sync to Supabase Database profile table
+    _syncToDatabase(isPro);
+  }
+
+  void _syncToDatabase(bool isPro) {
+    final userId = AuthSession.userId;
+    if (userId == null || userId.isEmpty) return;
+
+    final tierStr = isPro ? 'pro' : 'free';
+    ApiClient().patch(
+      '/profile?id=eq.$userId',
+      body: {'tier': tierStr},
+    ).then((response) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        debugPrint('[SubscriptionService] Successfully synced tier=$tierStr to database');
+      } else {
+        debugPrint('[SubscriptionService] Failed to sync tier to database: ${response.statusCode} ${response.body}');
+      }
+    }).catchError((e) {
+      debugPrint('[SubscriptionService] Error syncing tier to database: $e');
+    });
   }
 
   void _updateCustomerInfo(CustomerInfo customerInfo) {
@@ -165,32 +212,53 @@ class SubscriptionService {
 
   Future<bool> _purchase({required bool isYearly}) async {
     if (!_initialized) {
-      // Mock purchase for sandbox / development
-      debugPrint('[SubscriptionService] Mock purchase succeeded (Yearly: $isYearly)');
-      final expiry = DateTime.now().add(Duration(days: isYearly ? 365 : 30));
-      await _saveCachedStatus(
-        isPro: true,
-        tier: isYearly ? SubscriptionTier.yearly : SubscriptionTier.monthly,
-        expiry: expiry,
-      );
-      return true;
+      throw Exception('ระบบ RevenueCat ยังไม่ได้เริ่มต้นเชื่อมต่อ (กรุณาตรวจสอบการตั้งค่า API Key หรืออินเทอร์เน็ต)');
+    }
+
+    final currentOfferings = _offerings ?? await fetchOfferings();
+    final currentOffering = currentOfferings?.current ??
+        currentOfferings?.all['default'] ??
+        (currentOfferings?.all.isNotEmpty == true ? currentOfferings?.all.values.first : null);
+
+    Package? targetPackage;
+    if (currentOffering != null) {
+      if (isYearly) {
+        targetPackage = currentOffering.annual;
+        if (targetPackage == null) {
+          for (final p in currentOffering.availablePackages) {
+            if (p.packageType == PackageType.annual ||
+                p.identifier == '\$rc_annual' ||
+                p.identifier.toLowerCase().contains('annual') ||
+                p.identifier.toLowerCase().contains('year') ||
+                p.storeProduct.identifier.toLowerCase().contains('year') ||
+                p.storeProduct.identifier.toLowerCase().contains('annual')) {
+              targetPackage = p;
+              break;
+            }
+          }
+        }
+      } else {
+        targetPackage = currentOffering.monthly;
+        if (targetPackage == null) {
+          for (final p in currentOffering.availablePackages) {
+            if (p.packageType == PackageType.monthly ||
+                p.identifier == '\$rc_monthly' ||
+                p.identifier.toLowerCase().contains('monthly') ||
+                p.identifier.toLowerCase().contains('month') ||
+                p.storeProduct.identifier.toLowerCase().contains('month')) {
+              targetPackage = p;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (targetPackage == null) {
+      throw Exception('ยังไม่พบแพ็กเกจใน RevenueCat (กรุณาตรวจสอบ Offering และ Package บน RevenueCat Dashboard ให้เรียบร้อย)');
     }
 
     try {
-      final currentOfferings = _offerings ?? await fetchOfferings();
-      final currentOffering = currentOfferings?.current;
-
-      Package? targetPackage;
-      if (currentOffering != null) {
-        targetPackage = isYearly
-            ? currentOffering.annual
-            : currentOffering.monthly;
-      }
-
-      if (targetPackage == null) {
-        throw Exception('Package not found in RevenueCat offerings');
-      }
-
       final result = await Purchases.purchase(PurchaseParams.package(targetPackage));
       _updateCustomerInfo(result.customerInfo);
       return _isPro;
@@ -207,27 +275,11 @@ class SubscriptionService {
   /// Restore purchases (Required by App Store Review Guideline 3.1.2)
   Future<bool> restorePurchases() async {
     if (!_initialized) {
-      debugPrint('[SubscriptionService] Mock restore completed');
-      return _isPro;
+      throw Exception('ระบบ RevenueCat ยังไม่ได้เริ่มต้นเชื่อมต่อ');
     }
 
-    try {
-      final customerInfo = await Purchases.restorePurchases();
-      _updateCustomerInfo(customerInfo);
-      return _isPro;
-    } catch (e) {
-      debugPrint('[SubscriptionService] Failed to restore purchases: $e');
-      rethrow;
-    }
-  }
-
-  /// Developer / QA helper: Toggle Pro status for local verification
-  Future<void> devToggleProStatus() async {
-    final next = !_isPro;
-    await _saveCachedStatus(
-      isPro: next,
-      tier: next ? SubscriptionTier.yearly : SubscriptionTier.free,
-      expiry: next ? DateTime.now().add(const Duration(days: 365)) : null,
-    );
+    final customerInfo = await Purchases.restorePurchases();
+    _updateCustomerInfo(customerInfo);
+    return _isPro;
   }
 }

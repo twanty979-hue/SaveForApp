@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:app/core/localization/app_material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -32,6 +33,21 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
   bool _isYearly = true; // Default to best-value yearly plan
   bool _isLoading = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOfferings();
+  }
+
+  Future<void> _loadOfferings() async {
+    try {
+      final offerings = await SubscriptionService.instance.fetchOfferings();
+      if (mounted && offerings != null) {
+        setState(() {});
+      }
+    } catch (_) {}
+  }
 
   Future<void> _handlePurchase() async {
     HapticFeedback.selectionClick();
@@ -140,6 +156,39 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final offerings = SubscriptionService.instance.offerings;
+    final currentOffering = offerings?.current ??
+        offerings?.all['default'] ??
+        (offerings?.all.isNotEmpty == true ? offerings?.all.values.first : null);
+
+    Package? monthlyPkg = currentOffering?.monthly;
+    if (monthlyPkg == null && currentOffering != null) {
+      for (final p in currentOffering.availablePackages) {
+        if (p.packageType == PackageType.monthly ||
+            p.identifier == '\$rc_monthly' ||
+            p.storeProduct.identifier.toLowerCase().contains('month')) {
+          monthlyPkg = p;
+          break;
+        }
+      }
+    }
+
+    Package? yearlyPkg = currentOffering?.annual;
+    if (yearlyPkg == null && currentOffering != null) {
+      for (final p in currentOffering.availablePackages) {
+        if (p.packageType == PackageType.annual ||
+            p.identifier == '\$rc_annual' ||
+            p.storeProduct.identifier.toLowerCase().contains('year') ||
+            p.storeProduct.identifier.toLowerCase().contains('annual')) {
+          yearlyPkg = p;
+          break;
+        }
+      }
+    }
+
+    final monthlyPrice = monthlyPkg?.storeProduct.priceString ?? '฿35';
+    final yearlyPrice = yearlyPkg?.storeProduct.priceString ?? '฿350';
 
     return Container(
       constraints: BoxConstraints(
@@ -360,7 +409,7 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
                   isSelected: _isYearly,
                   badgeText: context.tr('🔥 คุ้มค่าที่สุด • ประหยัด 17%', 'Best Value • Save 17%'),
                   title: context.tr('รายปี (Yearly Plan)', 'Yearly Plan'),
-                  price: '฿350',
+                  price: yearlyPrice,
                   period: context.tr('/ ปี', '/ year'),
                   subPrice: context.tr('เฉลี่ยเพียง ฿29.17 / เดือน (ได้ฟรี 2 เดือน)', 'Just ~฿29 / month (2 months free)'),
                   isDark: isDark,
@@ -376,7 +425,7 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
                   isSelected: !_isYearly,
                   badgeText: null,
                   title: context.tr('รายเดือน (Monthly Plan)', 'Monthly Plan'),
-                  price: '฿35',
+                  price: monthlyPrice,
                   period: context.tr('/ เดือน', '/ month'),
                   subPrice: context.tr('ยกเลิกได้ตลอดเวลา ไม่มีข้อผูกมัด', 'Cancel anytime with zero commitments'),
                   isDark: isDark,
@@ -432,30 +481,38 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
                             children: [
                               const Icon(Icons.bolt_rounded, size: 20),
                               const SizedBox(width: 8),
-                              Text(
-                                _isYearly
-                                    ? context.tr('สมัครสมาชิกรายปี ฿350 / ปี', 'Subscribe Yearly ฿350')
-                                    : context.tr('สมัครสมาชิกรายเดือน ฿35 / เดือน', 'Subscribe Monthly ฿35'),
-                                style: const TextStyle(
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: -0.2,
+                              Flexible(
+                                child: Text(
+                                  _isYearly
+                                      ? context.tr('สมัครสมาชิกรายปี $yearlyPrice / ปี', 'Subscribe Yearly $yearlyPrice')
+                                      : context.tr('สมัครสมาชิกรายเดือน $monthlyPrice / เดือน', 'Subscribe Monthly $monthlyPrice'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.2,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
 
                 // Restore Purchases & Legal Links (Required by Apple Review)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 2,
+                  runSpacing: 0,
                   children: [
                     TextButton(
                       onPressed: _isLoading ? null : _handleRestore,
                       style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         foregroundColor: const Color(0xFF64748B),
                       ),
                       child: Text(
@@ -463,11 +520,12 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
                         style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
                       ),
                     ),
-                    const Text(' • ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                    const Text('•', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
                     TextButton(
                       onPressed: () => _openUrl('https://saveforapp.com/terms'),
                       style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         foregroundColor: const Color(0xFF64748B),
                       ),
                       child: Text(
@@ -475,11 +533,12 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
                         style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
                       ),
                     ),
-                    const Text(' • ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                    const Text('•', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
                     TextButton(
                       onPressed: () => _openUrl('https://saveforapp.com/privacy'),
                       style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         foregroundColor: const Color(0xFF64748B),
                       ),
                       child: Text(

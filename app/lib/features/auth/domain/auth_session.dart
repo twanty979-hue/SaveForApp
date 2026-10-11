@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/services/subscription_service.dart';
 
 class AuthSession {
   static String? userId;
@@ -52,6 +53,8 @@ class AuthSession {
     if (refresh != null) {
       await prefs.setString('refreshToken', refresh);
     }
+
+    SubscriptionService.instance.logIn(id);
   }
 
   static Future<void> updateTokens({
@@ -101,5 +104,7 @@ class AuthSession {
     await prefs.remove('accessToken');
     await prefs.remove('refreshToken');
     await prefs.remove('avatarUrl');
+
+    SubscriptionService.instance.logOut();
   }
 }

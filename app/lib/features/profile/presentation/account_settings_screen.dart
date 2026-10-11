@@ -922,12 +922,16 @@ class _ProSubscriptionBanner extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          'SaveFor PRO',
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w900,
-                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        Flexible(
+                          child: Text(
+                            'SaveFor PRO',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w900,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -956,6 +960,8 @@ class _ProSubscriptionBanner extends StatelessWidget {
                               'สแกนสลิปย้อนหลัง แดชบอร์ด 12 เดือน และไม่จำกัด',
                               'Unlock historical scan, 12-mo stats & unlimited dreams',
                             ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 10.5,
                         fontWeight: FontWeight.w500,

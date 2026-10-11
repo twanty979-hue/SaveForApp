@@ -19,6 +19,8 @@ import 'privacy_settings_screen.dart';
 import 'account_settings_screen.dart';
 import 'help_support_screen.dart';
 import 'supported_banks_screen.dart';
+import '../../../core/services/subscription_service.dart';
+import '../../subscription/presentation/subscription_paywall_sheet.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
   const ProfileSettingsScreen({super.key});
@@ -733,9 +735,35 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                             padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
                             children: [
                               _buildProfileHeader(),
-                              const SizedBox(height: 22),
+                              const SizedBox(height: 14),
                               _SectionLabel(context.tr('การตั้งค่า', 'Settings')),
                         const SizedBox(height: 8),
+                        _SettingsTile(
+                          icon: Icons.workspace_premium_rounded,
+                          title: context.tr('สมาชิก SaveFor PRO', 'SaveFor PRO Membership'),
+                          subtitle: context.tr(
+                            'ปลดล็อกสแกนสลิปย้อนหลัง และฟีเจอร์พรีเมียม',
+                            'Unlock historical slip scan & premium features',
+                          ),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'PRO',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          onTap: () => SubscriptionPaywallSheet.show(context),
+                        ),
                         _SettingsTile(
                           icon: Icons.manage_accounts_outlined,
                           title: context.tr('ตั้งค่าบัญชี', 'Account settings'),
@@ -910,137 +938,313 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   }
 
   Widget _buildProfileHeader() {
-    final isPro = _tier.toLowerCase() == 'pro';
     final palette = AppTheme.currentPalette;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [palette.primary, palette.strong],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryColor.withValues(alpha: 0.22),
-            blurRadius: 22,
-            offset: const Offset(0, 9),
+    return ValueListenableBuilder<bool>(
+      valueListenable: SubscriptionService.instance.isProNotifier,
+      builder: (context, isProSub, _) {
+        final isPro = isProSub || _tier.toLowerCase() == 'pro';
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [palette.primary, palette.strong],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryColor.withValues(alpha: 0.22),
+                blurRadius: 22,
+                offset: const Offset(0, 9),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: _isUploadingAvatar ? null : _showAvatarOptions,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: _isUploadingAvatar
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: _isUploadingAvatar ? null : _showAvatarOptions,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 60,
+                          height: 60,
+                          alignment: Alignment.center,
+                          decoration: const BoxDecoration(
                             color: Colors.white,
-                            strokeWidth: 2.3,
+                            shape: BoxShape.circle,
                           ),
-                        )
-                      : _avatarUrl?.isNotEmpty == true
-                      ? SafeNetworkImage(
-                          url: _avatarUrl!,
-                          width: 64,
-                          height: 64,
-                          fit: BoxFit.cover,
-                          isCircle: true,
-                          errorBuilder: (_, _, _) => _buildInitialAvatar(),
-                        )
-                      : _buildInitialAvatar(),
-                ),
-                Positioned(
-                  right: -2,
-                  bottom: -2,
+                          clipBehavior: Clip.antiAlias,
+                          child: _isUploadingAvatar
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.3,
+                                  ),
+                                )
+                              : _avatarUrl?.isNotEmpty == true
+                              ? SafeNetworkImage(
+                                  url: _avatarUrl!,
+                                  width: 60,
+                                  height: 60,
+                                  fit: BoxFit.cover,
+                                  isCircle: true,
+                                  errorBuilder: (_, _, _) => _buildInitialAvatar(),
+                                )
+                              : _buildInitialAvatar(),
+                        ),
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: palette.strong),
+                            ),
+                            child: Icon(
+                              Icons.camera_alt_rounded,
+                              size: 12,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                _displayName.trim().isEmpty
+                                    ? 'ผู้ใช้งาน SaveFor'
+                                    : _displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 7),
+                            GestureDetector(
+                              onTap: () => SubscriptionPaywallSheet.show(context),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: isPro
+                                      ? const LinearGradient(
+                                          colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                                        )
+                                      : null,
+                                  color: isPro ? null : Colors.white.withValues(alpha: 0.20),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isPro
+                                        ? Colors.amber.shade200
+                                        : Colors.white.withValues(alpha: 0.35),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (isPro) ...[
+                                      const Icon(Icons.star_rounded, size: 11, color: Colors.white),
+                                      const SizedBox(width: 3),
+                                    ],
+                                    Text(
+                                      isPro ? 'PRO' : 'FREE',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9.5,
+                                        letterSpacing: 0.5,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _email,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              // Integrated PRO banner bar inside the header card
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => SubscriptionPaywallSheet.show(context),
                   child: Container(
-                    width: 23,
-                    height: 23,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: palette.strong),
+                      color: Colors.black.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isPro
+                            ? const Color(0xFFF59E0B).withValues(alpha: 0.55)
+                            : Colors.white.withValues(alpha: 0.22),
+                        width: 1,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.camera_alt_rounded,
-                      size: 13,
-                      color: AppTheme.primaryColor,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            isPro ? Icons.star_rounded : Icons.workspace_premium_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      isPro ? 'SaveFor PRO Member' : 'อัปเกรด SaveFor PRO',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  if (!isPro) ...[
+                                    const SizedBox(width: 5),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF59E0B),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        '35฿/ด.',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 8.5,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                isPro
+                                    ? context.tr('ปลดล็อกทุกฟีเจอร์พรีเมียมแล้ว', 'All features unlocked')
+                                    : context.tr('สแกนสลิป 60 วัน • สถิติย้อนหลัง', 'Scan 60-day slips & full history'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isPro
+                                ? Colors.white.withValues(alpha: 0.22)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                isPro
+                                    ? context.tr('จัดการ', 'Manage')
+                                    : context.tr('อัปเกรด', 'Upgrade'),
+                                style: TextStyle(
+                                  color: isPro
+                                      ? Colors.white
+                                      : const Color(0xFFD97706),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                size: 8.5,
+                                color: isPro
+                                    ? Colors.white
+                                    : const Color(0xFFD97706),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _displayName.trim().isEmpty
-                      ? 'ผู้ใช้งาน SaveFor'
-                      : _displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  _email,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.82),
-                    fontSize: 11,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.17),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.30),
-                    ),
-                  ),
-                  child: Text(
-                    isPro ? 'SAVEFOR PRO' : 'SAVEFOR FREE',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      letterSpacing: 0.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

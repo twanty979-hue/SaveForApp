@@ -42,7 +42,7 @@ func SetupRouter() *gin.Engine {
 	// for every request that reaches user data.
 	r.Use(func(c *gin.Context) {
 		path := c.Request.URL.Path
-		if path == "/ping" || !strings.HasPrefix(path, "/api/v1/") || strings.HasPrefix(path, "/api/v1/auth/") || strings.HasPrefix(path, "/api/v1/bank-logos/") {
+		if path == "/ping" || !strings.HasPrefix(path, "/api/v1/") || strings.HasPrefix(path, "/api/v1/auth/") || strings.HasPrefix(path, "/api/v1/bank-logos/") || strings.HasPrefix(path, "/api/v1/webhooks/") {
 			c.Next()
 			return
 		}
@@ -229,6 +229,9 @@ func SetupRouter() *gin.Engine {
 		v1.GET("/bank-rules", HandleGetBankRules)
 		v1.POST("/bank-rules", HandleSaveBankRules)
 		v1.GET("/bank-logos/:name", HandleGetBankLogo)
+
+		// RevenueCat In-App Purchase Webhook
+		v1.POST("/webhooks/revenuecat", HandleRevenueCatWebhook)
 	}
 
 	return r
