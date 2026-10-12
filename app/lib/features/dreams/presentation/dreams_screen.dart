@@ -8,6 +8,8 @@ import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/shared_icon_selector.dart';
 import '../../../core/widgets/split_list_card.dart';
+import '../../../core/services/subscription_service.dart';
+import '../../subscription/presentation/subscription_paywall_sheet.dart';
 import '../../auth/domain/auth_session.dart';
 
 class DreamsScreen extends StatefulWidget {
@@ -429,7 +431,21 @@ class _DreamsScreenState extends State<DreamsScreen> {
   }
 
   // หน้าต่างสร้างเป้าหมายใหม่ (ตามดีไซน์รูปที่สอง)
-  void _showAddDreamBottomSheet({Map<String, dynamic>? dreamToEdit}) {
+  void _showAddDreamBottomSheet({Map<String, dynamic>? dreamToEdit}) async {
+    // จำกัดผู้ใช้ฟรีสามารถสร้างกระปุกความฝันได้สูงสุด 5 รายการ
+    if (dreamToEdit == null && _dreams.length >= 5 && !SubscriptionService.instance.isPro) {
+      final isThai = Localizations.localeOf(context).languageCode == 'th';
+      final upgraded = await SubscriptionPaywallSheet.show(
+        context,
+        reason: isThai
+            ? 'สมาชิกฟรีสามารถสร้างกระปุกออมเงินได้สูงสุด 5 รายการ ปลดล็อกสร้างได้ไม่จำกัดด้วย SaveFor PRO'
+            : 'Free plan can create up to 5 savings goals. Unlock unlimited goals with SaveFor PRO',
+      );
+      if (!upgraded) return;
+    }
+
+    if (!mounted) return;
+
     final titleController = TextEditingController(
       text: dreamToEdit?['title']?.toString(),
     );
@@ -1577,13 +1593,20 @@ class _DreamsScreenState extends State<DreamsScreen> {
                           ),
                           const SizedBox(width: 10),
                         ],
-                        const Text(
-                          'กระปุกความฝัน',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F172A),
-                          ),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: SubscriptionService.instance.isProNotifier,
+                          builder: (context, isPro, _) {
+                            return Text(
+                              isPro
+                                  ? 'กระปุกความฝัน (${_dreams.length})'
+                                  : 'กระปุกความฝัน (${_dreams.length}/5)',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                              ),
+                            );
+                          },
                         ),
                         const Spacer(),
                         GestureDetector(

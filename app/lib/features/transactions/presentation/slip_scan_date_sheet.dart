@@ -4,8 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/services/slip_scanner_bridge.dart';
-import '../../../core/services/subscription_service.dart';
-import '../../subscription/presentation/subscription_paywall_sheet.dart';
 import 'slip_scan_dialog.dart';
 
 
@@ -106,16 +104,6 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
 
   void _selectPreset(int days) async {
     HapticFeedback.selectionClick();
-    if (days > 30 && !SubscriptionService.instance.isPro) {
-      final isThai = Localizations.localeOf(context).languageCode == 'th';
-      final upgraded = await SubscriptionPaywallSheet.show(
-        context,
-        reason: isThai
-            ? 'ปลดล็อกการสแกนสลิปย้อนหลังสูงสุด 60 วัน ด้วย SaveFor PRO'
-            : 'Unlock scanning slips up to 60 days with SaveFor PRO',
-      );
-      if (!upgraded) return;
-    }
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final clamped = days.clamp(1, SlipScanDateSheet.maxDays);
@@ -131,7 +119,6 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
 
   Widget _buildPresetButton(int days, bool isThai) {
     final isSelected = _daysBack == days;
-    final isProFeature = days > 30;
     final label = days == 1
         ? (isThai ? 'วันนี้' : 'Today')
         : '$days ${isThai ? 'วัน' : 'days'}';
@@ -164,37 +151,14 @@ class _SlipScanDateSheetState extends State<SlipScanDateSheet> {
                     : null,
               ),
               child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontFamily: 'SukhumvitSet',
-                        fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                        color: isSelected ? Colors.white : const Color(0xFF475569),
-                      ),
-                    ),
-                    if (isProFeature) ...[
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: isSelected ? Colors.white : const Color(0xFFF59E0B),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: Text(
-                          'PRO',
-                          style: TextStyle(
-                            fontSize: 7.5,
-                            fontWeight: FontWeight.w900,
-                            color: isSelected ? AppTheme.primaryColor : Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'SukhumvitSet',
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                    color: isSelected ? Colors.white : const Color(0xFF475569),
+                  ),
                 ),
               ),
             ),

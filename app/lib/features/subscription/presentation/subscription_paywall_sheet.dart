@@ -341,12 +341,12 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
                   icon: Icons.qr_code_scanner_rounded,
                   iconColor: const Color(0xFF10B981),
                   title: context.tr(
-                    'สแกนสลิปย้อนหลังสูงสุด 60 วัน',
-                    'Scan slips up to 60 days',
+                    'สแกนสลิปไม่จำกัดจำนวน & ดึงข้อมูลอัตโนมัติ',
+                    'Unlimited Batch Slip Scanning',
                   ),
                   subtitle: context.tr(
-                    'อ่านสลิปอัตโนมัติจากอัลบั้ม ไม่จำกัดจำนวนรูป',
-                    'Batch OCR from gallery with unlimited slip quotas',
+                    'อ่านสลิปแม่นยำจากอัลบั้ม พร้อมระบบตรวจจับรายการซ้ำอัจฉริยะ',
+                    'Batch OCR from gallery with intelligent duplicate detection',
                   ),
                   isDark: isDark,
                 ),
@@ -373,8 +373,8 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
                     'Unlimited Savings Dreams',
                   ),
                   subtitle: context.tr(
-                    'ตั้งเป้าหมายทุกความฝัน พร้อมระบบคำนวณเงินออมอัตโนมัติ',
-                    'Track multiple goals, vacations, and emergency funds',
+                    'สมาชิกฟรีจำกัด 5 กระปุก • สมาชิก PRO สร้างเป้าหมายได้ไม่อั้น',
+                    'Free tier limited to 5 goals • Unlock unlimited goals with PRO',
                   ),
                   isDark: isDark,
                 ),
