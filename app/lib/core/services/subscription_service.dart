@@ -42,6 +42,45 @@ class SubscriptionService {
   DateTime? get expiryDate => _expiryDate;
   Offerings? get offerings => _offerings;
 
+  /// คำนวณข้อความระยะเวลาที่เหลือ (เช่น 'เหลืออีก 28 วัน', 'เหลืออีก 2 ชั่วโมง', 'ตลอดชีพ')
+  String getRemainingTimeText({bool isThai = true}) {
+    if (!_isPro) return '';
+    if (_expiryDate == null) {
+      return isThai ? 'ตลอดชีพ (Lifetime)' : 'Lifetime';
+    }
+
+    final now = DateTime.now();
+    final difference = _expiryDate!.difference(now);
+
+    if (difference.isNegative) {
+      return isThai ? 'หมดอายุแล้ว' : 'Expired';
+    }
+
+    final days = difference.inDays;
+    final hours = difference.inHours;
+    final minutes = difference.inMinutes;
+
+    if (days >= 1) {
+      return isThai ? 'เหลืออีก $days วัน' : '$days days left';
+    } else if (hours >= 1) {
+      return isThai ? 'เหลืออีก $hours ชั่วโมง' : '$hours hours left';
+    } else if (minutes >= 1) {
+      return isThai ? 'เหลืออีก $minutes นาที' : '$minutes mins left';
+    } else {
+      return isThai ? 'กำลังจะหมดอายุเร็วๆ นี้' : 'Expiring soon';
+    }
+  }
+
+  /// แสดงวันที่หมดอายุ (เช่น '12/10/2026')
+  String getFormattedExpiryDate() {
+    if (_expiryDate == null) return '';
+    final local = _expiryDate!.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year.toString();
+    return '$day/$month/$year';
+  }
+
   /// Call during app initialization or login
   Future<void> initialize({String? userId}) async {
     // 1. Purge any legacy local storage cache completely (Online-Only requirement)

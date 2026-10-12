@@ -953,20 +953,43 @@ class _ProSubscriptionBanner extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      isPro
-                          ? context.tr('สมาชิก PRO ปลดล็อกทุกฟีเจอร์แล้ว', 'Pro Member: All features unlocked')
-                          : context.tr(
-                              'สแกนสลิปย้อนหลัง แดชบอร์ด 12 เดือน และไม่จำกัด',
-                              'Unlock historical scan, 12-mo stats & unlimited dreams',
+                    Builder(
+                      builder: (context) {
+                        if (isPro) {
+                          final remainingText = SubscriptionService.instance.getRemainingTimeText(
+                            isThai: !context.l10n.isEnglish,
+                          );
+                          final expiryFormatted = SubscriptionService.instance.getFormattedExpiryDate();
+                          final subText = remainingText.isNotEmpty
+                              ? (expiryFormatted.isNotEmpty
+                                  ? '$remainingText • หมดอายุ $expiryFormatted'
+                                  : remainingText)
+                              : context.tr('สมาชิก PRO ปลดล็อกทุกฟีเจอร์แล้ว', 'Pro Member: All features unlocked');
+                          return Text(
+                            subText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
                             ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                      ),
+                          );
+                        }
+                        return Text(
+                          context.tr(
+                            'สแกนสลิปย้อนหลัง แดชบอร์ด 12 เดือน และไม่จำกัด',
+                            'Unlock historical scan, 12-mo stats & unlimited dreams',
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

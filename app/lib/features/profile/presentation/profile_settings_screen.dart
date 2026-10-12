@@ -1186,17 +1186,40 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                                 ],
                               ),
                               const SizedBox(height: 1),
-                              Text(
-                                isPro
-                                    ? context.tr('ปลดล็อกทุกฟีเจอร์พรีเมียมแล้ว', 'All features unlocked')
-                                    : context.tr('สแกนสลิป 60 วัน • สถิติย้อนหลัง', 'Scan 60-day slips & full history'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                              Builder(
+                                builder: (context) {
+                                  if (isPro) {
+                                    final remainingText = SubscriptionService.instance.getRemainingTimeText(
+                                      isThai: !context.l10n.isEnglish,
+                                    );
+                                    final expiryFormatted = SubscriptionService.instance.getFormattedExpiryDate();
+                                    final subText = remainingText.isNotEmpty
+                                        ? (expiryFormatted.isNotEmpty
+                                            ? '$remainingText • หมดอายุ $expiryFormatted'
+                                            : remainingText)
+                                        : context.tr('ปลดล็อกทุกฟีเจอร์พรีเมียมแล้ว', 'All features unlocked');
+                                    return Text(
+                                      subText,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(alpha: 0.9),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    );
+                                  }
+                                  return Text(
+                                    context.tr('สแกนสลิป 60 วัน • สถิติย้อนหลัง', 'Scan 60-day slips & full history'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.8),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),

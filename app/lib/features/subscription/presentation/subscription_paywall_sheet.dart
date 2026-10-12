@@ -307,6 +307,50 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
                 ),
                 const SizedBox(height: 12),
 
+                if (SubscriptionService.instance.isPro) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.verified_rounded, color: Color(0xFF10B981), size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                context.tr('คุณเป็นสมาชิก SaveFor PRO อยู่แล้ว', 'You are already a SaveFor PRO Member'),
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF10B981),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${SubscriptionService.instance.getRemainingTimeText(isThai: !context.l10n.isEnglish)} • หมดอายุ ${SubscriptionService.instance.getFormattedExpiryDate()}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 // Hero Title & Subtitle
                 Text(
                   context.tr(
