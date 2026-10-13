@@ -115,14 +115,18 @@ func handleListNotifications(c *gin.Context) {
 	if !ok {
 		return
 	}
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "5"))
 	if limit < 1 {
 		limit = 1
 	}
 	if limit > 100 {
 		limit = 100
 	}
-	path := fmt.Sprintf("/rest/v1/notification_deliveries?user_id=eq.%s&select=id,type,title,body,data,sent_at,read_at&order=sent_at.desc&limit=%d", url.QueryEscape(userID), limit)
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if offset < 0 {
+		offset = 0
+	}
+	path := fmt.Sprintf("/rest/v1/notification_deliveries?user_id=eq.%s&select=id,type,title,body,data,sent_at,read_at&order=sent_at.desc&limit=%d&offset=%d", url.QueryEscape(userID), limit, offset)
 	status, body, err := doSupabaseJSON(http.MethodGet, path, nil, "")
 	if err != nil || status < 200 || status >= 300 {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to load notifications"})
@@ -172,12 +176,59 @@ func handleReadNotification(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+var globalFCMClient *messaging.Client
+
+func handleSubscriptionNotification(c *gin.Context) {
+	userID, ok := authenticatedUserID(c)
+	if !ok {
+		return
+	}
+	var input struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+		Plan  string `json:"plan"`
+		Type  string `json:"type"`
+	}
+	_ = c.ShouldBindJSON(&input)
+	if strings.TrimSpace(input.Title) == "" {
+		input.Title = "🎉 ยินดีต้อนรับสู่ SaveFor PRO!"
+	}
+	if strings.TrimSpace(input.Body) == "" {
+		input.Body = "คุณได้ปลดล็อกฟีเจอร์พรีเมียม สแกนสลิปไม่จำกัด แดชบอร์ด 12 เดือน และกระปุกออมเงิน Dreams เรียบร้อยแล้ว"
+	}
+	if strings.TrimSpace(input.Type) == "" {
+		input.Type = "pro"
+	}
+
+	delivery := notificationDelivery{
+		UserID:          userID,
+		NotificationKey: fmt.Sprintf("sub_%s_%d", userID, time.Now().UnixNano()),
+		Type:            input.Type,
+		Title:           input.Title,
+		Body:            input.Body,
+		Data: map[string]any{
+			"type": input.Type,
+			"plan": input.Plan,
+		},
+		SentAt: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	_, _ = reserveNotification(delivery)
+
+	if globalFCMClient != nil {
+		go deliverNotification(context.Background(), globalFCMClient, delivery)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
 func StartNotificationScheduler() {
 	client, err := newFirebaseMessagingClient()
 	if err != nil {
 		log.Printf("FCM scheduler disabled: %v", err)
 		return
 	}
+	globalFCMClient = client
 
 	go func() {
 		runNotificationCycle(client, time.Now())

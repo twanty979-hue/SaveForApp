@@ -8,16 +8,22 @@ import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/split_list_card.dart';
 import '../../../core/widgets/shared_icon_selector.dart';
+import '../../../core/services/subscription_service.dart';
+import '../../subscription/presentation/subscription_paywall_sheet.dart';
 import '../../auth/domain/auth_session.dart';
 
 class RecurringExpenseScreen extends StatefulWidget {
   final bool embedded;
   final ValueListenable<int>? addRequest;
+  final int? totalPlansCount;
+  final ValueChanged<int>? onCountChanged;
 
   const RecurringExpenseScreen({
     super.key,
     this.embedded = false,
     this.addRequest,
+    this.totalPlansCount,
+    this.onCountChanged,
   });
 
   @override
@@ -104,6 +110,7 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
           }
           _isLoading = false;
         });
+        widget.onCountChanged?.call(_fixedExpenses.length);
       } else {
         setState(() {
           _isLoading = false;
@@ -232,7 +239,20 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
   }
 
   // หน้าต่างเพิ่มรายจ่ายประจำดีไซน์พรีเมียม ถอดแบบจากภาพที่สองและสามเป๊ะๆ
-  void _showAddExpenseBottomSheet({Map<String, dynamic>? expenseToEdit}) {
+  void _showAddExpenseBottomSheet({Map<String, dynamic>? expenseToEdit}) async {
+    final total = widget.totalPlansCount ?? _fixedExpenses.length;
+    if (expenseToEdit == null && total >= 10 && !SubscriptionService.instance.isPro) {
+      final isThai = Localizations.localeOf(context).languageCode == 'th';
+      final upgraded = await SubscriptionPaywallSheet.show(
+        context,
+        reason: isThai
+            ? 'สมาชิกฟรีสามารถสร้างรายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย) รวมกันได้สูงสุด 10 รายการ ปลดล็อกสร้างได้ไม่จำกัดด้วย SaveFor PRO'
+            : 'Free plan can create up to 10 scheduled plans combined. Unlock unlimited with SaveFor PRO',
+      );
+      if (!upgraded) return;
+    }
+    if (!mounted) return;
+
     final nameController = TextEditingController(
       text: expenseToEdit?['name']?.toString(),
     );

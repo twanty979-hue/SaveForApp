@@ -1,7 +1,13 @@
+import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'package:app/core/localization/app_material.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/services/subscription_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/floating_background.dart';
 import '../../../core/widgets/responsive_layout.dart';
+import '../../auth/domain/auth_session.dart';
+import '../../subscription/presentation/subscription_paywall_sheet.dart';
 import '../../dreams/presentation/dreams_screen.dart';
 import '../../recurring/presentation/recurring_expense_screen.dart';
 import '../../recurring/presentation/recurring_income_screen.dart';
@@ -33,6 +39,11 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
   final ValueNotifier<int> _dreamAddRequest = ValueNotifier(0);
   final ValueNotifier<int> _expenseAddRequest = ValueNotifier(0);
 
+  int _incomeCount = 0;
+  int _dreamCount = 0;
+  int _expenseCount = 0;
+  int get _totalPlansCount => _incomeCount + _dreamCount + _expenseCount;
+
   late final PageController _pageController;
 
   @override
@@ -40,6 +51,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
     super.initState();
     _section = widget.initialSection;
     _pageController = PageController(initialPage: _section.index);
+    _fetchPlanCounts();
     if (widget.startTutorial) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Future.delayed(const Duration(milliseconds: 1000), () {
@@ -49,6 +61,27 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
         });
       });
     }
+  }
+
+  Future<void> _fetchPlanCounts() async {
+    final userId = AuthSession.userId;
+    if (userId == null || userId.isEmpty) return;
+    try {
+      final res = await Future.wait([
+        ApiClient().get('/recurring/sources?user_id=eq.$userId&select=id'),
+        ApiClient().get('/dreams?user_id=eq.$userId&select=id'),
+        ApiClient().get('/recurring/expenses?user_id=eq.$userId&select=id'),
+      ]);
+      if (!mounted) return;
+      int iCount = res[0].statusCode == 200 ? (jsonDecode(res[0].body) as List).length : _incomeCount;
+      int dCount = res[1].statusCode == 200 ? (jsonDecode(res[1].body) as List).length : _dreamCount;
+      int eCount = res[2].statusCode == 200 ? (jsonDecode(res[2].body) as List).length : _expenseCount;
+      setState(() {
+        _incomeCount = iCount;
+        _dreamCount = dCount;
+        _expenseCount = eCount;
+      });
+    } catch (_) {}
   }
 
   @override
@@ -263,6 +296,237 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                       ],
                     ),
                   ),
+
+                  // แถบโควตารวมรายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย รวมกันสูงสุด 10 รายการ)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 2, 14, 6),
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: SubscriptionService.instance.isProNotifier,
+                      builder: (context, isPro, _) {
+                        final count = _totalPlansCount;
+                        const maxFree = 10;
+                        final isAtLimit = !isPro && count >= maxFree;
+
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isPro
+                                ? const Color(0xFF10B981).withValues(alpha: 0.08)
+                                : (isAtLimit
+                                    ? const Color(0xFFEF4444).withValues(alpha: 0.08)
+                                    : context.surfaceColor),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isPro
+                                  ? const Color(0xFF10B981).withValues(alpha: 0.25)
+                                  : (isAtLimit
+                                      ? const Color(0xFFEF4444).withValues(alpha: 0.25)
+                                      : context.borderColor),
+                              width: 1.1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: isPro
+                                      ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                      : (isAtLimit
+                                          ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                                          : const Color(0xFF8B5CF6).withValues(alpha: 0.12)),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  isPro
+                                      ? Icons.stars_rounded
+                                      : Icons.playlist_add_check_rounded,
+                                  size: 16,
+                                  color: isPro
+                                      ? const Color(0xFF10B981)
+                                      : (isAtLimit
+                                          ? const Color(0xFFEF4444)
+                                          : const Color(0xFF8B5CF6)),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      isPro
+                                          ? context.tr(
+                                              'รายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย)',
+                                              'Scheduled Plans (Income, Savings, Expenses)',
+                                            )
+                                          : context.tr(
+                                              'จำกัดจำนวนรายการที่ตั้งไว้',
+                                              'Scheduled Plans Limit',
+                                            ),
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: context.primaryTextColor,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 1),
+                                    Text(
+                                      isPro
+                                          ? context.tr(
+                                              'สมาชิก PRO สร้างได้ไม่จำกัด',
+                                              'PRO Member: Unlimited Plans',
+                                            )
+                                          : (isAtLimit
+                                              ? context.tr(
+                                                  'ครบโควตาฟรีแล้ว (อัปเกรด PRO เพื่อปลดล็อก)',
+                                                  'Quota reached (Upgrade PRO to unlock)',
+                                                )
+                                              : context.tr(
+                                                  'แบบฟรีสร้างรวม 3 แผนได้สูงสุด 10 รายการ',
+                                                  'Free plan: up to 10 plans combined',
+                                                )),
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w500,
+                                        color: isAtLimit
+                                            ? const Color(0xFFEF4444)
+                                            : context.secondaryTextColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              if (isPro)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 9,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.all_inclusive_rounded,
+                                        size: 13,
+                                        color: Color(0xFF10B981),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '$count รายการ (PRO)',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF10B981),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                InkWell(
+                                  borderRadius: BorderRadius.circular(10),
+                                  onTap: () {
+                                    HapticFeedback.lightImpact();
+                                    SubscriptionPaywallSheet.show(
+                                      context,
+                                      reason: 'planning_limit',
+                                    );
+                                  },
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isAtLimit
+                                              ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                                              : context.pageColor,
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(
+                                            color: isAtLimit
+                                                ? const Color(0xFFEF4444).withValues(alpha: 0.35)
+                                                : context.borderColor,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '$count/$maxFree',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            color: isAtLimit
+                                                ? const Color(0xFFEF4444)
+                                                : context.primaryTextColor,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 7,
+                                          vertical: 3.5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [
+                                              Color(0xFFF59E0B),
+                                              Color(0xFFF97316),
+                                            ],
+                                          ),
+                                          borderRadius: BorderRadius.circular(8),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 1),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.bolt_rounded,
+                                              size: 11,
+                                              color: Colors.white,
+                                            ),
+                                            SizedBox(width: 2),
+                                            Text(
+                                              'PRO',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w900,
+                                                color: Colors.white,
+                                                letterSpacing: 0.3,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                   Expanded(
                     child: MediaQuery.removePadding(
                       context: context,
@@ -278,14 +542,32 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                           RecurringIncomeScreen(
                             embedded: true,
                             addRequest: _incomeAddRequest,
+                            totalPlansCount: _totalPlansCount,
+                            onCountChanged: (c) {
+                              if (mounted && c != _incomeCount) {
+                                setState(() => _incomeCount = c);
+                              }
+                            },
                           ),
                           DreamsScreen(
                             embedded: true,
                             addRequest: _dreamAddRequest,
+                            totalPlansCount: _totalPlansCount,
+                            onCountChanged: (c) {
+                              if (mounted && c != _dreamCount) {
+                                setState(() => _dreamCount = c);
+                              }
+                            },
                           ),
                           RecurringExpenseScreen(
                             embedded: true,
                             addRequest: _expenseAddRequest,
+                            totalPlansCount: _totalPlansCount,
+                            onCountChanged: (c) {
+                              if (mounted && c != _expenseCount) {
+                                setState(() => _expenseCount = c);
+                              }
+                            },
                           ),
                         ],
                       ),
@@ -311,6 +593,15 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
   }
 
   void _requestAdd() {
+    if (!SubscriptionService.instance.isPro && _totalPlansCount >= 10) {
+      HapticFeedback.mediumImpact();
+      SubscriptionPaywallSheet.show(
+        context,
+        reason: 'สมาชิกฟรีสามารถสร้างรายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย) รวมกันได้สูงสุด 10 รายการ ปลดล็อกไม่จำกัดด้วย SaveFor PRO',
+      );
+      return;
+    }
+
     switch (_section) {
       case PlanningSection.income:
         _incomeAddRequest.value++;

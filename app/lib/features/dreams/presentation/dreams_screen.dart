@@ -15,8 +15,16 @@ import '../../auth/domain/auth_session.dart';
 class DreamsScreen extends StatefulWidget {
   final bool embedded;
   final ValueListenable<int>? addRequest;
+  final int? totalPlansCount;
+  final ValueChanged<int>? onCountChanged;
 
-  const DreamsScreen({super.key, this.embedded = false, this.addRequest});
+  const DreamsScreen({
+    super.key,
+    this.embedded = false,
+    this.addRequest,
+    this.totalPlansCount,
+    this.onCountChanged,
+  });
 
   @override
   State<DreamsScreen> createState() => _DreamsScreenState();
@@ -131,6 +139,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
           }
           _isLoading = false;
         });
+        widget.onCountChanged?.call(_dreams.length);
       } else {
         setState(() {
           _isLoading = false;
@@ -432,14 +441,19 @@ class _DreamsScreenState extends State<DreamsScreen> {
 
   // หน้าต่างสร้างเป้าหมายใหม่ (ตามดีไซน์รูปที่สอง)
   void _showAddDreamBottomSheet({Map<String, dynamic>? dreamToEdit}) async {
-    // จำกัดผู้ใช้ฟรีสามารถสร้างกระปุกความฝันได้สูงสุด 5 รายการ
-    if (dreamToEdit == null && _dreams.length >= 5 && !SubscriptionService.instance.isPro) {
+    final total = widget.totalPlansCount ?? _dreams.length;
+    final maxLimit = widget.embedded ? 10 : 5;
+    if (dreamToEdit == null && total >= maxLimit && !SubscriptionService.instance.isPro) {
       final isThai = Localizations.localeOf(context).languageCode == 'th';
       final upgraded = await SubscriptionPaywallSheet.show(
         context,
         reason: isThai
-            ? 'สมาชิกฟรีสามารถสร้างกระปุกออมเงินได้สูงสุด 5 รายการ ปลดล็อกสร้างได้ไม่จำกัดด้วย SaveFor PRO'
-            : 'Free plan can create up to 5 savings goals. Unlock unlimited goals with SaveFor PRO',
+            ? (widget.embedded
+                ? 'สมาชิกฟรีสามารถสร้างรายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย) รวมกันได้สูงสุด 10 รายการ ปลดล็อกสร้างได้ไม่จำกัดด้วย SaveFor PRO'
+                : 'สมาชิกฟรีสามารถสร้างกระปุกออมเงินได้สูงสุด 5 รายการ ปลดล็อกสร้างได้ไม่จำกัดด้วย SaveFor PRO')
+            : (widget.embedded
+                ? 'Free plan can create up to 10 scheduled plans combined. Unlock unlimited with SaveFor PRO'
+                : 'Free plan can create up to 5 savings goals. Unlock unlimited goals with SaveFor PRO'),
       );
       if (!upgraded) return;
     }
@@ -577,6 +591,36 @@ class _DreamsScreenState extends State<DreamsScreen> {
                                     color: Color(0xFF94A3B8),
                                   ),
                                 ),
+                                if (dreamToEdit == null) ...[
+                                  const SizedBox(height: 4),
+                                  ValueListenableBuilder<bool>(
+                                    valueListenable: SubscriptionService.instance.isProNotifier,
+                                    builder: (context, isPro, _) {
+                                      return Row(
+                                        children: [
+                                          Icon(
+                                            isPro ? Icons.stars_rounded : Icons.savings_rounded,
+                                            size: 13,
+                                            color: isPro ? const Color(0xFF10B981) : const Color(0xFF8B5CF6),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            isPro
+                                                ? 'สมาชิก PRO : สร้างได้ไม่จำกัด ⭐'
+                                                : 'โควตาสมาชิกฟรี : ${_dreams.length}/5 กระปุก',
+                                            style: TextStyle(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: isPro
+                                                  ? const Color(0xFF10B981)
+                                                  : const Color(0xFF8B5CF6),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ],
                               ],
                             ),
                           ],
@@ -1559,10 +1603,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                // หัวข้อเรื่องและปุ่มเพิ่ม (FAB) ปรับขึ้นไปอยู่ด้านบนสุดแทน Profile Bar
-                if (widget.embedded)
-                  const SizedBox(height: 4)
-                else
+                if (!widget.embedded)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
@@ -1600,10 +1641,10 @@ class _DreamsScreenState extends State<DreamsScreen> {
                               isPro
                                   ? 'กระปุกความฝัน (${_dreams.length})'
                                   : 'กระปุกความฝัน (${_dreams.length}/5)',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F172A),
+                                color: context.primaryTextColor,
                               ),
                             );
                           },
@@ -1647,7 +1688,7 @@ class _DreamsScreenState extends State<DreamsScreen> {
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                          padding: EdgeInsets.fromLTRB(16, widget.embedded ? 8 : 14, 16, 24),
                           itemCount: _dreams.length,
                           itemBuilder: (context, index) {
                             final rawDream = _dreams[index];

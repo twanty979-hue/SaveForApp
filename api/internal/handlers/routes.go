@@ -158,6 +158,7 @@ func SetupRouter() *gin.Engine {
 		v1.GET("/notifications", handleListNotifications)
 		v1.GET("/notifications/unread-count", handleUnreadNotificationCount)
 		v1.PATCH("/notifications/:id/read", handleReadNotification)
+		v1.POST("/notifications/subscription", handleSubscriptionNotification)
 		v1.GET("/support/channels", handleListSupportChannels)
 		v1.GET("/support/tickets", handleListSupportTickets)
 		v1.POST("/support/tickets", handleCreateSupportTicket)

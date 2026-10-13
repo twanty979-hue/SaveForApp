@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:app/core/localization/app_material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/notifications/notification_service.dart';
 import '../../../../core/services/subscription_service.dart';
 import '../../../../core/theme/app_theme.dart';
 
@@ -65,6 +67,11 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
 
       if (success) {
         HapticFeedback.heavyImpact();
+        unawaited(
+          NotificationService.instance.showProWelcomeNotification(
+            planName: _isYearly ? 'รายปี (Yearly Plan)' : 'รายเดือน (Monthly Plan)',
+          ),
+        );
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -114,6 +121,14 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
 
       if (restored) {
         HapticFeedback.heavyImpact();
+        unawaited(
+          NotificationService.instance.showProWelcomeNotification(
+            planName: SubscriptionService.instance.activeTier == SubscriptionTier.yearly
+                ? 'รายปี (Yearly Plan)'
+                : 'รายเดือน (Monthly Plan)',
+            isRestore: true,
+          ),
+        );
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -344,6 +359,44 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                        Tooltip(
+                          message: 'ทดสอบการแจ้งเตือน PRO',
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () async {
+                              HapticFeedback.lightImpact();
+                              await NotificationService.instance.showProWelcomeNotification(
+                                planName: _isYearly ? 'รายปี (Yearly Plan)' : 'รายเดือน (Monthly Plan)',
+                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    backgroundColor: const Color(0xFF10B981),
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    content: const Text(
+                                      'ส่งการแจ้งเตือนทดสอบแล้ว ⭐',
+                                      style: TextStyle(fontWeight: FontWeight.w700),
+                                    ),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.18),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.notifications_active_rounded,
+                                color: Color(0xFF10B981),
+                                size: 18,
+                              ),
+                            ),
                           ),
                         ),
                       ],

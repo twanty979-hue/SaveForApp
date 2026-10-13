@@ -264,7 +264,7 @@ class SubscriptionService {
     });
   }
 
-  void _updateCustomerInfo(CustomerInfo customerInfo) {
+  void _updateCustomerInfo(CustomerInfo customerInfo, {bool isExplicitAction = false}) {
     // Official RevenueCat standard: Entitlement is the single source of truth
     final entitlement = customerInfo.entitlements.all[entitlementId] ??
         customerInfo.entitlements.all['pro'] ??
@@ -288,6 +288,14 @@ class SubscriptionService {
         expiry = DateTime.tryParse(expString);
       }
       store = entitlement.store.name;
+    }
+
+    // หากเป็นการเช็กเบื้องหลังตอนเปิดแอป (Passive check) และสถานะใน Supabase ถูกตั้งเป็น Free (เช่น กดล้างใน Test Plan Studio)
+    // จะไม่ให้ StoreKit passive check แอบเขียนทับ Supabase ให้กลับเป็น PRO อัตโนมัติ
+    // ผู้ใช้ต้องกด "กู้คืนการซื้อ (Restore)" หรือ "ซื้อใหม่" ด้วยตนเองเท่านั้น
+    if (!isExplicitAction && !_isPro && active) {
+      debugPrint('[SubscriptionService] User is Free in Supabase. Ignoring passive StoreKit entitlement. User must tap Restore Purchases to re-link.');
+      return;
     }
 
     _updateMemoryAndSyncOnline(
@@ -369,7 +377,7 @@ class SubscriptionService {
 
     try {
       final result = await Purchases.purchase(PurchaseParams.package(targetPackage));
-      _updateCustomerInfo(result.customerInfo);
+      _updateCustomerInfo(result.customerInfo, isExplicitAction: true);
       return _isPro;
     } on PlatformException catch (e) {
       final errorCode = PurchasesErrorHelper.getErrorCode(e);
@@ -388,7 +396,7 @@ class SubscriptionService {
     }
 
     final customerInfo = await Purchases.restorePurchases();
-    _updateCustomerInfo(customerInfo);
+    _updateCustomerInfo(customerInfo, isExplicitAction: true);
     return _isPro;
   }
 }

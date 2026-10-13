@@ -224,4 +224,137 @@ class NotificationService {
       payload: jsonEncode(message.data),
     );
   }
+
+  /// ขอนุญาตแสดงการแจ้งเตือนทั้งบน iOS และ Android
+  Future<void> requestPermissions() async {
+    try {
+      if (_firebaseReady) {
+        await FirebaseMessaging.instance.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      }
+      if (!kIsWeb && Platform.isIOS) {
+        await _local
+            .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin
+            >()
+            ?.requestPermissions(alert: true, badge: true, sound: true);
+      } else if (!kIsWeb && Platform.isAndroid) {
+        await _local
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
+            ?.requestNotificationsPermission();
+      }
+    } catch (e) {
+      debugPrint('[NotificationService] Request permissions error: $e');
+    }
+  }
+
+  /// ยิงการแจ้งเตือนบนอุปกรณ์ทันที (Local Notification)
+  Future<void> showLocalNotification({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    final notifId = DateTime.now().millisecondsSinceEpoch % 1000000;
+    await _local.show(
+      id: notifId,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          channelId,
+          'การแจ้งเตือน SaveFor',
+          channelDescription: 'แจ้งเตือนรายรับ รายจ่าย และเป้าหมายการออม',
+          importance: Importance.max,
+          priority: Priority.high,
+          icon: '@mipmap/launcher_icon',
+          sound: RawResourceAndroidNotificationSound(
+            'alert_positive_marimba_swoop',
+          ),
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      payload: payload,
+    );
+  }
+
+  /// ส่งการแจ้งเตือนต้อนรับเมื่อผู้ใช้สมัครหรือกู้คืน SaveFor PRO สำเร็จ
+  Future<void> showProWelcomeNotification({
+    String? planName,
+    bool isRestore = false,
+  }) async {
+    final title = isRestore
+        ? '🎉 กู้คืนสิทธิ์ SaveFor PRO สำเร็จแล้ว!'
+        : '🎉 ยินดีต้อนรับสู่ SaveFor PRO!';
+    final body = isRestore
+        ? 'กู้คืนสิทธิ์สมาชิกพรีเมียมเรียบร้อยแล้ว ทุกฟีเจอร์พร้อมให้คุณใช้งานได้ทันที ⭐'
+        : (planName != null && planName.contains('ปี')
+            ? 'สมัครสมาชิกรายปีสำเร็จแล้ว! ปลดล็อกสแกนสลิปไม่จำกัด แดชบอร์ด 12 เดือน และกระปุกออมเงิน Dreams เรียบร้อยแล้ว ⭐'
+            : 'คุณได้ปลดล็อกสิทธิ์ SaveFor PRO เรียบร้อยแล้ว! เพลิดเพลินกับทุกฟีเจอร์พรีเมียม สแกนสลิป และแดชบอร์ด 12 เดือน ⭐');
+
+    // 1. ขอสิทธิ์แสดงการแจ้งเตือน (กรณีที่ยังไม่เคยขอ)
+    await requestPermissions();
+
+    // 2. เด้ง Local Notification ทันทีบนอุปกรณ์ พร้อมเสียงและสั่น
+    try {
+      final notifId = DateTime.now().millisecondsSinceEpoch % 1000000;
+      await _local.show(
+        id: notifId,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            channelId,
+            'การแจ้งเตือน SaveFor',
+            channelDescription: 'แจ้งเตือนรายรับ รายจ่าย และเป้าหมายการออม',
+            importance: Importance.max,
+            priority: Priority.high,
+            icon: '@mipmap/launcher_icon',
+            sound: RawResourceAndroidNotificationSound(
+              'alert_positive_marimba_swoop',
+            ),
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: jsonEncode({
+          'type': 'pro',
+          'plan': planName ?? 'pro',
+          'is_restore': isRestore,
+        }),
+      );
+    } catch (e) {
+      debugPrint('[NotificationService] Local PRO notification error: $e');
+    }
+
+    // 3. ส่งบันทึกไปยัง Server เพื่อเก็บไว้ในประวัติกล่องข้อความ (Notification Inbox)
+    try {
+      await _apiClient.post(
+        '/notifications/subscription',
+        body: {
+          'title': title,
+          'body': body,
+          'plan': planName ?? 'pro',
+          'type': 'pro',
+        },
+      );
+    } catch (e) {
+      debugPrint('[NotificationService] Server subscription log error: $e');
+    }
+
+    // 4. รีเฟรช badge และ inbox ทันที
+    unreadCount.value++;
+    inboxRevision.value++;
+  }
 }
