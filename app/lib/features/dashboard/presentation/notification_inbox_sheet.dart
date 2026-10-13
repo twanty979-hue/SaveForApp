@@ -6,6 +6,8 @@ import '../../../core/network/api_client.dart';
 import '../../../core/notifications/notification_service.dart';
 import '../../../core/theme/app_theme.dart';
 
+import 'dart:math' as math;
+
 class NotificationInboxSheet extends StatefulWidget {
   const NotificationInboxSheet({super.key});
 
@@ -18,11 +20,26 @@ class _NotificationInboxSheetState extends State<NotificationInboxSheet> {
   final ScrollController _scrollController = ScrollController();
   static const int _pageSize = 5;
 
-  List<Map<String, dynamic>> _items = [];
+  List<Map<String, dynamic>> _allItems = [];
+  int _visibleCount = _pageSize;
   bool _loading = true;
   bool _loadingMore = false;
-  bool _hasMore = true;
+  bool _serverHasMore = true;
   String? _error;
+
+  List<Map<String, dynamic>> get _items =>
+      _allItems.take(_visibleCount).toList();
+
+  bool get _hasMore =>
+      _visibleCount < _allItems.length || _serverHasMore;
+
+  int get _nextBatchCount {
+    final remainingLocal = _allItems.length - _visibleCount;
+    if (remainingLocal > 0) {
+      return math.min(_pageSize, remainingLocal);
+    }
+    return _pageSize;
+  }
 
   @override
   void initState() {
@@ -54,16 +71,18 @@ class _NotificationInboxSheetState extends State<NotificationInboxSheet> {
     });
     try {
       final response = await _apiClient.get(
-        '/notifications?limit=$_pageSize&offset=0',
+        '/notifications?limit=50&offset=0',
+        forceRefresh: true,
       );
       if (response.statusCode != 200) throw Exception(response.body);
       final decoded = (jsonDecode(response.body) as List<dynamic>)
           .cast<Map<String, dynamic>>();
       if (!mounted) return;
       setState(() {
-        _items = List<Map<String, dynamic>>.from(decoded);
+        _allItems = List<Map<String, dynamic>>.from(decoded);
+        _visibleCount = _pageSize;
+        _serverHasMore = decoded.length >= 50;
         _loading = false;
-        _hasMore = decoded.length >= _pageSize;
         _error = null;
       });
     } catch (_) {
@@ -77,30 +96,49 @@ class _NotificationInboxSheetState extends State<NotificationInboxSheet> {
 
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
+
+    if (_visibleCount < _allItems.length) {
+      setState(() {
+        _visibleCount += _pageSize;
+      });
+      return;
+    }
+
+    if (!_serverHasMore) return;
+
     setState(() => _loadingMore = true);
 
     try {
-      final offset = _items.length;
+      final offset = _allItems.length;
       final response = await _apiClient.get(
-        '/notifications?limit=$_pageSize&offset=$offset',
+        '/notifications?limit=50&offset=$offset',
+        forceRefresh: true,
       );
       if (response.statusCode != 200) throw Exception(response.body);
       final decoded = (jsonDecode(response.body) as List<dynamic>)
           .cast<Map<String, dynamic>>();
       if (!mounted) return;
       setState(() {
-        final existingIds = _items.map((e) => e['id']).toSet();
+        final existingIds = _allItems.map((e) => e['id']).toSet();
+        int added = 0;
         for (final item in decoded) {
           if (!existingIds.contains(item['id'])) {
-            _items.add(item);
+            _allItems.add(item);
+            added++;
           }
         }
+        if (added == 0 || decoded.length < 50) {
+          _serverHasMore = false;
+        }
+        _visibleCount += _pageSize;
         _loadingMore = false;
-        _hasMore = decoded.length >= _pageSize;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loadingMore = false);
+      setState(() {
+        _loadingMore = false;
+        _serverHasMore = false;
+      });
     }
   }
 
@@ -311,9 +349,9 @@ class _NotificationInboxSheetState extends State<NotificationInboxSheet> {
                       ),
                     ),
                     icon: const Icon(Icons.expand_more_rounded, size: 18),
-                    label: const Text(
-                      'โหลดเพิ่มเติม (5 รายการ)',
-                      style: TextStyle(
+                    label: Text(
+                      'โหลดเพิ่มเติม ($_nextBatchCount รายการ)',
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),

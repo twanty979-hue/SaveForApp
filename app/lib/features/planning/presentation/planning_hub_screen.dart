@@ -148,6 +148,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                             ),
                           ),
                         ),
+                        _buildCleanQuotaBadge(),
                       ],
                     ),
                   ),
@@ -297,236 +298,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
                     ),
                   ),
 
-                  // แถบโควตารวมรายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย รวมกันสูงสุด 10 รายการ)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 2, 14, 6),
-                    child: ValueListenableBuilder<bool>(
-                      valueListenable: SubscriptionService.instance.isProNotifier,
-                      builder: (context, isPro, _) {
-                        final count = _totalPlansCount;
-                        const maxFree = 10;
-                        final isAtLimit = !isPro && count >= maxFree;
-
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8.5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isPro
-                                ? const Color(0xFF10B981).withValues(alpha: 0.08)
-                                : (isAtLimit
-                                    ? const Color(0xFFEF4444).withValues(alpha: 0.08)
-                                    : context.surfaceColor),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isPro
-                                  ? const Color(0xFF10B981).withValues(alpha: 0.25)
-                                  : (isAtLimit
-                                      ? const Color(0xFFEF4444).withValues(alpha: 0.25)
-                                      : context.borderColor),
-                              width: 1.1,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: isPro
-                                      ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                                      : (isAtLimit
-                                          ? const Color(0xFFEF4444).withValues(alpha: 0.15)
-                                          : const Color(0xFF8B5CF6).withValues(alpha: 0.12)),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  isPro
-                                      ? Icons.stars_rounded
-                                      : Icons.playlist_add_check_rounded,
-                                  size: 16,
-                                  color: isPro
-                                      ? const Color(0xFF10B981)
-                                      : (isAtLimit
-                                          ? const Color(0xFFEF4444)
-                                          : const Color(0xFF8B5CF6)),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      isPro
-                                          ? context.tr(
-                                              'รายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย)',
-                                              'Scheduled Plans (Income, Savings, Expenses)',
-                                            )
-                                          : context.tr(
-                                              'จำกัดจำนวนรายการที่ตั้งไว้',
-                                              'Scheduled Plans Limit',
-                                            ),
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w800,
-                                        color: context.primaryTextColor,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 1),
-                                    Text(
-                                      isPro
-                                          ? context.tr(
-                                              'สมาชิก PRO สร้างได้ไม่จำกัด',
-                                              'PRO Member: Unlimited Plans',
-                                            )
-                                          : (isAtLimit
-                                              ? context.tr(
-                                                  'ครบโควตาฟรีแล้ว (อัปเกรด PRO เพื่อปลดล็อก)',
-                                                  'Quota reached (Upgrade PRO to unlock)',
-                                                )
-                                              : context.tr(
-                                                  'แบบฟรีสร้างรวม 3 แผนได้สูงสุด 10 รายการ',
-                                                  'Free plan: up to 10 plans combined',
-                                                )),
-                                      style: TextStyle(
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.w500,
-                                        color: isAtLimit
-                                            ? const Color(0xFFEF4444)
-                                            : context.secondaryTextColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              if (isPro)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 9,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF10B981).withValues(alpha: 0.14),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: const Color(0xFF10B981).withValues(alpha: 0.3),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                        Icons.all_inclusive_rounded,
-                                        size: 13,
-                                        color: Color(0xFF10B981),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '$count รายการ (PRO)',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w800,
-                                          color: Color(0xFF10B981),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              else
-                                InkWell(
-                                  borderRadius: BorderRadius.circular(10),
-                                  onTap: () {
-                                    HapticFeedback.lightImpact();
-                                    SubscriptionPaywallSheet.show(
-                                      context,
-                                      reason: 'planning_limit',
-                                    );
-                                  },
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isAtLimit
-                                              ? const Color(0xFFEF4444).withValues(alpha: 0.15)
-                                              : context.pageColor,
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(
-                                            color: isAtLimit
-                                                ? const Color(0xFFEF4444).withValues(alpha: 0.35)
-                                                : context.borderColor,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '$count/$maxFree',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800,
-                                            color: isAtLimit
-                                                ? const Color(0xFFEF4444)
-                                                : context.primaryTextColor,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 7,
-                                          vertical: 3.5,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          gradient: const LinearGradient(
-                                            colors: [
-                                              Color(0xFFF59E0B),
-                                              Color(0xFFF97316),
-                                            ],
-                                          ),
-                                          borderRadius: BorderRadius.circular(8),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
-                                              blurRadius: 4,
-                                              offset: const Offset(0, 1),
-                                            ),
-                                          ],
-                                        ),
-                                        child: const Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.bolt_rounded,
-                                              size: 11,
-                                              color: Colors.white,
-                                            ),
-                                            SizedBox(width: 2),
-                                            Text(
-                                              'PRO',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w900,
-                                                color: Colors.white,
-                                                letterSpacing: 0.3,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                  const SizedBox(height: 4),
                   Expanded(
                     child: MediaQuery.removePadding(
                       context: context,
@@ -580,6 +352,137 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
           _buildTutorialOverlay(),
         ],
       ),
+    );
+  }
+
+  Widget _buildCleanQuotaBadge() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: SubscriptionService.instance.isProNotifier,
+      builder: (context, isPro, _) {
+        final count = _totalPlansCount;
+        const maxFree = 10;
+        final isAtLimit = !isPro && count >= maxFree;
+
+        if (isPro) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFF10B981).withValues(alpha: 0.28),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.stars_rounded,
+                  size: 15,
+                  color: Color(0xFF10B981),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '$count (PRO)',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF10B981),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              SubscriptionPaywallSheet.show(
+                context,
+                reason: 'planning_limit',
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3.5),
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isAtLimit
+                      ? const Color(0xFFEF4444).withValues(alpha: 0.45)
+                      : context.borderColor,
+                  width: 1.1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.05),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    child: Text(
+                      '$count/$maxFree',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isAtLimit
+                            ? const Color(0xFFEF4444)
+                            : context.primaryTextColor,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFF59E0B), Color(0xFFF97316)],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bolt_rounded, size: 10, color: Colors.white),
+                        SizedBox(width: 2),
+                        Text(
+                          'PRO',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
