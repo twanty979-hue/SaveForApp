@@ -449,11 +449,11 @@ class _DreamsScreenState extends State<DreamsScreen> {
         context,
         reason: isThai
             ? (widget.embedded
-                ? 'สมาชิกฟรีสามารถสร้างรายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย) รวมกันได้สูงสุด 10 รายการ ปลดล็อกสร้างได้ไม่จำกัดด้วย SaveFor PRO'
-                : 'สมาชิกฟรีสามารถสร้างกระปุกออมเงินได้สูงสุด 5 รายการ ปลดล็อกสร้างได้ไม่จำกัดด้วย SaveFor PRO')
+                ? 'สมาชิกฟรีสามารถสร้างรายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย) รวมกันได้สูงสุด 10 รายการ ปลดล็อกสร้างได้ไม่จำกัดด้วย เงินมานี่ PRO'
+                : 'สมาชิกฟรีสามารถสร้างกระปุกออมเงินได้สูงสุด 5 รายการ ปลดล็อกสร้างได้ไม่จำกัดด้วย เงินมานี่ PRO')
             : (widget.embedded
-                ? 'Free plan can create up to 10 scheduled plans combined. Unlock unlimited with SaveFor PRO'
-                : 'Free plan can create up to 5 savings goals. Unlock unlimited goals with SaveFor PRO'),
+                ? 'Free plan can create up to 10 scheduled plans combined. Unlock unlimited with NgenManee PRO'
+                : 'Free plan can create up to 5 savings goals. Unlock unlimited goals with NgenManee PRO'),
       );
       if (!upgraded) return;
     }

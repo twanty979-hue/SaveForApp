@@ -500,7 +500,7 @@ class _PlanningHubScreenState extends State<PlanningHubScreen> {
       HapticFeedback.mediumImpact();
       SubscriptionPaywallSheet.show(
         context,
-        reason: 'สมาชิกฟรีสามารถสร้างรายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย) รวมกันได้สูงสุด 10 รายการ ปลดล็อกไม่จำกัดด้วย SaveFor PRO',
+        reason: 'สมาชิกฟรีสามารถสร้างรายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย) รวมกันได้สูงสุด 10 รายการ ปลดล็อกไม่จำกัดด้วย เงินมานี่ PRO',
       );
       return;
     }

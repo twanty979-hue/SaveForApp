@@ -10,10 +10,10 @@ class FaqScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final faqs = [
       {
-        'q': context.tr('แอป SaveFor คืออะไร?', 'What is SaveFor app?'),
+        'q': context.tr('แอป เงินมานี่ คืออะไร?', 'What is NgenManee app?'),
         'a': context.tr(
-          'SaveFor เป็นแอปพลิเคชันช่วยจัดการการออมเงิน ตั้งเป้าหมาย และติดตามค่าใช้จ่ายต่างๆ เพื่อให้คุณถึงเป้าหมายได้เร็วขึ้น',
-          'SaveFor is an app that helps you manage savings, set goals, and track expenses to reach your financial goals faster.'
+          'เงินมานี่ เป็นแอปพลิเคชันช่วยจัดการการออมเงิน ตั้งเป้าหมาย และติดตามค่าใช้จ่ายต่างๆ เพื่อให้คุณถึงเป้าหมายได้เร็วขึ้น',
+          'NgenManee is an app that helps you manage savings, set goals, and track expenses to reach your financial goals faster.'
         ),
       },
       {

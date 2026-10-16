@@ -22,13 +22,14 @@ xcodebuild -exportArchive \
     -exportOptionsPlist "$PLIST_PATH" \
     -allowProvisioningUpdates
 
-if [ -f "$EXPORT_PATH/SaveFor.ipa" ]; then
+IPA_FILE=$(find "$EXPORT_PATH" -maxdepth 1 -name "*.ipa" | head -n 1)
+if [ -n "$IPA_FILE" ] && [ -f "$IPA_FILE" ]; then
     echo "================================================="
     echo "  🎉 SUCCESS! IPA exported successfully:"
-    echo "  📍 $EXPORT_PATH/SaveFor.ipa"
+    echo "  📍 $IPA_FILE"
     echo "================================================="
-    open -R "$EXPORT_PATH/SaveFor.ipa"
+    open -R "$IPA_FILE"
 else
-    echo "❌ Export completed but SaveFor.ipa not found."
+    echo "❌ Export completed but IPA file not found in $EXPORT_PATH"
     exit 1
 fi

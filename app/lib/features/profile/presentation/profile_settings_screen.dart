@@ -740,7 +740,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                         const SizedBox(height: 8),
                         _SettingsTile(
                           icon: Icons.workspace_premium_rounded,
-                          title: context.tr('สมาชิก SaveFor PRO', 'SaveFor PRO Membership'),
+                          title: context.tr('สมาชิก เงินมานี่ PRO', 'NgenManee PRO Membership'),
                           subtitle: context.tr(
                             'ปลดล็อกสแกนสลิปย้อนหลัง และฟีเจอร์พรีเมียม',
                             'Unlock historical slip scan & premium features',
@@ -1030,7 +1030,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                             Flexible(
                               child: Text(
                                 _displayName.trim().isEmpty
-                                    ? 'ผู้ใช้งาน SaveFor'
+                                    ? 'ผู้ใช้งาน เงินมานี่'
                                     : _displayName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -1155,7 +1155,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                                 children: [
                                   Flexible(
                                     child: Text(
-                                      isPro ? 'SaveFor PRO Member' : 'อัปเกรด SaveFor PRO',
+                                      isPro ? 'เงินมานี่ PRO Member' : 'อัปเกรด เงินมานี่ PRO',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(

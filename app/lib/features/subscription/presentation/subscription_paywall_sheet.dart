@@ -85,8 +85,8 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
                 Expanded(
                   child: Text(
                     context.tr(
-                      'ยินดีต้อนรับสู่ SaveFor PRO! ปลดล็อกทุกฟีเจอร์แล้ว 🎉',
-                      'Welcome to SaveFor PRO! All features unlocked 🎉',
+                      'ยินดีต้อนรับสู่ เงินมานี่ PRO! ปลดล็อกทุกฟีเจอร์แล้ว 🎉',
+                      'Welcome to NgenManee PRO! All features unlocked 🎉',
                     ),
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
@@ -137,8 +137,8 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             content: Text(
               context.tr(
-                'กู้คืนสิทธิ์ SaveFor PRO สำเร็จเรียบร้อย!',
-                'SaveFor PRO restored successfully!',
+                'กู้คืนสิทธิ์ เงินมานี่ PRO สำเร็จเรียบร้อย!',
+                'NgenManee PRO restored successfully!',
               ),
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
@@ -342,7 +342,7 @@ class _SubscriptionPaywallSheetState extends State<SubscriptionPaywallSheet> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                context.tr('คุณเป็นสมาชิก SaveFor PRO อยู่แล้ว', 'You are already a SaveFor PRO Member'),
+                                context.tr('คุณเป็นสมาชิก เงินมานี่ PRO อยู่แล้ว', 'You are already a NgenManee PRO Member'),
                                 style: const TextStyle(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.bold,

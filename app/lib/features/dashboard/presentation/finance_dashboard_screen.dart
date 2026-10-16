@@ -427,8 +427,8 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen>
                                       final upgraded = await SubscriptionPaywallSheet.show(
                                         context,
                                         reason: context.tr(
-                                          'ปลดล็อกดูภาพรวมเดือนก่อนและประวัติย้อนหลังทั้งหมดด้วย SaveFor PRO',
-                                          'Unlock previous months and all financial history with SaveFor PRO',
+                                          'ปลดล็อกดูภาพรวมเดือนก่อนและประวัติย้อนหลังทั้งหมดด้วย เงินมานี่ PRO',
+                                          'Unlock previous months and all financial history with NgenManee PRO',
                                         ),
                                       );
                                       if (!upgraded) return;

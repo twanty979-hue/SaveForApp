@@ -136,7 +136,7 @@ class MyApp extends StatelessWidget {
         builder: (context, themeStyle, _) => ValueListenableBuilder<ThemeMode>(
           valueListenable: AppSettings.themeMode,
           builder: (context, themeMode, _) => MaterialApp(
-            title: 'SaveFor',
+            title: 'เงินมานี่',
             locale: locale,
             supportedLocales: const [Locale('th'), Locale('en')],
             localizationsDelegates: const [
@@ -168,7 +168,7 @@ class MyApp extends StatelessWidget {
                     builder: (_) => WebDocumentScreen(
                       title: 'นโยบายความเป็นส่วนตัว',
                       paragraphs: [
-                        'SaveFor จัดเก็บข้อมูลที่จำเป็นต่อการให้บริการ เช่น บัญชีผู้ใช้ รายรับ รายจ่าย และเป้าหมายการออมของคุณ',
+                        'เงินมานี่ จัดเก็บข้อมูลที่จำเป็นต่อการให้บริการ เช่น บัญชีผู้ใช้ รายรับ รายจ่าย และเป้าหมายการออมของคุณ',
                         'ข้อมูลของคุณใช้เพื่อแสดงผลและให้บริการภายในบัญชีของคุณเท่านั้น เราไม่ขอรหัสผ่านธนาคารและไม่เชื่อมต่อเข้าบัญชีธนาคารโดยตรง',
                         'คุณสามารถติดต่อทีมงานเพื่อขอข้อมูลเพิ่มเติมหรือขอลบบัญชีได้ผ่านหน้าช่วยเหลือ',
                       ],
@@ -179,7 +179,7 @@ class MyApp extends StatelessWidget {
                     builder: (_) => WebDocumentScreen(
                       title: 'เงื่อนไขการใช้งาน',
                       paragraphs: [
-                        'การใช้งาน SaveFor หมายถึงคุณยอมรับการใช้บริการเพื่อบันทึกและวางแผนการเงินส่วนบุคคล',
+                        'การใช้งาน เงินมานี่ หมายถึงคุณยอมรับการใช้บริการเพื่อบันทึกและวางแผนการเงินส่วนบุคคล',
                         'ข้อมูลและสรุปผลในแอปเป็นเครื่องมือช่วยวางแผน ไม่ใช่คำแนะนำการลงทุนหรือคำแนะนำทางการเงินเฉพาะบุคคล',
                       ],
                     ),
@@ -197,7 +197,7 @@ class MyApp extends StatelessWidget {
                 case webDeleteAccountPath:
                   return MaterialPageRoute(
                     builder: (_) => WebDocumentScreen(
-                      title: 'การลบบัญชี SaveFor',
+                      title: 'การลบบัญชี เงินมานี่',
                       paragraphs: [
                         'คุณสามารถขอลบบัญชีและข้อมูลส่วนตัวที่เกี่ยวข้องได้จากเมนูบัญชีภายในแอป หรือส่งคำขอผ่านหน้าช่วยเหลือ',
                         'ก่อนเผยแพร่จริง เราจะเพิ่มช่องทางติดต่อและรายละเอียดระยะเวลาการดำเนินการในหน้านี้',

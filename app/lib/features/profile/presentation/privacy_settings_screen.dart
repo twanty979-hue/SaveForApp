@@ -131,8 +131,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                           Expanded(
                             child: Text(
                               ctx.tr(
-                                'SaveFor ปฏิบัติตามมาตรฐาน PDPA อย่างเคร่งครัด ข้อมูลของคุณเป็นสิทธิ์ของคุณแต่เพียงผู้เดียว',
-                                'SaveFor strictly adheres to PDPA standards. Your financial data strictly belongs to you.',
+                                'เงินมานี่ ปฏิบัติตามมาตรฐาน PDPA อย่างเคร่งครัด ข้อมูลของคุณเป็นสิทธิ์ของคุณแต่เพียงผู้เดียว',
+                                'NgenManee strictly adheres to PDPA standards. Your financial data strictly belongs to you.',
                               ),
                               style: TextStyle(
                                 fontSize: 12,
@@ -219,8 +219,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                         '5. No Data Selling or Ads',
                       ),
                       body: ctx.tr(
-                        '• SaveFor ไม่มีนโยบายนำข้อมูลทางการเงิน หรือพฤติกรรมการใช้จ่ายของคุณไปจำหน่าย แลกเปลี่ยน หรือใช้ในการยิงโฆษณาแก่บุคคลภายนอกโดยเด็ดขาด',
-                        '• SaveFor never sells, rents, or exchanges your financial data for commercial marketing or advertising.',
+                        '• เงินมานี่ ไม่มีนโยบายนำข้อมูลทางการเงิน หรือพฤติกรรมการใช้จ่ายของคุณไปจำหน่าย แลกเปลี่ยน หรือใช้ในการยิงโฆษณาแก่บุคคลภายนอกโดยเด็ดขาด',
+                        '• NgenManee never sells, rents, or exchanges your financial data for commercial marketing or advertising.',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -320,7 +320,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                             ),
                           ),
                           Text(
-                            ctx.tr('เงื่อนไขและข้อกำหนดในการใช้งานแอปพลิเคชัน', 'Terms and conditions for using SaveFor'),
+                            ctx.tr('เงื่อนไขและข้อกำหนดในการใช้งานแอปพลิเคชัน', 'Terms and conditions for using NgenManee'),
                             style: TextStyle(
                               fontSize: 12,
                               color: ctx.secondaryTextColor,
@@ -346,8 +346,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                       icon: Icons.savings_rounded,
                       title: ctx.tr('1. วัตถุประสงค์การใช้งาน', '1. Purpose of Service'),
                       body: ctx.tr(
-                        'SaveFor เป็นแอปพลิเคชันบันทึกและวางแผนการเงินส่วนบุคคล ออกแบบมาเพื่อช่วยบันทึกรายรับ-รายจ่าย วิเคราะห์การเงิน และติดตามเป้าหมายการออมเงิน',
-                        'SaveFor is a personal financial tracking tool designed to log income, expenses, and savings goals.',
+                        'เงินมานี่ เป็นแอปพลิเคชันบันทึกและวางแผนการเงินส่วนบุคคล ออกแบบมาเพื่อช่วยบันทึกรายรับ-รายจ่าย วิเคราะห์การเงิน และติดตามเป้าหมายการออมเงิน',
+                        'NgenManee is a personal financial tracking tool designed to log income, expenses, and savings goals.',
                       ),
                     ),
                     const SizedBox(height: 12),

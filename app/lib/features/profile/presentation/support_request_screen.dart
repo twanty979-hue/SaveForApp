@@ -94,8 +94,8 @@ class _SupportRequestScreenState extends State<SupportRequestScreen> {
             'Tell us what happened and how we can reproduce it.',
           )
         : context.tr(
-            'ส่งข้อความถึงทีมงาน SaveFor โดยตรง',
-            'Send a message directly to the SaveFor team.',
+            'ส่งข้อความถึงทีมงาน เงินมานี่ โดยตรง',
+            'Send a message directly to the NgenManee team.',
           );
 
     return Scaffold(

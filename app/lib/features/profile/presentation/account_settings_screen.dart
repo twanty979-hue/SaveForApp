@@ -571,7 +571,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                           icon: Icons.badge_outlined,
                           title: context.tr('ชื่อที่แสดง', 'Display name'),
                           subtitle: _displayName.isEmpty
-                              ? context.tr('ผู้ใช้งาน SaveFor', 'SaveFor User')
+                              ? context.tr('ผู้ใช้งาน เงินมานี่', 'NgenManee User')
                               : _displayName,
                           onTap: _editDisplayName,
                         ),
@@ -924,7 +924,7 @@ class _ProSubscriptionBanner extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            'SaveFor PRO',
+                            'เงินมานี่ PRO',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

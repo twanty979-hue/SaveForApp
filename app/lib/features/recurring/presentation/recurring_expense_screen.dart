@@ -246,8 +246,8 @@ class _RecurringExpenseScreenState extends State<RecurringExpenseScreen> {
       final upgraded = await SubscriptionPaywallSheet.show(
         context,
         reason: isThai
-            ? 'สมาชิกฟรีสามารถสร้างรายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย) รวมกันได้สูงสุด 10 รายการ ปลดล็อกสร้างได้ไม่จำกัดด้วย SaveFor PRO'
-            : 'Free plan can create up to 10 scheduled plans combined. Unlock unlimited with SaveFor PRO',
+            ? 'สมาชิกฟรีสามารถสร้างรายการที่ตั้งไว้ (รายรับ, เงินออม, รายจ่าย) รวมกันได้สูงสุด 10 รายการ ปลดล็อกสร้างได้ไม่จำกัดด้วย เงินมานี่ PRO'
+            : 'Free plan can create up to 10 scheduled plans combined. Unlock unlimited with NgenManee PRO',
       );
       if (!upgraded) return;
     }

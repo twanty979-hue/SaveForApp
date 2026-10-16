@@ -1,1334 +1,1679 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import Link from "next/link";
 
-interface UserItem {
+interface ChatMessageItem {
   id: string;
-  email: string;
-  displayName: string;
-  avatarUrl: string | null;
-  tier: "free" | "pro";
-  provider: string;
-  createdAt: string;
-  lastSignInAt: string | null;
-  hasCompletedTutorial: boolean;
-  subscriptionExpiresAt?: string | null;
-  subscriptionPlan?: string | null;
-  subscriptionStore?: string | null;
+  role: "user" | "bot" | "card" | "typing";
+  text?: string;
+  category?: "expense" | "income" | "savings";
+  title?: string;
+  amount?: string;
+  date: string;
+  subtitle?: string;
 }
 
-interface Stats {
-  total: number;
-  pro: number;
-  free: number;
-  newToday: number;
-  newThisMonth: number;
-}
-
-interface RCSubscriberData {
-  status: "active" | "inactive" | "not_found" | "error";
-  activeEntitlements: string[];
-  subscriptions: Array<{
-    productId: string;
-    isActive: boolean;
-    expiresDate: string | null;
-    purchaseDate: string | null;
-    store: string;
-    willRenew: boolean;
-  }>;
-  managementUrl: string | null;
-  lastSeen: string | null;
-}
-
-interface AuditUserItem {
+interface ScreenTab {
   id: string;
-  email: string;
-  displayName: string;
-  avatarUrl: string | null;
-  provider: string;
-  createdAt: string;
-  dbTier: "free" | "pro";
-  dbExpiresAt?: string | null;
-  dbPlan?: string | null;
-  dbStore?: string | null;
-  rcData: RCSubscriberData;
-  isDbPro: boolean;
-  isRcPro: boolean;
-  syncStatus:
-    | "synced_pro"
-    | "synced_free"
-    | "mismatch_db_free_rc_pro"
-    | "mismatch_db_pro_rc_inactive";
+  label: string;
+  title: string;
+  desc: string;
 }
 
-interface ComparisonStats {
-  totalUsers: number;
-  dbProCount: number;
-  rcProCount: number;
-  syncedCount: number;
-  mismatchCount: number;
-  isFullyInSync: boolean;
-}
+const screenTabs: ScreenTab[] = [
+  {
+    id: "chat",
+    label: "จดบันทึกสด (แชท)",
+    title: "บันทึกง่ายสไตล์แชทสมุดโน้ต",
+    desc: "พิมพ์รายการลงบัญชีง่ายเหมือนคุยแชท แสดงยอดใช้จ่ายวันนี้และเดือนนี้บนหัวบิลแบบเรียลไทม์",
+  },
+  {
+    id: "slip",
+    label: "สแกนสลิปอัจฉริยะ",
+    title: "อ่านสลิปธนาคารอัตโนมัติ 16 ใบเสร็จในคลิกเดียว",
+    desc: "ดึงยอดเงิน วันที่ และแยกธนาคาร (กสิกร, ไทยพาณิชย์, พร้อมเพย์) พร้อมบันทึกลงบัญชีทันที",
+  },
+  {
+    id: "dreams",
+    label: "กระปุกเงินตามฝัน",
+    title: "รายการที่ตั้งไว้ & ออมเงินตามเป้าหมาย",
+    desc: "สร้างเป้าหมายเก็บเงินสำหรับบ้านหรือมอเตอร์ไซค์ พร้อมแถบความคืบหน้าคำนวณระยะเวลาออมให้อัตโนมัติ",
+  },
+  {
+    id: "dashboard",
+    label: "แดชบอร์ดการเงิน",
+    title: "แดชบอร์ดสรุปภาพรวมและกระแสเงินสด",
+    desc: "กราฟวงแหวนวิเคราะห์รายรับ-รายจ่าย อัตราการออม และค่าใช้จ่ายเฉลี่ยต่อวัน รู้ทันทีว่าเงินรั่วไหลไปกับอะไร",
+  },
+];
 
-export default function AdminDashboardPage() {
-  // Navigation Tabs
-  const [activeTab, setActiveTab] = useState<"users" | "rc_audit" | "mismatch">("users");
+const supportedBanks = [
+  { name: "กสิกรไทย (K-Bank)", logo: "/images/banks/kbank.png" },
+  { name: "ไทยพาณิชย์ (SCB)", logo: "/images/banks/scb.png" },
+  { name: "กรุงไทย (KTB)", logo: "/images/banks/ktb.png" },
+  { name: "กรุงเทพ (BBL)", logo: "/images/banks/bbl.png" },
+  { name: "กรุงศรีอยุธยา (BAY)", logo: "/images/banks/bay.png" },
+  { name: "ทีทีบี (ttb)", logo: "/images/banks/ttb.png" },
+  { name: "ออมสิน (GSB)", logo: "/images/banks/gsb.png" },
+  { name: "พร้อมเพย์ (PromptPay)", logo: "/images/banks/promptpay.png" },
+];
 
-  // Users State
-  const [users, setUsers] = useState<UserItem[]>([]);
-  const [stats, setStats] = useState<Stats>({
-    total: 0,
-    pro: 0,
-    free: 0,
-    newToday: 0,
-    newThisMonth: 0,
-  });
-  const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(true);
+const faqs = [
+  {
+    q: "แอป เงินมานี่ (NgenManee) ใช้งานฟรีไหม?",
+    a: "ใช้งานฟรีได้ตลอดชีพครับ ฟีเจอร์หลักทั้งการจดบันทึกรายรับ-รายจ่ายสไตล์แชท, สแกนสลิปโอนเงินจากอัลบั้ม, และการสร้างเป้าหมายเงินออม สามารถใช้งานได้ฟรีครบถ้วน และมีแพ็กเกจ SaveFor PRO (เริ่มต้นเพียงเดือนละ ฿35 หรือรายปี ฿350) สำหรับผู้ที่ต้องการสแกนสลิปไม่จำกัดและปลดล็อกฟังก์ชันขั้นสูง",
+  },
+  {
+    q: "แอปสามารถดึงเงินจากบัญชีธนาคารของผู้ใช้ได้หรือไม่?",
+    a: "ไม่มีทางและทำไม่ได้แน่นอนครับ เงินมานี่ เป็นเพียงสมุดบันทึกรายรับ-รายจ่ายส่วนบุคคล ไม่มีการขอรหัสผ่านธนาคาร ไม่มีการเชื่อมต่อ API สั่งโอนเงิน ข้อมูลธุรกรรมเกิดขึ้นจากการสแกนภาพสลิปที่คุณโอนเงินเสร็จแล้ว หรือการพิมพ์ข้อความบันทึกเองเท่านั้น",
+  },
+  {
+    q: "ระบบสแกนสลิปทำงานอย่างไร รองรับธนาคารใดบ้าง?",
+    a: "ระบบใช้เทคโนโลยี Smart OCR สแกนตรวจจับสลิปจากอัลบั้มภาพย้อนหลังได้สูงสุด 60 วัน รองรับทุกธนาคารไทยชั้นนำ เช่น กสิกรไทย, ไทยพาณิชย์, กรุงไทย, กรุงเทพ, กรุงศรีอยุธยา, ออมสิน, ทีทีบี และ PromptPay ดึงยอดเงิน วันที่ และบันทึกให้อัตโนมัติ",
+  },
+  {
+    q: "หากเปลี่ยนโทรศัพท์ ข้อมูลจะหายหรือไม่?",
+    a: "ข้อมูลไม่หายครับ เมื่อคุณเข้าสู่ระบบด้วยอีเมล, Google หรือ Apple ID เดิม ข้อมูลรายรับ-รายจ่ายและเป้าหมายที่ตั้งไว้ทั้งหมดจะถูกซิงค์กลับมายังอุปกรณ์ใหม่อัตโนมัติทันที",
+  },
+  {
+    q: "มีระบบล็อคเพื่อความเป็นส่วนตัวหรือไม่?",
+    a: "มีครับ เงินมานี่ รองรับการล็อคด้วย Face ID, Touch ID หรือรหัส PIN พร้อมปุ่มโหมดความเป็นส่วนตัวสำหรับซ่อนตัวเลขยอดเงินในหน้าแรกได้ทันที ไม่ต้องกังวลว่าคนรอบข้างจะมองเห็นยอดเงินของคุณ",
+  },
+  {
+    q: "หากต้องการลบบัญชีและข้อมูลทั้งหมด ทำได้หรือไม่?",
+    a: "ทำได้อย่างง่ายดายครับ คุณสามารถกดลบบัญชีได้โดยตรงที่เมนูการตั้งค่าภายในแอป หรือทำรายการผ่านหน้าเว็บ /delete-account ข้อมูลทั้งหมดของคุณจะถูกลบออกจากเซิร์ฟเวอร์อย่างถาวรทันที",
+  },
+];
 
-  // RevenueCat Audit State
-  const [auditUsers, setAuditUsers] = useState<AuditUserItem[]>([]);
-  const [comparisonStats, setComparisonStats] = useState<ComparisonStats>({
-    totalUsers: 0,
-    dbProCount: 0,
-    rcProCount: 0,
-    syncedCount: 0,
-    mismatchCount: 0,
-    isFullyInSync: true,
-  });
-  const [isLoadingAudit, setIsLoadingAudit] = useState<boolean>(false);
-  const [lastAuditTime, setLastAuditTime] = useState<string | null>(null);
+export default function LandingPage() {
+  const [activeTab, setActiveTab] = useState<number>(0);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
-  // Action Loading States
-  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
-  const [isBulkSyncing, setIsBulkSyncing] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [selectedUser, setSelectedUser] = useState<UserItem | AuditUserItem | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Chat typing animation states for Tab 0
+  const [typedText, setTypedText] = useState<string>("");
+  const [isSending, setIsSending] = useState<boolean>(false);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Filter & Search
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [tierFilter, setTierFilter] = useState<"all" | "pro" | "free">("all");
-  const [providerFilter, setProviderFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"newest" | "recent_active" | "name">("newest");
+  const initialChatMessages: ChatMessageItem[] = [
+    { id: "init-1", role: "user", text: "ขับไรเดอร์ 800", date: "6 ต.ค. • 13:01" },
+    {
+      id: "init-2",
+      role: "card",
+      category: "income",
+      title: "เงินเดือน",
+      amount: "+฿43",
+      date: "10 ต.ค. • 13:49",
+      subtitle: "ยอดรับสะสมเดือนนี้ ฿843",
+    },
+  ];
 
+  const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>(initialChatMessages);
+  const [todayExpense, setTodayExpense] = useState<number>(0);
+
+  // Smart Slip modal state for Tab 1
+  const [slipModalOpen, setSlipModalOpen] = useState<boolean>(true);
+  const [slipSaved, setSlipSaved] = useState<boolean>(false);
+
+  // Scroll ONLY the inner chat container, NEVER scroll the browser window
   useEffect(() => {
-    fetchUsers();
-    fetchRevenueCatAudit();
-  }, []);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3800);
-  };
-
-  const fetchUsers = async () => {
-    setIsLoadingUsers(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/admin/users");
-      const data = await res.json();
-      if (data.success) {
-        setUsers(data.users || []);
-        if (data.stats) setStats(data.stats);
-      } else {
-        setError(data.error || "เกิดข้อผิดพลาดในการโหลดข้อมูลผู้ใช้งาน");
-      }
-    } catch (err: any) {
-      setError(err.message || "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
-    } finally {
-      setIsLoadingUsers(false);
-    }
-  };
-
-  const fetchRevenueCatAudit = async () => {
-    setIsLoadingAudit(true);
-    try {
-      const res = await fetch("/api/admin/revenuecat/audit");
-      const data = await res.json();
-      if (data.success) {
-        setAuditUsers(data.users || []);
-        if (data.comparison) setComparisonStats(data.comparison);
-        setLastAuditTime(
-          new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-        );
-      }
-    } catch (err: any) {
-      console.error("RC Audit failed", err);
-    } finally {
-      setIsLoadingAudit(false);
-    }
-  };
-
-  // Toggle tier in DB
-  const handleToggleTier = async (user: { id: string; tier?: string; dbTier?: string; displayName: string }) => {
-    const currentTier = user.tier || user.dbTier || "free";
-    const nextTier = currentTier === "pro" ? "free" : "pro";
-    setUpdatingUserId(user.id);
-    try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier: nextTier }),
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: "smooth",
       });
-      const data = await res.json();
-      if (data.success) {
-        // Optimistic update users
-        setUsers((prev) =>
-          prev.map((u) => (u.id === user.id ? { ...u, tier: nextTier } : u))
-        );
-        // Optimistic update audit users
-        setAuditUsers((prev) =>
-          prev.map((u) => {
-            if (u.id !== user.id) return u;
-            const isDbPro = nextTier === "pro";
-            let syncStatus: any = "synced_free";
-            if (isDbPro && u.isRcPro) syncStatus = "synced_pro";
-            else if (!isDbPro && !u.isRcPro) syncStatus = "synced_free";
-            else if (!isDbPro && u.isRcPro) syncStatus = "mismatch_db_free_rc_pro";
-            else syncStatus = "mismatch_db_pro_rc_inactive";
+    }
+  }, [chatMessages]);
 
-            return { ...u, dbTier: nextTier, isDbPro, syncStatus };
-          })
-        );
-        // Update stats
-        setStats((prev) => ({
+  // Cycle simulation tabs: 28 seconds for Tab 0 (Live Chat) so the full conversation plays out comfortably, 10s for other tabs
+  useEffect(() => {
+    const duration = activeTab === 0 ? 28000 : 10000;
+    const timer = setTimeout(() => {
+      setActiveTab((prev) => (prev + 1) % screenTabs.length);
+    }, duration);
+    return () => clearTimeout(timer);
+  }, [activeTab]);
+
+  // Quick Action Handler for instant interaction
+  const handleQuickAction = (
+    text: string,
+    category: "expense" | "income" | "savings",
+    title: string,
+    amount: string,
+    botReply: string,
+    subtitle: string,
+    expenseVal?: number
+  ) => {
+    setTypedText("");
+    setIsSending(true);
+
+    setTimeout(() => {
+      const userMsgId = `quick-user-${Date.now()}`;
+      const typingMsgId = `quick-typing-${Date.now()}`;
+
+      setChatMessages((prev) => [
+        ...prev,
+        { id: userMsgId, role: "user", text, date: "เมื่อสักครู่" },
+      ]);
+      setIsSending(false);
+
+      // Typing indicator
+      setTimeout(() => {
+        setChatMessages((prev) => [
           ...prev,
-          pro: nextTier === "pro" ? prev.pro + 1 : prev.pro - 1,
-          free: nextTier === "free" ? prev.free + 1 : prev.free - 1,
-        }));
-        showToast(
-          nextTier === "pro"
-            ? `⭐ ปรับผู้ใช้ "${user.displayName}" เป็น PRO สำเร็จ!`
-            : `👤 ปรับผู้ใช้ "${user.displayName}" กลับเป็น Free เรียบร้อย`
-        );
-      } else {
-        alert("ไม่สามารถปรับสถานะได้: " + (data.error || "Unknown error"));
-      }
-    } catch (err: any) {
-      alert("Error: " + err.message);
-    } finally {
-      setUpdatingUserId(null);
-    }
+          { id: typingMsgId, role: "typing", date: "" },
+        ]);
+
+        // Bot reply
+        setTimeout(() => {
+          setChatMessages((prev) => [
+            ...prev.filter((m) => m.id !== typingMsgId),
+            { id: `quick-bot-${Date.now()}`, role: "bot", text: botReply, date: "เมื่อสักครู่" },
+            {
+              id: `quick-card-${Date.now()}`,
+              role: "card",
+              category,
+              title,
+              amount,
+              date: "เมื่อสักครู่",
+              subtitle,
+            },
+          ]);
+          if (expenseVal !== undefined && expenseVal > 0) {
+            setTodayExpense((prev) => prev + expenseVal);
+          }
+        }, 900);
+      }, 350);
+    }, 200);
   };
 
-  // Sync individual user DB tier directly from RevenueCat
-  const handleSyncUserWithRC = async (userId: string, userName: string) => {
-    setUpdatingUserId(userId);
-    try {
-      const res = await fetch("/api/admin/revenuecat/sync-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, action: "sync_db_with_rc" }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(`⚡ ซิงก์ "${userName}" ให้ตรงกับ RevenueCat สำเร็จ! (${data.syncedTier?.toUpperCase()})`);
-        // Refresh both lists
-        fetchRevenueCatAudit();
-        fetchUsers();
-      } else {
-        alert("ซิงก์ไม่สำเร็จ: " + (data.error || "Unknown error"));
-      }
-    } catch (err: any) {
-      alert("Error: " + err.message);
-    } finally {
-      setUpdatingUserId(null);
-    }
-  };
+  const handleManualSend = () => {
+    if (!typedText.trim()) return;
+    const text = typedText.trim();
+    const num = parseInt(text.match(/\d+/)?.[0] || "100", 10);
+    const isIncome = text.includes("เงินเดือน") || text.includes("รับ") || text.includes("ได้");
+    const isSavings = text.includes("ออม") || text.includes("กระปุก") || text.includes("บ้าน") || text.includes("มอไซ");
 
-  // Grant promotional entitlement in RevenueCat
-  const handleGrantPromoRC = async (userId: string, userName: string) => {
-    if (!confirm(`ต้องการมอบสิทธิ์ PRO โปรโมชันใน RevenueCat ให้กับ "${userName}" หรือไม่?`)) return;
-    setUpdatingUserId(userId);
-    try {
-      const res = await fetch("/api/admin/revenuecat/sync-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, action: "grant_rc_promo", duration: "monthly" }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(`🎁 มอบสิทธิ์ PRO โปรโมชันให้ "${userName}" ใน RevenueCat สำเร็จ!`);
-        fetchRevenueCatAudit();
-        fetchUsers();
-      } else {
-        alert("ไม่สำเร็จ: " + (data.error || "Unknown error"));
-      }
-    } catch (err: any) {
-      alert("Error: " + err.message);
-    } finally {
-      setUpdatingUserId(null);
-    }
-  };
-
-  // Delete subscriber in RevenueCat Sandbox (Reset)
-  const handleDeleteRCSubscriber = async (userId: string, userName: string) => {
-    if (
-      !confirm(
-        `⚠️ คุณแน่ใจหรือไม่ว่าต้องการลบประวัติการทดสอบใน RevenueCat ของ "${userName}"?\n(ข้อมูลใบเสร็จใน RC Sandbox จะถูกล้าง เพื่อให้ทดสอบกดซื้อใหม่ได้)`
-      )
-    )
-      return;
-
-    setUpdatingUserId(userId);
-    try {
-      const res = await fetch("/api/admin/revenuecat/sync-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, action: "delete_rc_subscriber" }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(`🗑️ ล้างประวัติใน RevenueCat ของ "${userName}" สำเร็จ พร้อมทดสอบใหม่`);
-        fetchRevenueCatAudit();
-        fetchUsers();
-      } else {
-        alert("ลบไม่สำเร็จ: " + (data.error || "Unknown error"));
-      }
-    } catch (err: any) {
-      alert("Error: " + err.message);
-    } finally {
-      setUpdatingUserId(null);
-    }
-  };
-
-  // Bulk reconcile all mismatched users
-  const handleBulkSyncAll = async () => {
-    if (!confirm("คุณต้องการซิงก์ฐานข้อมูล Supabase ให้ตรงกับสถานะจริงใน RevenueCat ของทุกคนหรือไม่?")) return;
-    setIsBulkSyncing(true);
-    try {
-      const res = await fetch("/api/admin/revenuecat/sync-all", { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        showToast(`🎉 ${data.message}`);
-        await Promise.all([fetchRevenueCatAudit(), fetchUsers()]);
-      } else {
-        alert("Bulk sync failed: " + (data.error || "Unknown error"));
-      }
-    } catch (err: any) {
-      alert("Error: " + err.message);
-    } finally {
-      setIsBulkSyncing(false);
-    }
-  };
-
-  // Export CSV
-  const handleExportCSV = () => {
-    const listToExport = filteredUsers;
-    if (listToExport.length === 0) return;
-    const headers = ["User ID", "Display Name", "Email", "Tier", "Provider", "Created At", "Last Sign In"];
-    const rows = listToExport.map((u) => [
-      `"${u.id}"`,
-      `"${u.displayName.replace(/"/g, '""')}"`,
-      `"${u.email}"`,
-      `"${u.tier.toUpperCase()}"`,
-      `"${u.provider}"`,
-      `"${u.createdAt ? new Date(u.createdAt).toLocaleString("th-TH") : "-"}"`,
-      `"${u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString("th-TH") : "-"}"`,
-    ]);
-
-    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `savefor_users_${new Date().toISOString().split("T")[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("📥 ส่งออกรายงาน CSV เรียบร้อยแล้ว");
-  };
-
-  // Filtered Supabase Users
-  const filteredUsers = useMemo(() => {
-    let list = [...users];
-    if (tierFilter !== "all") list = list.filter((u) => u.tier === tierFilter);
-    if (providerFilter !== "all") list = list.filter((u) => u.provider.toLowerCase().includes(providerFilter.toLowerCase()));
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      list = list.filter(
-        (u) =>
-          u.displayName.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q) ||
-          u.id.toLowerCase().includes(q)
+    if (isSavings) {
+      handleQuickAction(
+        text,
+        "savings",
+        text,
+        `+฿${num.toLocaleString()}`,
+        `หยอดกระปุก '${text}' ฿${num.toLocaleString()} สำเร็จแล้วครับ`,
+        "เป้าหมายเงินออมคืบหน้าอย่างต่อเนื่อง"
+      );
+    } else if (isIncome) {
+      handleQuickAction(
+        text,
+        "income",
+        text,
+        `+฿${num.toLocaleString()}`,
+        `บันทึกรายรับ '${text}' ฿${num.toLocaleString()} เข้ากระเป๋าเรียบร้อยครับ`,
+        "ยอดรับสะสมเดือนนี้เพิ่มขึ้น"
+      );
+    } else {
+      handleQuickAction(
+        text,
+        "expense",
+        text,
+        `-฿${num.toLocaleString()}`,
+        `บันทึกรายจ่าย '${text}' ฿${num.toLocaleString()} เรียบร้อยครับ`,
+        "หมวดหมู่ทั่วไป • บันทึกสำเร็จ",
+        num
       );
     }
-    list.sort((a, b) => {
-      if (sortBy === "name") return a.displayName.localeCompare(b.displayName);
-      if (sortBy === "recent_active") {
-        const timeA = a.lastSignInAt ? new Date(a.lastSignInAt).getTime() : 0;
-        const timeB = b.lastSignInAt ? new Date(b.lastSignInAt).getTime() : 0;
-        return timeB - timeA;
-      }
-      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return timeB - timeA;
-    });
-    return list;
-  }, [users, tierFilter, providerFilter, searchQuery, sortBy]);
-
-  // Filtered RevenueCat Audit Users
-  const filteredAuditUsers = useMemo(() => {
-    let list = [...auditUsers];
-    if (activeTab === "mismatch") {
-      list = list.filter((u) => u.syncStatus.startsWith("mismatch"));
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      list = list.filter(
-        (u) =>
-          u.displayName.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q) ||
-          u.id.toLowerCase().includes(q)
-      );
-    }
-    return list;
-  }, [auditUsers, activeTab, searchQuery]);
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "-";
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString("th-TH", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return dateStr;
-    }
   };
 
-  const getProviderBadge = (provider: string) => {
-    const p = provider.toLowerCase();
-    if (p.includes("google")) {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-            <path
-              fill="currentColor"
-              d="M12.24 10.285V13.4h6.887C18.2 16.14 15.645 18 12.24 18c-3.323 0-6.01-2.697-6.01-6s2.687-6 6.01-6c1.488 0 2.85.545 3.9 1.45l2.42-2.42C16.945 3.52 14.73 2.6 12.24 2.6 6.945 2.6 2.6 6.945 2.6 12.24s4.345 9.64 9.64 9.64c5.54 0 9.215-3.9 9.215-9.38 0-.63-.065-1.22-.185-1.785H12.24z"
-            />
-          </svg>
-          Google
-        </span>
-      );
-    }
-    if (p.includes("apple")) {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-700/50 text-zinc-300 border border-zinc-600/30">
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.63-.77 1.06-1.84.94-2.91-.91.04-2.02.61-2.67 1.38-.58.67-1.09 1.76-.95 2.81 1.02.08 2.05-.51 2.68-1.28" />
-          </svg>
-          Apple
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-        ✉️ อีเมล
-      </span>
+  // Animate multi-step chat typing & bot responses when Tab 0 is active
+  useEffect(() => {
+    if (activeTab !== 0) return;
+
+    setChatMessages(initialChatMessages);
+    setTodayExpense(0);
+    setTypedText("");
+    setIsSending(false);
+
+    const timeouts: NodeJS.Timeout[] = [];
+    let currentInterval: NodeJS.Timeout | null = null;
+
+    // Step 1: Type "กินชาบู 350" at t = 1200ms
+    const phrase1 = "กินชาบู 350";
+    timeouts.push(
+      setTimeout(() => {
+        let idx = 0;
+        currentInterval = setInterval(() => {
+          if (idx < phrase1.length) {
+            setTypedText(phrase1.slice(0, idx + 1));
+            idx++;
+          } else {
+            if (currentInterval) clearInterval(currentInterval);
+            // Step 2: Send message
+            timeouts.push(
+              setTimeout(() => {
+                setIsSending(true);
+                timeouts.push(
+                  setTimeout(() => {
+                    setChatMessages((prev) => [
+                      ...prev,
+                      { id: "user-1", role: "user", text: "กินชาบู 350", date: "เมื่อสักครู่" },
+                    ]);
+                    setTypedText("");
+                    setIsSending(false);
+
+                    // Step 3: Bot typing indicator
+                    timeouts.push(
+                      setTimeout(() => {
+                        setChatMessages((prev) => [
+                          ...prev,
+                          { id: "typing-1", role: "typing", date: "" },
+                        ]);
+
+                        // Step 4: Bot replies with text + expense card
+                        timeouts.push(
+                          setTimeout(() => {
+                            setChatMessages((prev) => [
+                              ...prev.filter((m) => m.id !== "typing-1"),
+                              {
+                                id: "bot-1",
+                                role: "bot",
+                                text: "บันทึกรายจ่าย 'กินชาบู' เรียบร้อยครับ",
+                                date: "เมื่อสักครู่",
+                              },
+                              {
+                                id: "card-1",
+                                role: "card",
+                                category: "expense",
+                                title: "กินชาบู",
+                                amount: "-฿350",
+                                date: "เมื่อสักครู่",
+                                subtitle: "หมวดอาหารและเครื่องดื่ม • วันนี้รวม ฿350",
+                              },
+                            ]);
+                            setTodayExpense(350);
+
+                            // Step 5: Pause to read, then start typing Message 2
+                            timeouts.push(
+                              setTimeout(() => {
+                                const phrase2 = "ออมเงินมอไซ 500";
+                                let idx2 = 0;
+                                currentInterval = setInterval(() => {
+                                  if (idx2 < phrase2.length) {
+                                    setTypedText(phrase2.slice(0, idx2 + 1));
+                                    idx2++;
+                                  } else {
+                                    if (currentInterval) clearInterval(currentInterval);
+                                    // Send second message
+                                    timeouts.push(
+                                      setTimeout(() => {
+                                        setIsSending(true);
+                                        timeouts.push(
+                                          setTimeout(() => {
+                                            setChatMessages((prev) => [
+                                              ...prev,
+                                              { id: "user-2", role: "user", text: "ออมเงินมอไซ 500", date: "เมื่อสักครู่" },
+                                            ]);
+                                            setTypedText("");
+                                            setIsSending(false);
+
+                                            // Bot typing indicator 2
+                                            timeouts.push(
+                                              setTimeout(() => {
+                                                setChatMessages((prev) => [
+                                                  ...prev,
+                                                  { id: "typing-2", role: "typing", date: "" },
+                                                ]);
+
+                                                // Bot reply 2: text + savings card
+                                                timeouts.push(
+                                                  setTimeout(() => {
+                                                    setChatMessages((prev) => [
+                                                      ...prev.filter((m) => m.id !== "typing-2"),
+                                                      {
+                                                        id: "bot-2",
+                                                        role: "bot",
+                                                        text: "หยอดกระปุก 'มอไซ' ฿500 สำเร็จ! เป้าหมายถึง 55% แล้วครับ",
+                                                        date: "เมื่อสักครู่",
+                                                      },
+                                                      {
+                                                        id: "card-2",
+                                                        role: "card",
+                                                        category: "savings",
+                                                        title: "หยอดกระปุกมอไซ",
+                                                        amount: "+฿500",
+                                                        date: "เมื่อสักครู่",
+                                                        subtitle: "กระปุกมอไซ: ฿27,709 / ฿50,000 (55%)",
+                                                      },
+                                                    ]);
+                                                  }, 1100)
+                                                );
+                                              }, 450)
+                                            );
+                                          }, 350)
+                                        );
+                                      }, 350)
+                                    );
+                                  }
+                                }, 110);
+                              }, 3200) // Reading pause between message 1 and 2
+                            );
+                          }, 1100)
+                        );
+                      }, 450)
+                    );
+                  }, 350)
+                );
+              }, 350)
+            );
+          }
+        }, 110);
+      }, 1200)
     );
-  };
 
-  const renderSyncBadge = (status: AuditUserItem["syncStatus"]) => {
-    switch (status) {
-      case "synced_pro":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            🟢 ตรงกัน (PRO)
-          </span>
-        );
-      case "synced_free":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700/80">
-            <span className="w-2 h-2 rounded-full bg-slate-500" />
-            🟢 ตรงกัน (Free)
-          </span>
-        );
-      case "mismatch_db_free_rc_pro":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
-            <span>⚠️</span>
-            DB Free แต่ RevenueCat มี PRO!
-          </span>
-        );
-      case "mismatch_db_pro_rc_inactive":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40">
-            <span>⚠️</span>
-            DB PRO แต่ RevenueCat หมดอายุ/ไม่มีสิทธิ์
-          </span>
-        );
-    }
-  };
+    return () => {
+      timeouts.forEach((t) => clearTimeout(t));
+      if (currentInterval) clearInterval(currentInterval);
+    };
+  }, [activeTab]);
 
   return (
-    <div className="min-h-screen bg-[#0A0E17] text-slate-100 font-sans selection:bg-emerald-500 selection:text-white pb-20">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-slate-900/95 text-white px-5 py-3.5 rounded-2xl border border-emerald-500/50 shadow-2xl shadow-emerald-500/20 backdrop-blur-xl animate-fade-in">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-          <p className="text-sm font-semibold">{toastMessage}</p>
-        </div>
-      )}
-
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-[#0A0E17]/90 backdrop-blur-md border-b border-slate-800/80 px-4 lg:px-8 py-3.5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <span className="text-xl">💰</span>
+    <div className="min-h-screen bg-[#FAF7E8] text-[#2D3748] selection:bg-[#E2EFCF] selection:text-[#5A8238]">
+      {/* ─────────────────────────────────────────────────────────────
+          1. HEADER / NAVBAR
+      ───────────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 bg-[#FAF7E8]/90 backdrop-blur-md border-b border-[#E8E2CB]/80 transition-all">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
+          {/* Logo & Brand */}
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="w-12 h-12 rounded-2xl bg-white shadow-xs border border-[#E2EFCF] p-1.5 flex items-center justify-center transition-transform group-hover:scale-105">
+              <Image
+                src="/images/logo_blue.png"
+                alt="เงินมานี่ โลโก้"
+                width={40}
+                height={40}
+                className="object-contain rounded-xl"
+                priority
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-base font-bold tracking-tight text-white">SaveFor</span>
-                <span className="text-[10px] uppercase tracking-wider font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md">
-                  Admin & Subscriptions
+                <span className="text-xl sm:text-2xl font-bold tracking-tight text-[#1A2412]">
+                  เงินมานี่
+                </span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#E2EFCF] text-[#5A8238] border border-[#C5DCAB]">
+                  ngenmoney.com
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
-                ระบบจัดการผู้ใช้ & เปรียบเทียบข้อมูล RevenueCat กับ Supabase Database
+              <p className="text-xs text-[#718096] hidden sm:block">
+                สมุดบันทึกรายรับรายจ่าย & กระปุกเงินตามฝัน
               </p>
             </div>
-          </div>
+          </Link>
 
-          <div className="flex items-center gap-2.5">
+          {/* Nav Links */}
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-[#4A5568]">
+            <a href="#showcase" className="hover:text-[#7EA459] transition-colors">
+              หน้าจอแอปจริง
+            </a>
+            <a href="#features" className="hover:text-[#7EA459] transition-colors">
+              ฟีเจอร์เด่น
+            </a>
+            <a href="#banks" className="hover:text-[#7EA459] transition-colors">
+              ธนาคารที่รองรับ
+            </a>
+            <a href="#faq" className="hover:text-[#7EA459] transition-colors">
+              คำถามที่พบบ่อย
+            </a>
+          </nav>
+
+          {/* CTA & Admin */}
+          <div className="flex items-center gap-3">
             <Link
-              href="/admin/test-plan"
-              className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 shadow-sm transition-all"
+              href="/admin"
+              className="hidden lg:inline-flex text-xs font-medium text-[#718096] hover:text-[#2D3748] px-3 py-1.5 rounded-lg border border-[#E2E8F0] hover:bg-white transition-all"
             >
-              <span>🧪</span>
-              <span>ทดสอบแผน (Test Plan)</span>
+              แดชบอร์ดแอดมิน
             </Link>
-
-            <Link
-              href="/bank-rules"
-              className="hidden md:flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60 transition-all"
+            <a
+              href="#download"
+              className="inline-flex items-center gap-2 bg-[#7EA459] hover:bg-[#5A8238] text-white font-medium text-sm px-5 py-2.5 rounded-full shadow-xs hover:shadow-md transition-all transform hover:-translate-y-0.5 active:translate-y-0"
             >
-              ⚙️ กฎธนาคาร
-            </Link>
-
-            <button
-              onClick={() => {
-                fetchUsers();
-                fetchRevenueCatAudit();
-              }}
-              disabled={isLoadingUsers || isLoadingAudit}
-              className="flex items-center gap-2 text-xs font-semibold px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 transition-all disabled:opacity-50"
-            >
-              <svg
-                className={`w-3.5 h-3.5 ${isLoadingUsers || isLoadingAudit ? "animate-spin" : ""}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2.5"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
+              <span>ดาวน์โหลดฟรี</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
               </svg>
-              <span>รีเฟรชข้อมูล</span>
-            </button>
+            </a>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 lg:px-8 py-8">
-        {/* ========================================================================= */}
-        {/* REVENUECAT VS SUPABASE DATABASE COMPARISON BANNER */}
-        {/* ========================================================================= */}
-        <section className="mb-8">
-          <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/30 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">⚡</span>
-                  <h2 className="text-lg font-black text-white tracking-tight">
-                    ผลการเปรียบเทียบ: Supabase Database vs RevenueCat
-                  </h2>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    Live API Verified
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300">
-                  ตรวจสอบความถูกต้องระหว่างฐานข้อมูลหลัก Supabase กับยอดผู้สมัครจริงในระบบ RevenueCat
-                  {lastAuditTime && ` • ตรวจสอบล่าสุดเมื่อ ${lastAuditTime}`}
-                </p>
+      {/* ─────────────────────────────────────────────────────────────
+          2. HERO SECTION WITH LIVING ANIMATED APP SIMULATOR
+      ───────────────────────────────────────────────────────────── */}
+      <section id="showcase" className="relative pt-10 pb-20 sm:pt-16 sm:pb-28 overflow-hidden">
+        {/* Soft background aura */}
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-gradient-to-r from-[#E2EFCF]/60 via-[#FAF7E8] to-[#FFF3CD]/40 blur-3xl -z-10 rounded-full pointer-events-none" />
+
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+            {/* Left Column: Headlines & Actions */}
+            <div className="lg:col-span-7 text-center lg:text-left">
+              {/* Badge */}
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#E2EFCF] text-[#5A8238] text-xs sm:text-sm font-semibold border border-[#BED7A1] mb-6 shadow-xs">
+                <span className="flex h-2 w-2 rounded-full bg-[#7EA459] animate-pulse" />
+                <span>แอปบันทึกการเงินสไตล์สมุดโน้ตอบอุ่น • เปิดให้ดาวน์โหลดแล้ว</span>
               </div>
 
-              {/* Status pill & Sync button */}
-              <div className="flex flex-wrap items-center gap-3">
-                {comparisonStats.isFullyInSync ? (
-                  <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>🟢 ข้อมูลตรงกัน 100% (In Sync)</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold animate-pulse">
-                    <span>⚠️</span>
-                    <span>พบข้อมูลไม่ตรงกัน {comparisonStats.mismatchCount} รายการ!</span>
-                  </div>
-                )}
-
-                {!comparisonStats.isFullyInSync && (
-                  <button
-                    onClick={handleBulkSyncAll}
-                    disabled={isBulkSyncing}
-                    className="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-50"
+              {/* Headline */}
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-[#1A2412] tracking-tight leading-[1.18] mb-6">
+                จดง่าย สบายใจ... <br />
+                <span className="text-[#7EA459] relative inline-block">
+                  ให้เงินไหลมาเทมา
+                  <svg
+                    className="absolute -bottom-2 left-0 w-full text-[#F5B731]"
+                    viewBox="0 0 250 12"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
                   >
-                    <span>⚡</span>
-                    <span>{isBulkSyncing ? "กำลังซิงก์..." : "ซิงก์ทุกคนให้ตรงกับ RevenueCat"}</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Comparison Metrics Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-              {/* Total Users */}
-              <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                  ผู้ใช้ทั้งหมดในระบบ
+                    <path d="M3 9C55 3 195 2 247 9" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+                  </svg>
                 </span>
-                <div className="text-2xl font-black text-white mt-1">
-                  {isLoadingAudit ? "..." : comparisonStats.totalUsers} <span className="text-xs font-normal text-slate-400">บัญชี</span>
-                </div>
-                <span className="text-[10px] text-slate-500 mt-0.5 block">Supabase Auth & Profiles</span>
-              </div>
+              </h1>
 
-              {/* Supabase PRO Count */}
-              <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider block">
-                    PRO ใน Database
-                  </span>
-                  <span className="text-xs">🗄️</span>
-                </div>
-                <div className="text-2xl font-black text-emerald-400 mt-1">
-                  {isLoadingAudit ? "..." : comparisonStats.dbProCount} <span className="text-xs font-normal text-slate-400">คน</span>
-                </div>
-                <span className="text-[10px] text-emerald-400/70 mt-0.5 block">ตาราง profiles (tier = 'pro')</span>
-              </div>
+              {/* Subtitle */}
+              <p className="text-lg sm:text-xl text-[#4A5568] max-w-xl mx-auto lg:mx-0 leading-relaxed mb-8 font-light">
+                บันทึกรายรับ-รายจ่ายผ่านช่องแชทง่ายๆ เหมือนคุยกับเพื่อน สแกนสลิปโอนเงินย้อนหลัง บันทึก 16 ใบเสร็จในคลิกเดียว พร้อมกระปุกเงินตามฝันและแดชบอร์ดการเงินที่ใช้งานง่ายที่สุด
+              </p>
 
-              {/* RevenueCat PRO Count */}
-              <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-indigo-400 uppercase tracking-wider block">
-                    PRO ใน RevenueCat
-                  </span>
-                  <span className="text-xs">⚡</span>
-                </div>
-                <div className="text-2xl font-black text-indigo-400 mt-1">
-                  {isLoadingAudit ? "..." : comparisonStats.rcProCount} <span className="text-xs font-normal text-slate-400">คน</span>
-                </div>
-                <span className="text-[10px] text-indigo-400/70 mt-0.5 block">Active Entitlements ใน RC</span>
-              </div>
-
-              {/* Mismatch Count */}
-              <div
-                className={`bg-slate-950/60 rounded-2xl p-4 border ${
-                  comparisonStats.mismatchCount > 0
-                    ? "border-amber-500/40 bg-amber-500/5"
-                    : "border-slate-800/80"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span
-                    className={`text-[11px] font-semibold uppercase tracking-wider block ${
-                      comparisonStats.mismatchCount > 0 ? "text-amber-400" : "text-slate-400"
-                    }`}
-                  >
-                    ความคลาดเคลื่อน
-                  </span>
-                  <span className="text-xs">{comparisonStats.mismatchCount > 0 ? "⚠️" : "✅"}</span>
-                </div>
-                <div
-                  className={`text-2xl font-black mt-1 ${
-                    comparisonStats.mismatchCount > 0 ? "text-amber-400" : "text-emerald-400"
-                  }`}
+              {/* Store Download CTAs */}
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 mb-8">
+                {/* App Store Button */}
+                <a
+                  href="https://apps.apple.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-[#1A2412] hover:bg-black text-white px-6 py-3.5 rounded-2xl shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 active:translate-y-0"
                 >
-                  {isLoadingAudit ? "..." : comparisonStats.mismatchCount} <span className="text-xs font-normal text-slate-400">คน</span>
-                </div>
-                <span className="text-[10px] text-slate-500 mt-0.5 block">
-                  {comparisonStats.mismatchCount > 0 ? "กดดูที่แท็บด้านล่างเพื่อซิงก์" : "ตรงกันสมบูรณ์"}
-                </span>
-              </div>
-            </div>
+                  <svg className="w-7 h-7 fill-current" viewBox="0 0 24 24">
+                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.64-.78 1.08-1.86.96-2.95-1 .04-2.16.66-2.83 1.45-.58.68-1.1 1.77-.96 2.84 1.12.09 2.22-.56 2.83-1.34z" />
+                  </svg>
+                  <div className="text-left">
+                    <div className="text-[10px] uppercase tracking-wider text-gray-300 leading-none">
+                      Download on the
+                    </div>
+                    <div className="text-base font-semibold leading-tight">
+                      App Store
+                    </div>
+                  </div>
+                </a>
 
-            <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-          </div>
-        </section>
-
-        {/* ========================================================================= */}
-        {/* TABS NAVIGATION */}
-        {/* ========================================================================= */}
-        <div className="flex items-center gap-2 mb-6 border-b border-slate-800/80 pb-3">
-          <button
-            onClick={() => setActiveTab("users")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              activeTab === "users"
-                ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20"
-                : "bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-slate-800/80"
-            }`}
-          >
-            <span>👥</span>
-            <span>รายชื่อผู้ใช้งาน Supabase ({stats.total})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("rc_audit")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              activeTab === "rc_audit"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
-                : "bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-slate-800/80"
-            }`}
-          >
-            <span>⚡</span>
-            <span>ตารางเปรียบเทียบ RevenueCat ({auditUsers.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("mismatch")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all relative ${
-              activeTab === "mismatch"
-                ? "bg-amber-600 text-white shadow-lg shadow-amber-600/20"
-                : "bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-slate-800/80"
-            }`}
-          >
-            <span>⚠️</span>
-            <span>รายการที่ไม่ตรงกัน</span>
-            {comparisonStats.mismatchCount > 0 && (
-              <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center">
-                {comparisonStats.mismatchCount}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Filter and Search Bar */}
-        <div className="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-4 mb-6 backdrop-blur-xl shadow-lg">
-          <div className="flex flex-col md:flex-row gap-3.5 items-stretch md:items-center justify-between">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <span className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-slate-400">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </span>
-              <input
-                type="text"
-                placeholder="ค้นหาชื่อผู้ใช้, อีเมล, หรือ User ID..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/80 transition-all"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute inset-y-0 right-3 flex items-center text-slate-500 hover:text-white"
+                {/* Google Play Button */}
+                <a
+                  href="https://play.google.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-[#1A2412] hover:bg-black text-white px-6 py-3.5 rounded-2xl shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 active:translate-y-0"
                 >
-                  ✕
-                </button>
-              )}
-            </div>
+                  <svg className="w-7 h-7 fill-current" viewBox="0 0 24 24">
+                    <path d="M3.609 1.814L13.793 12 3.61 22.186a2.38 2.38 0 01-.61-.715V2.53c.184-.286.39-.53.61-.716zm11.602 11.604L4.85 23.778c.376.14.796.177 1.229.074.453-.109.873-.34 1.229-.68l10.9-6.242-2.997-3.512zM21.5 10.366l-3.328-1.906-3.418 3.54 3.418 3.54 3.328-1.906c.928-.532 1.499-1.503 1.499-2.634 0-1.131-.571-2.102-1.499-2.634zm-6.289-1.574L7.308.848C6.952.508 6.532.277 6.079.168 5.646.065 5.226.102 4.85.242l10.361 10.36 2.997-1.81z" />
+                  </svg>
+                  <div className="text-left">
+                    <div className="text-[10px] uppercase tracking-wider text-gray-300 leading-none">
+                      GET IT ON
+                    </div>
+                    <div className="text-base font-semibold leading-tight">
+                      Google Play
+                    </div>
+                  </div>
+                </a>
+              </div>
 
-            {activeTab === "users" && (
-              <>
-                {/* Filter Tabs for users */}
-                <div className="flex items-center gap-1.5 bg-slate-950/70 p-1 rounded-xl border border-slate-800/80">
-                  <button
-                    onClick={() => setTierFilter("all")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      tierFilter === "all" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    ทั้งหมด ({stats.total})
-                  </button>
-                  <button
-                    onClick={() => setTierFilter("pro")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                      tierFilter === "pro" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-emerald-400"
-                    }`}
-                  >
-                    <span>⭐</span> PRO ({stats.pro})
-                  </button>
-                  <button
-                    onClick={() => setTierFilter("free")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      tierFilter === "free" ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    Free ({stats.free})
-                  </button>
-                </div>
-
+              {/* Trust Badges */}
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-6 text-xs text-[#718096]">
                 <div className="flex items-center gap-2">
-                  <select
-                    value={providerFilter}
-                    onChange={(e) => setProviderFilter(e.target.value)}
-                    className="bg-slate-950/70 border border-slate-800 text-xs text-slate-300 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="all">ช่องทาง: ทั้งหมด</option>
-                    <option value="google">Google</option>
-                    <option value="apple">Apple</option>
-                    <option value="email">อีเมล</option>
-                  </select>
-
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as any)}
-                    className="bg-slate-950/70 border border-slate-800 text-xs text-slate-300 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="newest">สมัครล่าสุด</option>
-                    <option value="recent_active">ใช้งานล่าสุด</option>
-                    <option value="name">ชื่อ A-Z</option>
-                  </select>
-
-                  <button
-                    onClick={handleExportCSV}
-                    title="ดาวน์โหลดเป็นไฟล์ CSV"
-                    className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700/80 transition-all"
-                  >
-                    <span>📥</span>
-                    <span className="hidden sm:inline">CSV</span>
-                  </button>
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <span>สแกนสลิปทุกธนาคารไทย</span>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span>⚠️</span>
-              <span>{error}</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <span>ไม่ขอรหัสผ่านธนาคาร 100%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <span>ไม่มีโฆษณาคั่นกวนใจ</span>
+                </div>
+              </div>
             </div>
-            <button onClick={fetchUsers} className="text-xs font-bold underline hover:text-red-300">
-              ลองใหม่
-            </button>
-          </div>
-        )}
 
-        {/* ========================================================================= */}
-        {/* VIEW 1: SUPABASE USERS LIST */}
-        {/* ========================================================================= */}
-        {activeTab === "users" && (
-          <div className="bg-slate-900/80 border border-slate-800/90 rounded-2xl overflow-hidden shadow-xl backdrop-blur-xl">
-            {isLoadingUsers ? (
-              <div className="py-24 text-center">
-                <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-sm text-slate-400">กำลังเชื่อมต่อ Supabase เพื่อดึงรายชื่อผู้ใช้...</p>
+            {/* Right Column: LIVING ANIMATED APP SIMULATION */}
+            <div className="lg:col-span-5 flex flex-col items-center">
+              {/* Feature Switcher Pills */}
+              <div className="flex flex-wrap items-center justify-center gap-1.5 p-1 bg-white/90 backdrop-blur-md rounded-2xl border border-[#E8E2CB] shadow-xs mb-4 text-xs font-semibold">
+                {screenTabs.map((tab, idx) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(idx)}
+                    className={`px-3 py-1.5 rounded-xl transition-all ${
+                      activeTab === idx
+                        ? "bg-[#7EA459] text-white shadow-xs font-bold"
+                        : "text-[#4A5568] hover:text-[#1A2412]"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
-            ) : filteredUsers.length === 0 ? (
-              <div className="py-24 text-center">
-                <span className="text-4xl block mb-3">🔍</span>
-                <p className="text-base font-semibold text-white mb-1">ไม่พบข้อมูลผู้ใช้ที่ตรงกับเงื่อนไข</p>
-                <p className="text-xs text-slate-400">ลองล้างการค้นหาหรือเปลี่ยนตัวกรองใหม่</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-800/80 bg-slate-950/40 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      <th className="py-3.5 px-5">ผู้ใช้งาน</th>
-                      <th className="py-3.5 px-5">สถานะใน DB</th>
-                      <th className="py-3.5 px-5">ช่องทาง</th>
-                      <th className="py-3.5 px-5">วันที่สมัคร</th>
-                      <th className="py-3.5 px-5">ใช้งานล่าสุด</th>
-                      <th className="py-3.5 px-5 text-right">ปรับสิทธิ์ด่วน</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50 text-sm">
-                    {filteredUsers.map((user) => {
-                      const isPro = user.tier === "pro";
-                      const isUpdating = updatingUserId === user.id;
 
-                      return (
-                        <tr
-                          key={user.id}
-                          className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
-                          onClick={() => setSelectedUser(user)}
-                        >
-                          {/* User Profile */}
-                          <td className="py-4 px-5">
-                            <div className="flex items-center gap-3">
-                              {user.avatarUrl ? (
-                                <img
-                                  src={user.avatarUrl}
-                                  alt={user.displayName}
-                                  className="w-10 h-10 rounded-full object-cover border border-slate-700/80 shadow-sm"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 flex items-center justify-center font-bold text-white text-sm shadow-sm border border-slate-700">
-                                  {user.displayName.substring(0, 1).toUpperCase()}
+              {/* iPhone 16 Pro Frame with EXACT Real App UI & Animations */}
+              <div className="relative w-[310px] sm:w-[330px] bg-gradient-to-b from-[#2B2E26] via-[#1A1D15] to-[#12140F] rounded-[52px] p-2.5 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.38)] ring-1 ring-white/20 border-2 border-[#4A4E42]/40">
+                {/* Metallic Bezel Reflection Ring */}
+                <div className="absolute inset-0 rounded-[52px] pointer-events-none ring-1 ring-inset ring-white/10" />
+
+                {/* Inner Screen Container */}
+                <div className="w-full h-[620px] sm:h-[660px] bg-[#FAF7E8] rounded-[44px] overflow-hidden relative shadow-inner flex flex-col font-sans select-none bg-[linear-gradient(to_right,#EFE9D2_1px,transparent_1px),linear-gradient(to_bottom,#EFE9D2_1px,transparent_1px)] bg-[size:16px_16px]">
+                  {/* Status Bar */}
+                  <div className="pt-2 px-6 pb-1.5 flex items-center justify-between text-[11px] font-semibold text-[#1A2412] z-30">
+                    <span>01:08</span>
+                    {/* Dynamic Island */}
+                    <div className="w-24 h-4.5 bg-black rounded-full flex items-center justify-end pr-1.5 gap-1 shadow-xs">
+                      <div className="w-2 h-2 rounded-full bg-[#0D1409] border border-[#22C55E]/40" />
+                    </div>
+                    {/* Signal & Battery */}
+                    <div className="flex items-center gap-1 text-[#1A2412]">
+                      <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                        <path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L12 22l7.03-4.39C20.26 16.07 21 14.12 21 12c0-4.97-4.03-9-9-9z" />
+                      </svg>
+                      <div className="w-5 h-2.5 border border-[#1A2412] rounded-xs p-0.5 flex items-center">
+                        <div className="w-2/3 h-full bg-[#1A2412] rounded-2xs" />
+                      </div>
+                      <span className="text-[9px] font-bold">13</span>
+                    </div>
+                  </div>
+
+                  {/* ════════════════════════════════════════════════════════════
+                      SIMULATED APP SCREENS (EXACT MATCH TO USER SCREENSHOTS)
+                  ════════════════════════════════════════════════════════════ */}
+                  
+                  {/* ──── SCREEN 0: CHAT NOTEBOOK (LIVE ANIMATED) ──── */}
+                  {activeTab === 0 && (
+                    <div className="flex-1 flex flex-col justify-between overflow-hidden relative animate-fadeIn">
+                      {/* Top Header Card (Exact match to screenshot 1) */}
+                      <div className="px-3 pt-1 z-20">
+                        <div className="bg-white rounded-2xl p-2.5 border border-[#E8E2CB] shadow-xs flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-9 h-9 rounded-full overflow-hidden bg-white border border-[#E2EFCF] p-1 flex items-center justify-center shadow-xs">
+                              <Image
+                                src="/images/logo_blue.png"
+                                alt="เงินมานี่"
+                                width={32}
+                                height={32}
+                                className="w-full h-full object-contain rounded-full"
+                              />
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-[#1A2412] leading-tight">บอลทาโร่</div>
+                              <div className="text-[9px] flex items-center gap-1 text-gray-500 mt-0.5">
+                                <span className={`font-semibold ${todayExpense > 0 ? "text-red-500" : "text-red-500"}`}>
+                                  วันนี้ ฿{todayExpense}
+                                </span>
+                                <span>•</span>
+                                <span>เดือนนี้ ฿4372</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Quick Header Actions */}
+                          <div className="flex items-center gap-1.5">
+                            {/* QR Scanner button with glowing RED badge 18 */}
+                            <button
+                              onClick={() => setActiveTab(1)}
+                              className="w-8 h-8 rounded-xl bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center relative shadow-2xs hover:scale-105 transition-transform"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                              </svg>
+                              <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-black px-1 py-0.2 rounded-full border border-white animate-pulse">
+                                18
+                              </span>
+                            </button>
+
+                            <div className="w-8 h-8 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 flex items-center justify-center">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+
+                            <div className="w-8 h-8 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 flex items-center justify-center relative">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                              </svg>
+                              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full" />
+                            </div>
+
+                            <div className="w-8 h-8 rounded-xl bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Chat Messages Stream */}
+                      <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-2.5">
+                        {chatMessages.map((msg) => (
+                          <React.Fragment key={msg.id}>
+                            {/* 1. User Message (Right Green Bubble) */}
+                            {msg.role === "user" && (
+                              <div className="flex justify-end animate-slide-up flex-shrink-0">
+                                <div className="bg-[#6F9745] text-white px-3.5 py-2 rounded-2xl rounded-tr-xs shadow-xs text-right max-w-[210px]">
+                                  <div className="text-xs font-bold">{msg.text}</div>
+                                  <div className="text-[8px] text-white/80 mt-0.5">{msg.date}</div>
                                 </div>
-                              )}
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-white group-hover:text-emerald-400 transition-colors">
-                                    {user.displayName}
+                              </div>
+                            )}
+
+                            {/* 2. Bot Message (Left White Bubble with Avatar) */}
+                            {msg.role === "bot" && (
+                              <div className="flex items-start gap-1.5 animate-slide-up max-w-[240px] flex-shrink-0">
+                                <div className="w-6 h-6 rounded-lg bg-white border border-[#E2EFCF] p-0.5 shadow-2xs flex-shrink-0 mt-0.5">
+                                  <Image
+                                    src="/images/logo_blue.png"
+                                    alt="เงินมานี่"
+                                    width={20}
+                                    height={20}
+                                    className="object-contain rounded-md"
+                                  />
+                                </div>
+                                <div className="bg-white border border-[#E8E2CB] text-[#1A2412] px-3 py-2 rounded-2xl rounded-tl-xs shadow-xs text-left">
+                                  <div className="text-[11px] font-semibold leading-relaxed text-[#1A2412]">
+                                    {msg.text}
+                                  </div>
+                                  <div className="text-[8px] text-gray-400 mt-0.5">{msg.date}</div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 3. Bot Typing Indicator */}
+                            {msg.role === "typing" && (
+                              <div className="flex items-center gap-1.5 animate-slide-up flex-shrink-0">
+                                <div className="w-6 h-6 rounded-lg bg-white border border-[#E2EFCF] p-0.5 shadow-2xs flex-shrink-0">
+                                  <Image
+                                    src="/images/logo_blue.png"
+                                    alt="เงินมานี่"
+                                    width={20}
+                                    height={20}
+                                    className="object-contain rounded-md"
+                                  />
+                                </div>
+                                <div className="bg-white border border-[#E8E2CB] px-3 py-2 rounded-2xl rounded-tl-xs shadow-xs flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 bg-[#7EA459] rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                  <span className="w-1.5 h-1.5 bg-[#7EA459] rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                  <span className="w-1.5 h-1.5 bg-[#7EA459] rounded-full animate-bounce" />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 4. Structured Transaction Card */}
+                            {msg.role === "card" && (
+                              <div className="w-[210px] bg-white rounded-2xl border border-[#D5E3DF] overflow-hidden shadow-xs animate-slide-up flex-shrink-0">
+                                <div
+                                  className={`p-2 flex items-center justify-between ${
+                                    msg.category === "income"
+                                      ? "bg-[#E6F5F3]"
+                                      : msg.category === "savings"
+                                      ? "bg-[#EDE8FD]"
+                                      : "bg-[#FEE2E2]"
+                                  }`}
+                                >
+                                  <span
+                                    className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full border ${
+                                      msg.category === "income"
+                                        ? "text-[#10B981] bg-white border-[#A7F3D0]"
+                                        : msg.category === "savings"
+                                        ? "text-[#7A5AF8] bg-white border-[#DCD2F9]"
+                                        : "text-[#EF4444] bg-white border-[#FCA5A5]"
+                                    }`}
+                                  >
+                                    {msg.category === "income"
+                                      ? "รายรับ"
+                                      : msg.category === "savings"
+                                      ? "เงินออม"
+                                      : "รายจ่าย"}
                                   </span>
-                                  {isPro && (
-                                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-extrabold">
-                                      PRO
-                                    </span>
+                                  <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-gray-500 shadow-2xs">
+                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                  </div>
+                                </div>
+                                <div className="p-2.5">
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <div
+                                      className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+                                        msg.category === "income"
+                                          ? "bg-[#E6F5F3] text-[#10B981]"
+                                          : msg.category === "savings"
+                                          ? "bg-[#EDE8FD] text-[#7A5AF8]"
+                                          : "bg-[#FEE2E2] text-[#EF4444]"
+                                      }`}
+                                    >
+                                      {msg.category === "income" ? (
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                        </svg>
+                                      ) : msg.category === "savings" ? (
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                      ) : (
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                        </svg>
+                                      )}
+                                    </div>
+                                    <div className="text-[8px] text-gray-400">{msg.date}</div>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-xs font-bold text-[#1A2412] truncate max-w-[110px]">{msg.title}</div>
+                                    <div
+                                      className={`text-xs font-black ${
+                                        msg.category === "income"
+                                          ? "text-[#10B981]"
+                                          : msg.category === "savings"
+                                          ? "text-[#7A5AF8]"
+                                          : "text-[#EF4444]"
+                                      }`}
+                                    >
+                                      {msg.amount}
+                                    </div>
+                                  </div>
+                                  {msg.subtitle && (
+                                    <div className="text-[8px] text-gray-400 mt-0.5 leading-tight">{msg.subtitle}</div>
                                   )}
                                 </div>
-                                <p className="text-xs text-slate-400 font-mono tracking-tight">{user.email}</p>
                               </div>
-                            </div>
-                          </td>
-
-                          {/* Tier Status Badge */}
-                          <td className="py-4 px-5">
-                            {isPro ? (
-                              <div>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                  SaveFor PRO ⭐
-                                </span>
-                                {user.subscriptionExpiresAt && (
-                                  <p className="text-[10px] text-emerald-400/80 mt-1 font-mono">
-                                    หมดอายุ: {formatDate(user.subscriptionExpiresAt)}
-                                  </p>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">
-                                Free Plan
-                              </span>
                             )}
-                          </td>
+                          </React.Fragment>
+                        ))}
+                      </div>
 
-                          {/* Auth Provider */}
-                          <td className="py-4 px-5">{getProviderBadge(user.provider)}</td>
-
-                          {/* Created At */}
-                          <td className="py-4 px-5 text-xs text-slate-400 font-mono">
-                            {formatDate(user.createdAt)}
-                          </td>
-
-                          {/* Last Sign In */}
-                          <td className="py-4 px-5 text-xs text-slate-400 font-mono">
-                            {formatDate(user.lastSignInAt)}
-                          </td>
-
-                          {/* Actions */}
-                          <td className="py-4 px-5 text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => handleToggleTier(user)}
-                                disabled={isUpdating}
-                                className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
-                                  isPro
-                                    ? "bg-slate-800/80 hover:bg-red-500/20 text-slate-300 hover:text-red-400 border-slate-700 hover:border-red-500/30"
-                                    : "bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border-emerald-500/40"
-                                } disabled:opacity-50`}
-                              >
-                                {isUpdating ? "..." : isPro ? "ปรับเป็น Free" : "⚡ อัปเป็น PRO"}
-                              </button>
-                              <button
-                                onClick={() => setSelectedUser(user)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                                title="ดูรายละเอียดผู้ใช้"
-                              >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ========================================================================= */}
-        {/* VIEW 2 & 3: REVENUECAT VS SUPABASE COMPARISON AUDIT TABLE */}
-        {/* ========================================================================= */}
-        {(activeTab === "rc_audit" || activeTab === "mismatch") && (
-          <div className="bg-slate-900/80 border border-slate-800/90 rounded-2xl overflow-hidden shadow-xl backdrop-blur-xl">
-            {isLoadingAudit ? (
-              <div className="py-24 text-center">
-                <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-sm text-slate-400">กำลังยิงตรวจเทียบกับ RevenueCat v1 REST API...</p>
-                <p className="text-xs text-slate-500 mt-1">Bearer sk_jTsXZnbJhWRcJOIrXGJTUTpVsPGbp</p>
-              </div>
-            ) : filteredAuditUsers.length === 0 ? (
-              <div className="py-24 text-center">
-                <span className="text-4xl block mb-3">
-                  {activeTab === "mismatch" ? "🎉" : "🔍"}
-                </span>
-                <p className="text-base font-semibold text-white mb-1">
-                  {activeTab === "mismatch"
-                    ? "ยอดเยี่ยม! ไม่มีข้อมูลไม่ตรงกันเลย ทุกบัญชีถูกต้องตรงกัน 100%"
-                    : "ไม่พบข้อมูลผู้ใช้ที่ตรงกับเงื่อนไข"}
-                </p>
-                <p className="text-xs text-slate-400">
-                  {activeTab === "mismatch"
-                    ? "ฐานข้อมูล Supabase และ RevenueCat สอดคล้องกันทั้งหมด"
-                    : "ลองรีเฟรชข้อมูลหรือล้างการค้นหา"}
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-800/80 bg-slate-950/40 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      <th className="py-3.5 px-5">ผู้ใช้งาน</th>
-                      <th className="py-3.5 px-5">สถานะใน DB (Supabase)</th>
-                      <th className="py-3.5 px-5">สถานะใน RevenueCat</th>
-                      <th className="py-3.5 px-5">ผลการเทียบเคียง</th>
-                      <th className="py-3.5 px-5 text-right">เครื่องมือซิงก์ & จัดการ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50 text-sm">
-                    {filteredAuditUsers.map((item) => {
-                      const isUpdating = updatingUserId === item.id;
-                      const hasActiveEntitlement = item.rcData.activeEntitlements.length > 0;
-
-                      return (
-                        <tr
-                          key={item.id}
-                          className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
-                          onClick={() => setSelectedUser(item)}
+                      {/* Bottom Quick Category Pills */}
+                      <div className="px-3 py-1 flex items-center gap-1.5 z-20">
+                        <button
+                          onClick={() =>
+                            handleQuickAction(
+                              "ค่าห้อง 3500",
+                              "expense",
+                              "ค่าห้อง",
+                              "-฿3,500",
+                              "บันทึกค่าใช้จ่าย 'ค่าห้อง' ฿3,500 เรียบร้อยครับ",
+                              "หมวดที่พักอาศัย • บันทึกสำเร็จ",
+                              3500
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-xl bg-[#FDE8E8] text-[#E05252] border border-[#FBD5D5] text-[9px] font-bold flex items-center gap-1 shadow-2xs active:scale-95 transition-transform cursor-pointer"
                         >
-                          {/* User info */}
-                          <td className="py-4 px-5">
-                            <div className="flex items-center gap-3">
-                              {item.avatarUrl ? (
-                                <img
-                                  src={item.avatarUrl}
-                                  alt={item.displayName}
-                                  className="w-10 h-10 rounded-full object-cover border border-slate-700/80 shadow-sm"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-700 to-indigo-600 flex items-center justify-center font-bold text-white text-sm shadow-sm border border-slate-700">
-                                  {item.displayName.substring(0, 1).toUpperCase()}
-                                </div>
-                              )}
-                              <div>
-                                <span className="font-semibold text-white group-hover:text-indigo-400 transition-colors">
-                                  {item.displayName}
-                                </span>
-                                <p className="text-xs text-slate-400 font-mono tracking-tight">{item.email}</p>
-                                <p className="text-[10px] text-slate-500 font-mono tracking-tight">ID: {item.id.substring(0, 8)}...</p>
-                              </div>
-                            </div>
-                          </td>
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                          </svg>
+                          <span>ค่าห้อง</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleQuickAction(
+                              "เงินเดือน 25000",
+                              "income",
+                              "เงินเดือน",
+                              "+฿25,000",
+                              "ยินดีด้วยครับ! บันทึกรายรับ 'เงินเดือน' ฿25,000 เข้ากระเป๋าแล้วครับ",
+                              "ยอดรับสะสมเดือนนี้ ฿25,843",
+                              0
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-xl bg-[#E3F5EC] text-[#2E9E66] border border-[#BCF0DA] text-[9px] font-bold flex items-center gap-1 shadow-2xs active:scale-95 transition-transform cursor-pointer"
+                        >
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          <span>เงินเดือน</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleQuickAction(
+                              "บ้าน 500",
+                              "savings",
+                              "หยอดกระปุกบ้าน",
+                              "+฿500",
+                              "หยอดกระปุก 'บ้าน' ฿500 สำเร็จแล้วครับ",
+                              "สะสมแล้ว ฿146,165 / ฿5,500,000",
+                              0
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-xl bg-[#EDE8FD] text-[#7A5AF8] border border-[#DCD2F9] text-[9px] font-bold flex items-center gap-1 shadow-2xs active:scale-95 transition-transform cursor-pointer"
+                        >
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                          <span>บ้าน</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleQuickAction(
+                              "มอไซ 300",
+                              "savings",
+                              "หยอดกระปุกมอไซ",
+                              "+฿300",
+                              "หยอดกระปุก 'มอไซ' ฿300 สำเร็จแล้วครับ",
+                              "สะสมแล้ว ฿27,509 / ฿50,000 (55%)",
+                              0
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-xl bg-[#E8EDFD] text-[#4E6BF2] border border-[#D1DBFB] text-[9px] font-bold flex items-center gap-1 shadow-2xs active:scale-95 transition-transform cursor-pointer"
+                        >
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span>มอไซ</span>
+                        </button>
+                      </div>
 
-                          {/* Supabase DB Tier */}
-                          <td className="py-4 px-5">
-                            {item.isDbPro ? (
-                              <div>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                  PRO ⭐
-                                </span>
-                                {item.dbExpiresAt && (
-                                  <p className="text-[10px] text-emerald-400/80 mt-1 font-mono">
-                                    หมดอายุ: {formatDate(item.dbExpiresAt)}
-                                  </p>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">
-                                Free 👤
-                              </span>
-                            )}
-                          </td>
-
-                          {/* RevenueCat Status */}
-                          <td className="py-4 px-5">
-                            {item.isRcPro ? (
-                              <div>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-                                  Active ({item.rcData.activeEntitlements.join(", ") || "pro"})
-                                </span>
-                                {item.rcData.subscriptions.length > 0 && (
-                                  <p className="text-[10px] text-indigo-300/70 mt-1 font-mono">
-                                    {item.rcData.subscriptions[0].store} • {item.rcData.subscriptions[0].productId}
-                                  </p>
-                                )}
-                              </div>
-                            ) : (
-                              <div>
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800/80 text-slate-400 border border-slate-700/80">
-                                  {item.rcData.status === "not_found" ? "ยังไม่เคยเข้าแอป" : "ไม่มีสมาชิกที่ใช้งาน"}
-                                </span>
-                                {item.rcData.lastSeen && (
-                                  <p className="text-[10px] text-slate-500 mt-1">
-                                    เข้าแอปล่าสุด: {formatDate(item.rcData.lastSeen)}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Comparison Sync Status */}
-                          <td className="py-4 px-5">
-                            {renderSyncBadge(item.syncStatus)}
-                          </td>
-
-                          {/* Reconcile & Action Buttons */}
-                          <td className="py-4 px-5 text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-end gap-2 flex-wrap">
-                              {/* 1-Click Sync Button */}
-                              <button
-                                onClick={() => handleSyncUserWithRC(item.id, item.displayName)}
-                                disabled={isUpdating}
-                                title="ปรับสถานะใน DB ให้ตรงกับ RevenueCat ทันที"
-                                className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 transition-all disabled:opacity-50"
-                              >
-                                <span>🔄</span>
-                                <span>{isUpdating ? "..." : "ซิงก์ DB"}</span>
-                              </button>
-
-                              {/* Grant Promo */}
-                              <button
-                                onClick={() => handleGrantPromoRC(item.id, item.displayName)}
-                                disabled={isUpdating}
-                                title="มอบสิทธิ์ PRO โปรโมชันใน RevenueCat (1 เดือน)"
-                                className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 transition-all disabled:opacity-50"
-                              >
-                                <span>🎁</span>
-                                <span>แจก PRO</span>
-                              </button>
-
-                              {/* Reset RC sandbox */}
-                              <button
-                                onClick={() => handleDeleteRCSubscriber(item.id, item.displayName)}
-                                disabled={isUpdating}
-                                title="ล้างประวัติการทดสอบใน RevenueCat เพื่อทดสอบซื้อใหม่"
-                                className="p-1.5 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 transition-all disabled:opacity-50"
-                              >
-                                <span>🗑️</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </main>
-
-      {/* ========================================================================= */}
-      {/* USER & REVENUECAT DETAILS MODAL */}
-      {/* ========================================================================= */}
-      {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-[#111827] border border-slate-800 rounded-3xl w-full max-w-xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => setSelectedUser(null)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-white text-lg w-8 h-8 rounded-full bg-slate-800/60 flex items-center justify-center"
-            >
-              ✕
-            </button>
-
-            {/* Profile Header */}
-            <div className="flex items-center gap-4 mb-6">
-              {selectedUser.avatarUrl ? (
-                <img
-                  src={selectedUser.avatarUrl}
-                  alt={selectedUser.displayName}
-                  className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500/50"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-indigo-600 flex items-center justify-center text-white text-2xl font-black">
-                  {selectedUser.displayName.substring(0, 1).toUpperCase()}
-                </div>
-              )}
-              <div>
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  {selectedUser.displayName}
-                  {((selectedUser as any).tier === "pro" || (selectedUser as any).dbTier === "pro") && (
-                    <span className="text-emerald-400 text-sm">⭐ PRO</span>
+                      {/* Bottom Input Bar with Typing Simulation & Interactive Input */}
+                      <div className="p-3 pt-1 z-20">
+                        <div className="bg-white rounded-2xl px-3 py-2 border border-[#E8E2CB] shadow-sm flex items-center justify-between gap-2">
+                          <div className="w-5 h-5 text-[#7EA459]">
+                            <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 text-xs text-gray-700 font-medium">
+                            <input
+                              type="text"
+                              value={typedText}
+                              onChange={(e) => setTypedText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleManualSend();
+                              }}
+                              placeholder="พิมพ์รายการและจำนวนเงิน..."
+                              className="w-full bg-transparent text-xs text-[#1A2412] font-medium placeholder-gray-400 focus:outline-none"
+                            />
+                          </div>
+                          <button
+                            onClick={handleManualSend}
+                            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                              typedText || isSending
+                                ? "bg-[#7EA459] text-white shadow-xs scale-105 cursor-pointer"
+                                : "bg-gray-100 text-gray-400 cursor-default"
+                            }`}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   )}
+
+                  {/* ──── SCREEN 1: SMART SLIP OCR (EXACT MATCH TO SCREENSHOT 3) ──── */}
+                  {activeTab === 1 && (
+                    <div className="flex-1 p-3 flex flex-col justify-center items-center relative animate-fadeIn">
+                      {/* Dimmed Background Notebook */}
+                      <div className="absolute inset-0 bg-black/35 backdrop-blur-2xs z-10" />
+
+                      {/* Modal Sheet from Screenshot 3 */}
+                      <div className="relative z-20 w-full bg-[#FAF5E6] rounded-3xl p-4 border border-[#E8E2CB] shadow-2xl space-y-3">
+                        {/* Modal Header */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            <Image
+                              src="/images/logo_blue.png"
+                              alt="Logo"
+                              width={28}
+                              height={28}
+                              className="rounded-lg"
+                            />
+                            <div>
+                              <div className="text-xs font-bold text-[#1A2412]">SaveFor</div>
+                              <div className="text-[9px] text-gray-500">สรุปยอดสแกนทั้งหมด</div>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold bg-[#FDF0D5] text-[#9A6700] px-2.5 py-0.5 rounded-full border border-[#F3DBA7]">
+                            16/16 ใบ
+                          </span>
+                        </div>
+
+                        {/* Total Amount Box */}
+                        <div className="text-center py-2">
+                          <div className="text-[10px] text-gray-500">ยอดเงินรวมทั้งสิ้น</div>
+                          <div className="text-2xl font-black text-[#1A2412] tracking-tight mt-0.5">
+                            ฿1602.86
+                          </div>
+                        </div>
+
+                        {/* Bank Badges Pill */}
+                        <div className="bg-[#F6EED8] p-2 rounded-2xl flex items-center justify-center gap-4 text-xs font-bold">
+                          <div className="flex items-center gap-1.5">
+                            <Image
+                              src="/images/banks/kbank.png"
+                              alt="KBank"
+                              width={18}
+                              height={18}
+                              className="rounded-full"
+                            />
+                            <span className="text-xs text-gray-700">x8</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Image
+                              src="/images/banks/scb.png"
+                              alt="SCB"
+                              width={18}
+                              height={18}
+                              className="rounded-full"
+                            />
+                            <span className="text-xs text-gray-700">x8</span>
+                          </div>
+                        </div>
+
+                        {/* Ready to Save Tag */}
+                        <div className="bg-[#EBF7EE] border border-[#BDE8C6] p-2 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-bold text-[#2E9E66]">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span>พร้อมบันทึกสลิปทั้งหมด 16 รายการ</span>
+                        </div>
+
+                        <div className="text-center text-[9px] text-gray-400">
+                          ปัดซ้ายเพื่อดูสลิปทีละใบ
+                        </div>
+
+                        {/* Actions */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="w-full py-1.5 bg-[#4B4B4B] text-white text-[10px] font-bold rounded-xl text-center shadow-xs">
+                            สรุปยอดรวม (16 ใบ)
+                          </div>
+                          <button
+                            onClick={() => setSlipSaved(true)}
+                            className="w-full py-2.5 bg-[#6F9745] hover:bg-[#5E8238] text-white text-xs font-bold rounded-xl text-center shadow-md active:scale-98 transition-all flex items-center justify-center gap-1.5 animate-pulse"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                            </svg>
+                            <span>{slipSaved ? "บันทึกสำเร็จเรียบร้อยแล้ว!" : "บันทึกทั้งหมด (16 ใบ • ฿1602.86)"}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ──── SCREEN 2: DREAMS / PLANS (EXACT MATCH TO SCREENSHOT 4) ──── */}
+                  {activeTab === 2 && (
+                    <div className="flex-1 p-3 space-y-3 overflow-y-auto animate-fadeIn">
+                      {/* Top Bar from Screenshot 4 */}
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </div>
+                          <span className="text-sm font-bold text-[#1A2412]">รายการที่ตั้งไว้</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold bg-[#FFF7ED] text-[#D97706] px-2 py-0.5 rounded-full border border-[#FDBA74]">
+                            5/10 PRO
+                          </span>
+                          <div className="w-7 h-7 rounded-lg bg-[#1E293B] text-white flex items-center justify-center">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Segment Filter Capsules */}
+                      <div className="flex items-center gap-2 text-[10px] font-bold">
+                        <span className="px-3 py-1 bg-white border border-gray-200 rounded-full text-gray-500">รายรับ</span>
+                        <span className="px-3 py-1 bg-[#EDE8FD] text-[#7A5AF8] rounded-full">เงินออม</span>
+                        <span className="px-3 py-1 bg-white border border-gray-200 rounded-full text-gray-500">รายจ่าย</span>
+                      </div>
+
+                      {/* Goal Card 1: บ้าน (Gold border) */}
+                      <div className="bg-white rounded-2xl p-3 border-2 border-[#F59E0B] shadow-xs space-y-2 relative overflow-hidden">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                              </svg>
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-[#1A2412]">บ้าน</div>
+                              <span className="text-[8px] text-orange-600 bg-orange-100 px-1.5 py-0.2 rounded-full font-semibold">
+                                หยอดแล้ว 0 ครั้ง
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded">
+                            3%
+                          </span>
+                        </div>
+
+                        <div className="flex items-baseline justify-between text-xs">
+                          <span className="font-bold text-[#1A2412]">฿145,665</span>
+                          <span className="text-[10px] text-gray-400">/ ฿5,500,000</span>
+                        </div>
+
+                        {/* Animated Progress Bar */}
+                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full w-[3%] transition-all duration-1000" />
+                        </div>
+                        <div className="text-[8px] text-gray-400">เดือนละ ฿5 • อีก 1070867 เดือน</div>
+                      </div>
+
+                      {/* Goal Card 2: มอไซ (Mint border) */}
+                      <div className="bg-white rounded-2xl p-3 border-2 border-[#10B981]/50 shadow-xs space-y-2 relative overflow-hidden">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-[#1A2412]">มอไซ</div>
+                              <span className="text-[8px] text-emerald-600 bg-emerald-100 px-1.5 py-0.2 rounded-full font-semibold">
+                                หยอดแล้ว 0 ครั้ง
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                            54%
+                          </span>
+                        </div>
+
+                        <div className="flex items-baseline justify-between text-xs">
+                          <span className="font-bold text-[#1A2412]">฿27,209</span>
+                          <span className="text-[10px] text-gray-400">/ ฿50,000</span>
+                        </div>
+
+                        {/* Animated Progress Bar */}
+                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-emerald-400 to-[#10B981] rounded-full w-[54%] transition-all duration-1000" />
+                        </div>
+                        <div className="text-[8px] text-gray-400">เดือนละ ฿3,000 • อีก 8 เดือน</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ──── SCREEN 3: DASHBOARD (EXACT MATCH TO SCREENSHOT 5) ──── */}
+                  {activeTab === 3 && (
+                    <div className="flex-1 p-3 space-y-2.5 overflow-y-auto animate-fadeIn">
+                      {/* Top Bar from Screenshot 5 */}
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-[#1A2412] flex items-center gap-1">
+                              แดชบอร์ดการเงิน <span className="text-[8px] bg-[#E2EFCF] text-[#5A8238] px-1 rounded">PRO</span>
+                            </div>
+                            <div className="text-[8px] text-gray-400">ภาพรวมกระแสเงินสดและการตัดสินใจ</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-7 h-7 rounded-lg bg-white border border-gray-200 text-gray-600 flex items-center justify-center text-xs">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </div>
+                          <div className="w-7 h-7 rounded-lg bg-white border border-gray-200 text-gray-600 flex items-center justify-center text-xs">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Period Capsules */}
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                        <span className="px-3 py-1 bg-white border border-gray-200 rounded-full text-[#1A2412]">เดือนนี้</span>
+                        <span className="px-3 py-1 bg-white border border-gray-200 rounded-full text-gray-400">เดือนก่อน</span>
+                        <span className="px-3 py-1 bg-white border border-gray-200 rounded-full text-gray-400">30 วัน</span>
+                        <span className="px-3 py-1 bg-white border border-gray-200 rounded-full text-gray-400">ทั้งหมด</span>
+                      </div>
+
+                      {/* Donut Card from Screenshot 5 */}
+                      <div className="bg-white rounded-2xl p-3 border border-[#E8E2CB] shadow-xs space-y-2">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-[#1A2412] flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> ภาพรวมเดือนนี้
+                          </span>
+                          <span className="text-[8px] bg-red-100 text-red-600 px-1.5 py-0.2 rounded-full font-bold">
+                            รายจ่ายเกิน
+                          </span>
+                        </div>
+
+                        {/* Interactive Ring & Numbers */}
+                        <div className="flex items-center justify-between pt-1">
+                          {/* Animated SVG Donut */}
+                          <div className="relative w-20 h-20 flex items-center justify-center">
+                            <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                              <path
+                                className="text-gray-100"
+                                strokeWidth="3.8"
+                                stroke="currentColor"
+                                fill="none"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              />
+                              <path
+                                className="text-[#10B981] transition-all duration-1000"
+                                strokeDasharray="16, 100"
+                                strokeWidth="3.8"
+                                strokeLinecap="round"
+                                stroke="currentColor"
+                                fill="none"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              />
+                              <path
+                                className="text-[#EF4444] transition-all duration-1000"
+                                strokeDasharray="84, 100"
+                                strokeDashoffset="-16"
+                                strokeWidth="3.8"
+                                strokeLinecap="round"
+                                stroke="currentColor"
+                                fill="none"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              />
+                            </svg>
+                            <div className="absolute text-center">
+                              <div className="text-[7px] text-gray-400">คงเหลือสุทธิ</div>
+                              <div className="text-[10px] font-black text-red-500">-฿3.5k</div>
+                            </div>
+                          </div>
+
+                          {/* Metric Rows */}
+                          <div className="space-y-1.5 text-[9px] flex-1 pl-3">
+                            <div className="flex items-center justify-between bg-emerald-50/50 p-1 rounded-lg">
+                              <span className="text-[#10B981] font-bold">↗ รายรับ</span>
+                              <span className="font-black text-[#10B981]">฿843</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-red-50/50 p-1 rounded-lg">
+                              <span className="text-red-500 font-bold">↘ รายจ่าย</span>
+                              <span className="font-black text-red-500">฿4,372</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-purple-50/50 p-1 rounded-lg">
+                              <span className="text-purple-600 font-bold">เงินออม</span>
+                              <span className="font-black text-purple-600">฿0</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 4 KPI Cards Grid from Screenshot 5 */}
+                      <div className="grid grid-cols-2 gap-2 text-[9px]">
+                        <div className="bg-white p-2.5 rounded-xl border border-gray-200">
+                          <span className="text-gray-400">อัตราการออม</span>
+                          <div className="text-sm font-black text-[#1A2412] mt-0.5">0%</div>
+                          <span className="text-[8px] text-orange-500">แนะนำ 20%+</span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-xl border border-gray-200">
+                          <span className="text-gray-400">ใช้จ่ายต่อรายรับ</span>
+                          <div className="text-sm font-black text-red-500 mt-0.5">519%</div>
+                          <span className="text-[8px] text-red-500">ระวังใช้เกินตัว</span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-xl border border-gray-200">
+                          <span className="text-gray-400">เฉลี่ยจ่ายต่อวัน</span>
+                          <div className="text-sm font-black text-[#1A2412] mt-0.5">฿257</div>
+                          <span className="text-[8px] text-gray-400">ความเร็วการใช้เงิน</span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-xl border border-gray-200">
+                          <span className="text-gray-400">จำนวนรายการ</span>
+                          <div className="text-sm font-black text-[#1A2412] mt-0.5">10</div>
+                          <span className="text-[8px] text-blue-500">รายการบันทึก</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Home Bar Indicator */}
+                  <div className="h-3.5 flex items-center justify-center pb-1 bg-white border-t border-gray-100">
+                    <div className="w-24 h-1 bg-gray-400 rounded-full" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Screen Caption Box */}
+              <div className="mt-4 text-center max-w-xs">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#7EA459] bg-[#E2EFCF] px-2.5 py-0.5 rounded-full border border-[#BED7A1]">
+                  Interactive Demo
+                </span>
+                <h3 className="text-sm font-bold text-[#1A2412] mt-1.5">
+                  {screenTabs[activeTab].title}
                 </h3>
-                <p className="text-sm text-slate-400">{selectedUser.email}</p>
-                <div className="mt-1.5">{getProviderBadge(selectedUser.provider)}</div>
-              </div>
-            </div>
-
-            {/* Supabase DB Details Box */}
-            <div className="space-y-2 bg-slate-950/70 p-4 rounded-2xl border border-slate-800/80 text-xs font-mono mb-4">
-              <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-2 font-sans flex items-center gap-1.5">
-                <span>🗄️</span> ข้อมูลใน Supabase Database
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/50">
-                <span className="text-slate-500 font-sans">User ID (UUID):</span>
-                <span
-                  onClick={() => {
-                    navigator.clipboard.writeText(selectedUser.id);
-                    showToast("📋 คัดลอก User ID เรียบร้อยแล้ว");
-                  }}
-                  className="text-emerald-400 hover:underline cursor-pointer"
-                  title="คลิกเพื่อคัดลอก"
-                >
-                  {selectedUser.id}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/50">
-                <span className="text-slate-500 font-sans">สถานะ DB Tier:</span>
-                <span
-                  className={
-                    ((selectedUser as any).tier === "pro" || (selectedUser as any).dbTier === "pro")
-                      ? "text-emerald-400 font-bold"
-                      : "text-slate-300"
-                  }
-                >
-                  {((selectedUser as any).tier || (selectedUser as any).dbTier || "free").toUpperCase()}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/50">
-                <span className="text-slate-500 font-sans">วันหมดอายุใน DB:</span>
-                <span className="text-slate-300">
-                  {formatDate((selectedUser as any).subscriptionExpiresAt || (selectedUser as any).dbExpiresAt)}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/50">
-                <span className="text-slate-500 font-sans">แผนการสมัครใน DB:</span>
-                <span className="text-slate-300">
-                  {((selectedUser as any).subscriptionPlan || (selectedUser as any).dbPlan || "free").toUpperCase()}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/50">
-                <span className="text-slate-500 font-sans">ช่องทางชำระเงิน (Store):</span>
-                <span className="text-slate-300">
-                  {(selectedUser as any).subscriptionStore || (selectedUser as any).dbStore || "-"}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/50">
-                <span className="text-slate-500 font-sans">วันที่สมัคร:</span>
-                <span className="text-slate-300">{formatDate(selectedUser.createdAt)}</span>
-              </div>
-              {"lastSignInAt" in selectedUser && (
-                <div className="flex justify-between py-1">
-                  <span className="text-slate-500 font-sans">เข้าใช้งานล่าสุด:</span>
-                  <span className="text-slate-300">{formatDate((selectedUser as any).lastSignInAt)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* RevenueCat Subscriber Details Box */}
-            {"rcData" in selectedUser && (
-              <div className="space-y-2 bg-indigo-950/20 p-4 rounded-2xl border border-indigo-500/30 text-xs font-mono mb-6">
-                <div className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider mb-2 font-sans flex items-center gap-1.5">
-                  <span>⚡</span> ข้อมูลใน RevenueCat (API Verified)
-                </div>
-                <div className="flex justify-between py-1 border-b border-indigo-500/20">
-                  <span className="text-slate-400 font-sans">สถานะใน RevenueCat:</span>
-                  <span className={(selectedUser as AuditUserItem).isRcPro ? "text-indigo-400 font-bold" : "text-slate-400"}>
-                    {(selectedUser as AuditUserItem).rcData.status.toUpperCase()}
-                  </span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-indigo-500/20">
-                  <span className="text-slate-400 font-sans">Active Entitlements:</span>
-                  <span className="text-indigo-300">
-                    {(selectedUser as AuditUserItem).rcData.activeEntitlements.length > 0
-                      ? (selectedUser as AuditUserItem).rcData.activeEntitlements.join(", ")
-                      : "ไม่มี"}
-                  </span>
-                </div>
-                {(selectedUser as AuditUserItem).rcData.subscriptions.length > 0 && (
-                  <>
-                    <div className="flex justify-between py-1 border-b border-indigo-500/20">
-                      <span className="text-slate-400 font-sans">Store / Product:</span>
-                      <span className="text-slate-300">
-                        {(selectedUser as AuditUserItem).rcData.subscriptions[0].store} / {(selectedUser as AuditUserItem).rcData.subscriptions[0].productId}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-indigo-500/20">
-                      <span className="text-slate-400 font-sans">วันหมดอายุสิทธิ์:</span>
-                      <span className="text-slate-300">
-                        {formatDate((selectedUser as AuditUserItem).rcData.subscriptions[0].expiresDate)}
-                      </span>
-                    </div>
-                  </>
-                )}
-                <div className="flex justify-between py-1">
-                  <span className="text-slate-400 font-sans">ผลการเทียบเคียง:</span>
-                  <div>{renderSyncBadge((selectedUser as AuditUserItem).syncStatus)}</div>
-                </div>
-              </div>
-            )}
-
-            {/* Actions Footer */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => handleToggleTier(selectedUser as any)}
-                  disabled={updatingUserId === selectedUser.id}
-                  className={`flex-1 py-3 rounded-xl font-bold text-xs shadow-md transition-all ${
-                    ((selectedUser as any).tier === "pro" || (selectedUser as any).dbTier === "pro")
-                      ? "bg-slate-800 text-slate-300 hover:bg-red-500/20 hover:text-red-400 border border-slate-700"
-                      : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
-                  }`}
-                >
-                  {updatingUserId === selectedUser.id
-                    ? "กำลังบันทึก..."
-                    : ((selectedUser as any).tier === "pro" || (selectedUser as any).dbTier === "pro")
-                    ? "🔻 ปรับสถานะ DB เป็น Free"
-                    : "⭐ ปรับสถานะ DB เป็น PRO"}
-                </button>
-
-                <button
-                  onClick={() => handleSyncUserWithRC(selectedUser.id, selectedUser.displayName)}
-                  disabled={updatingUserId === selectedUser.id}
-                  className="px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/20"
-                >
-                  🔄 ซิงก์ตาม RC
-                </button>
-
-                <button
-                  onClick={() => handleGrantPromoRC(selectedUser.id, selectedUser.displayName)}
-                  disabled={updatingUserId === selectedUser.id}
-                  className="px-4 py-3 rounded-xl bg-purple-600/30 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 text-xs font-bold transition-all"
-                >
-                  🎁 แจก Promo
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between pt-2">
-                <button
-                  onClick={() => handleDeleteRCSubscriber(selectedUser.id, selectedUser.displayName)}
-                  disabled={updatingUserId === selectedUser.id}
-                  className="text-xs text-rose-400 hover:underline flex items-center gap-1"
-                >
-                  <span>🗑️ ลบประวัติเทสใน RevenueCat (Reset Subscriber)</span>
-                </button>
-
-                <button
-                  onClick={() => setSelectedUser(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-                >
-                  ปิด
-                </button>
+                <p className="text-xs text-[#718096] mt-0.5 leading-relaxed">
+                  {screenTabs[activeTab].desc}
+                </p>
               </div>
             </div>
           </div>
         </div>
-      )}
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────
+          3. SUPPORTED BANKS SHOWCASE
+      ───────────────────────────────────────────────────────────── */}
+      <section id="banks" className="py-16 bg-white border-y border-[#E8E2CB]">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center max-w-2xl mx-auto mb-10">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#7EA459] bg-[#E2EFCF] px-3 py-1 rounded-full border border-[#C5DCAB]">
+              Smart Bank OCR
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-[#1A2412] mt-3 mb-2 tracking-tight">
+              สแกนสลิปได้ทุกธนาคารไทยชั้นนำ
+            </h2>
+            <p className="text-sm text-[#4A5568]">
+              ระบบดึงยอด วันที่ เวลา และผู้รับเงินได้จากสลิปของทุกธนาคารในประเทศไทยอย่างแม่นยำ
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
+            {supportedBanks.map((bank, index) => (
+              <div
+                key={index}
+                className="bg-[#FAF7E8] p-3.5 rounded-2xl border border-[#E8E2CB] flex flex-col items-center justify-center text-center hover:border-[#7EA459] hover:shadow-xs transition-all"
+              >
+                <div className="w-12 h-12 rounded-xl bg-white p-1.5 border border-gray-100 flex items-center justify-center mb-2 shadow-2xs">
+                  <Image
+                    src={bank.logo}
+                    alt={bank.name}
+                    width={40}
+                    height={40}
+                    className="object-contain"
+                  />
+                </div>
+                <span className="text-[11px] font-bold text-[#1A2412] leading-tight">
+                  {bank.name}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────
+          4. DETAILED FEATURES WITH REAL SCREENSHOTS
+      ───────────────────────────────────────────────────────────── */}
+      <section id="features" className="py-20 bg-[#FAF7E8] space-y-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#7EA459] bg-[#E2EFCF] px-3 py-1 rounded-full border border-[#C5DCAB]">
+              เจาะลึกฟีเจอร์เด่น
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#1A2412] mt-4 mb-3 tracking-tight">
+              สัมผัสความง่ายที่คิดมาเพื่อการใช้งานจริง
+            </h2>
+            <p className="text-[#4A5568] text-base leading-relaxed">
+              ภาพหน้าจอจริงจากแอป เงินมานี่ ที่พร้อมให้คุณดาวน์โหลดและใช้งานแล้ววันนี้
+            </p>
+          </div>
+
+          {/* Feature 1: Slip OCR */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-white rounded-3xl p-6 sm:p-10 border border-[#E8E2CB] shadow-xs mb-12">
+            <div className="lg:col-span-6 space-y-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#7EA459] bg-[#E2EFCF] px-3 py-1 rounded-full">
+                ฟีเจอร์ไฮไลท์ 01
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-extrabold text-[#1A2412]">
+                สแกนสลิปจากอัลบั้ม ย้อนหลังได้สูงสุด 60 วัน
+              </h3>
+              <p className="text-sm sm:text-base text-[#4A5568] leading-relaxed font-light">
+                ไม่ต้องมานั่งกรอกเองทีละรายการ! เพียงเลือกช่วงวันที่ต้องการสแกน ระบบ Smart OCR จะตรวจจับสลิปโอนเงินจากอัลบั้มรูปภาพ อ่านยอดเงิน วันที่ และจัดหมวดหมู่อัตโนมัติ สรุปยอดรวมและกดบันทึกทั้งหมด 16 รายการได้ในคลิกเดียว
+              </p>
+              <div className="space-y-2 pt-2 text-xs sm:text-sm text-[#2D3748]">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center font-bold">✓</div>
+                  <span>เลือกสแกนย้อนหลังได้ 1 วัน, 3 วัน, 7 วัน, 15 วัน, 30 วัน หรือ 60 วัน</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center font-bold">✓</div>
+                  <span>สรุปยอดเงินรวมทั้งสิ้น และจำแนกตามธนาคาร (กสิกร, ไทยพาณิชย์, พร้อมเพย์)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center font-bold">✓</div>
+                  <span>ปัดซ้าย-ขวาเพื่อตรวจสอบรายละเอียดสลิปทีละใบได้อย่างอิสระ</span>
+                </div>
+              </div>
+            </div>
+            <div className="lg:col-span-6 flex items-center justify-center gap-4">
+              <div className="w-48 sm:w-56 rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100">
+                <Image
+                  src="/images/screenshots/screen_slip_picker.png"
+                  alt="สแกนสลิปจากอัลบั้ม"
+                  width={240}
+                  height={520}
+                  className="w-full h-auto object-cover"
+                />
+              </div>
+              <div className="w-48 sm:w-56 rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100">
+                <Image
+                  src="/images/screenshots/screen_slip_result.png"
+                  alt="สรุปยอดสแกนสลิป"
+                  width={240}
+                  height={520}
+                  className="w-full h-auto object-cover"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Feature 2: Chat Style Home & Dreams */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-white rounded-3xl p-6 sm:p-10 border border-[#E8E2CB] shadow-xs mb-12">
+            <div className="lg:col-span-6 order-2 lg:order-1 flex items-center justify-center gap-4">
+              <div className="w-48 sm:w-56 rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100">
+                <Image
+                  src="/images/screenshots/screen_home.png"
+                  alt="หน้าแรกสไตล์แชท"
+                  width={240}
+                  height={520}
+                  className="w-full h-auto object-cover"
+                />
+              </div>
+              <div className="w-48 sm:w-56 rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100">
+                <Image
+                  src="/images/screenshots/screen_dreams.png"
+                  alt="รายการที่ตั้งไว้ & กระปุกเงินตามฝัน"
+                  width={240}
+                  height={520}
+                  className="w-full h-auto object-cover"
+                />
+              </div>
+            </div>
+
+            <div className="lg:col-span-6 order-1 lg:order-2 space-y-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#7EA459] bg-[#E2EFCF] px-3 py-1 rounded-full">
+                ฟีเจอร์ไฮไลท์ 02
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-extrabold text-[#1A2412]">
+                จดง่ายสไตล์แชท & กระปุกเงินตามฝัน
+              </h3>
+              <p className="text-sm sm:text-base text-[#4A5568] leading-relaxed font-light">
+                จดบัญชีได้สนุกเหมือนคุยกับเพื่อน เพียงพิมพ์รายการในกล่องแชทด้านล่าง ระบบจะบันทึกพร้อมแสดงเวลาและยอดเงินทันที พร้อมตั้งเป้าหมายเงินออมสำหรับสิ่งที่อยากได้ เช่น บ้าน, มอเตอร์ไซค์ พร้อมคำนวณจำนวนเดือนที่ต้องออมให้อัตโนมัติ
+              </p>
+              <div className="space-y-2 pt-2 text-xs sm:text-sm text-[#2D3748]">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center font-bold">✓</div>
+                  <span>ปุ่มลัดพิมพ์ด่วนสำหรับหมวดหมู่ประจำ เช่น ค่าห้อง, เงินเดือน, บ้าน, มอไซ</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center font-bold">✓</div>
+                  <span>เห็นยอดสะสมรวมของทั้งวันและทั้งเดือนบนหัวบิลเสมอ</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center font-bold">✓</div>
+                  <span>หลอดเปอร์เซ็นต์แสดงความคืบหน้าการออม ให้คุณมีกำลังใจทุกวัน</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Feature 3: Financial Dashboard */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-white rounded-3xl p-6 sm:p-10 border border-[#E8E2CB] shadow-xs">
+            <div className="lg:col-span-6 space-y-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#7EA459] bg-[#E2EFCF] px-3 py-1 rounded-full">
+                ฟีเจอร์ไฮไลท์ 03
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-extrabold text-[#1A2412]">
+                แดชบอร์ดสรุปภาพรวมและศูนย์วิเคราะห์การเงิน
+              </h3>
+              <p className="text-sm sm:text-base text-[#4A5568] leading-relaxed font-light">
+                รู้ทันสุขภาพการเงินของตนเองด้วยแดชบอร์ดที่วิเคราะห์กระแสเงินสดให้แบบ Real-time พร้อมกราฟวงแหวน Donut Chart เปรียบเทียบรายรับ รายจ่าย และเงินออม พร้อมเตือนเมื่อใช้จ่ายเกินตัว
+              </p>
+              <div className="space-y-2 pt-2 text-xs sm:text-sm text-[#2D3748]">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center font-bold">✓</div>
+                  <span>คำนวณอัตราการออม (%) และสัดส่วนค่าใช้จ่ายต่อรายรับให้อัตโนมัติ</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center font-bold">✓</div>
+                  <span>แสดงค่าใช้จ่ายเฉลี่ยต่อวัน (Burn Rate) เพื่อการวางแผนงบประมาณที่แม่นยำ</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center font-bold">✓</div>
+                  <span>โหมดความเป็นส่วนตัว แตะซ่อนตัวเลขได้ทันทีเมื่อเปิดดูในที่สาธารณะ</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-6 flex items-center justify-center">
+              <div className="w-56 sm:w-64 rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100">
+                <Image
+                  src="/images/screenshots/screen_dashboard.png"
+                  alt="แดชบอร์ดการเงิน เงินมานี่"
+                  width={280}
+                  height={600}
+                  className="w-full h-auto object-cover"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────
+          5. FAQ ACCORDION
+      ───────────────────────────────────────────────────────────── */}
+      <section id="faq" className="py-20 bg-white border-t border-[#E8E2CB]">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#7EA459] bg-[#E2EFCF] px-3 py-1 rounded-full border border-[#C5DCAB]">
+              FAQ
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#1A2412] mt-4 mb-3 tracking-tight">
+              คำถามที่พบบ่อย
+            </h2>
+            <p className="text-[#4A5568] text-base">
+              ข้อสงสัยเกี่ยวกับการใช้งานและระบบความปลอดภัยของ เงินมานี่
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {faqs.map((faq, index) => {
+              const isOpen = openFaq === index;
+              return (
+                <div
+                  key={index}
+                  className="bg-[#FAF7E8] rounded-2xl border border-[#E8E2CB] overflow-hidden transition-all shadow-2xs"
+                >
+                  <button
+                    onClick={() => setOpenFaq(isOpen ? null : index)}
+                    className="w-full px-6 py-5 text-left flex items-center justify-between gap-4 font-semibold text-base text-[#1A2412] hover:text-[#7EA459] transition-colors"
+                  >
+                    <span>{faq.q}</span>
+                    <span
+                      className={`transform transition-transform text-[#7EA459] text-xl font-bold ${
+                        isOpen ? "rotate-45" : "rotate-0"
+                      }`}
+                    >
+                      +
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="px-6 pb-5 text-sm text-[#4A5568] leading-relaxed border-t border-[#E8E2CB]/50 pt-3">
+                      {faq.a}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────
+          6. BOTTOM DOWNLOAD CTA BANNER
+      ───────────────────────────────────────────────────────────── */}
+      <section id="download" className="py-20 bg-[#FAF7E8]">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="relative bg-gradient-to-br from-[#7EA459] via-[#6B9346] to-[#4F732E] rounded-[40px] p-8 sm:p-14 text-white shadow-xl overflow-hidden">
+            <div className="relative z-10 max-w-2xl text-center sm:text-left">
+              <span className="inline-block text-xs font-bold uppercase tracking-wider bg-white/20 px-3.5 py-1 rounded-full text-white mb-4 backdrop-blur-xs">
+                เริ่มต้นสร้างสุขภาพการเงินที่ดีตั้งแต่วันนี้
+              </span>
+              <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight mb-4">
+                ดาวน์โหลด เงินมานี่ <br />
+                <span className="text-[#F5B731]">ฟรีทั้ง iOS & Android</span>
+              </h2>
+              <p className="text-white/90 text-base sm:text-lg mb-8 leading-relaxed max-w-xl font-light">
+                สัมผัสประสบการณ์บันทึกการเงินที่เข้าใจง่าย สแกนสลิปโอนเงินเสร็จในพริบตา พร้อมกระปุกเงินตามฝันที่จะพาคุณไปถึงทุกเป้าหมาย
+              </p>
+
+              {/* Dual Store Download Buttons */}
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <a
+                  href="https://apps.apple.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-[#1A2412] px-6 py-3.5 rounded-2xl shadow-md transition-transform hover:-translate-y-0.5 active:translate-y-0 font-medium"
+                >
+                  <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.64-.78 1.08-1.86.96-2.95-1 .04-2.16.66-2.83 1.45-.58.68-1.1 1.77-.96 2.84 1.12.09 2.22-.56 2.83-1.34z" />
+                  </svg>
+                  <div className="text-left">
+                    <div className="text-[9px] uppercase tracking-wider text-gray-500 leading-none">
+                      Download on the
+                    </div>
+                    <div className="text-sm font-bold leading-tight">
+                      App Store
+                    </div>
+                  </div>
+                </a>
+
+                <a
+                  href="https://play.google.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-[#1A2412] px-6 py-3.5 rounded-2xl shadow-md transition-transform hover:-translate-y-0.5 active:translate-y-0 font-medium"
+                >
+                  <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+                    <path d="M3.609 1.814L13.793 12 3.61 22.186a2.38 2.38 0 01-.61-.715V2.53c.184-.286.39-.53.61-.716zm11.602 11.604L4.85 23.778c.376.14.796.177 1.229.074.453-.109.873-.34 1.229-.68l10.9-6.242-2.997-3.512zM21.5 10.366l-3.328-1.906-3.418 3.54 3.418 3.54 3.328-1.906c.928-.532 1.499-1.503 1.499-2.634 0-1.131-.571-2.102-1.499-2.634zm-6.289-1.574L7.308.848C6.952.508 6.532.277 6.079.168 5.646.065 5.226.102 4.85.242l10.361 10.36 2.997-1.81z" />
+                  </svg>
+                  <div className="text-left">
+                    <div className="text-[9px] uppercase tracking-wider text-gray-500 leading-none">
+                      GET IT ON
+                    </div>
+                    <div className="text-sm font-bold leading-tight">
+                      Google Play
+                    </div>
+                  </div>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────
+          7. FOOTER
+      ───────────────────────────────────────────────────────────── */}
+      <footer className="bg-white border-t border-[#E8E2CB] pt-14 pb-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+            {/* Col 1: Brand Info */}
+            <div className="md:col-span-2 space-y-4">
+              <div className="flex items-center gap-3">
+                <Image
+                  src="/images/logo_blue.png"
+                  alt="เงินมานี่"
+                  width={36}
+                  height={36}
+                  className="rounded-xl border border-[#E2EFCF]"
+                />
+                <span className="text-xl font-bold text-[#1A2412]">
+                  เงินมานี่ (NgenManee)
+                </span>
+              </div>
+              <p className="text-sm text-[#718096] max-w-sm leading-relaxed font-light">
+                แอปพลิเคชันบันทึกรายรับ-รายจ่าย สแกนสลิปอัจฉริยะ และวางแผนกระปุกเงินตามฝัน ในสไตล์สมุดบันทึกอบอุ่น ปลอดภัย ไม่เข้าถึงบัญชีธนาคาร
+              </p>
+              <div className="text-xs text-[#A0AEC0]">
+                เว็บไซต์ทางการ: <span className="text-[#7EA459] font-semibold">ngenmoney.com</span>
+              </div>
+            </div>
+
+            {/* Col 2: Legal & Compliance */}
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#1A2412] mb-4">
+                ข้อมูลทางกฎหมาย
+              </h4>
+              <ul className="space-y-2.5 text-sm text-[#4A5568]">
+                <li>
+                  <Link href="/privacy" className="hover:text-[#7EA459] transition-colors">
+                    นโยบายความเป็นส่วนตัว (Privacy Policy)
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/terms" className="hover:text-[#7EA459] transition-colors">
+                    เงื่อนไขการใช้งาน (Terms of Use / EULA)
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/delete-account" className="hover:text-[#7EA459] transition-colors">
+                    การขอลบบัญชีผู้ใช้ (Account Deletion)
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            {/* Col 3: Support & Contact */}
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#1A2412] mb-4">
+                ช่วยเหลือและบริการ
+              </h4>
+              <ul className="space-y-2.5 text-sm text-[#4A5568]">
+                <li>
+                  <Link href="/support" className="hover:text-[#7EA459] transition-colors">
+                    ศูนย์ช่วยเหลือและติดต่อเรา
+                  </Link>
+                </li>
+                <li>
+                  <a href="mailto:support@ngenmoney.com" className="hover:text-[#7EA459] transition-colors">
+                    support@ngenmoney.com
+                  </a>
+                </li>
+                <li>
+                  <Link href="/admin" className="hover:text-[#7EA459] transition-colors text-xs text-[#A0AEC0]">
+                    เข้าสู่ระบบแอดมิน
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Bottom Copyright */}
+          <div className="pt-8 border-t border-[#F0EEDC] flex flex-col sm:flex-row items-center justify-between text-xs text-[#718096] gap-4">
+            <p>© {new Date().getFullYear()} เงินมานี่ (NgenManee) • ngenmoney.com - สงวนลิขสิทธิ์</p>
+            <p>ออกแบบเพื่อการเงินส่วนบุคคลที่โปร่งใสและปลอดภัย</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

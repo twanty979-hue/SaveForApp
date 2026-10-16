@@ -14,13 +14,14 @@ cd "$APP_DIR"
 echo "📦 Running Flutter Build IPA (Release)..."
 flutter build ipa --release --export-options-plist ios/ExportOptions.plist
 
-if [ -f "$APP_DIR/build/ios/ipa/SaveFor.ipa" ]; then
+IPA_FILE=$(find "$APP_DIR/build/ios/ipa" -maxdepth 1 -name "*.ipa" | head -n 1)
+if [ -n "$IPA_FILE" ] && [ -f "$IPA_FILE" ]; then
     echo "================================================="
     echo "  🎉 SUCCESS! IPA file created successfully:"
-    echo "  📍 $APP_DIR/build/ios/ipa/SaveFor.ipa"
+    echo "  📍 $IPA_FILE"
     echo "================================================="
-    open -R "$APP_DIR/build/ios/ipa/SaveFor.ipa"
+    open -R "$IPA_FILE"
 else
-    echo "❌ Build finished but SaveFor.ipa not found."
+    echo "❌ Build finished but IPA file not found in $APP_DIR/build/ios/ipa"
     exit 1
 fi
