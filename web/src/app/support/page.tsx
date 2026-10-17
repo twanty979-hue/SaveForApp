@@ -113,6 +113,11 @@ export default function SupportPage() {
               <li>ภาพถ่ายหน้าจอ (Screenshot) หรือข้อความแจ้งเตือนข้อผิดพลาดที่พบ</li>
             </ul>
           </div>
+
+          {/* Founder & CEO Note */}
+          <div className="text-center text-xs text-[#718096] pt-2">
+            สร้างสรรค์และดูแลระบบโดย <strong className="text-[#1A2412]">วรธน นำทอง (Worathon Namthong)</strong> • Founder & CEO (วัยรุ่นไฟแรงผู้ก่อตั้ง SuparPOS & เงินมานี่)
+          </div>
         </div>
       </main>
     </div>

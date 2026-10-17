@@ -145,6 +145,7 @@ export default function PrivacyPolicyPage() {
                 สามารถติดต่อเราได้ที่:
               </p>
               <div className="p-3 bg-[#FAF7E8] rounded-xl text-xs space-y-1 text-[#4A5568]">
+                <p><strong>ผู้ก่อตั้งและผู้ควบคุมข้อมูล (Founder & CEO):</strong> นายวรธน นำทอง (Worathon Namthong)</p>
                 <p><strong>ทีมพัฒนา เงินมานี่ (NgenManee)</strong></p>
                 <p>อีเมล: support@ngenmoney.com</p>
                 <p>เว็บไซต์: https://ngenmoney.com</p>

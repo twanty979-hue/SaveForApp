@@ -472,9 +472,17 @@ export default function LandingPage() {
                 image: "https://ngenmoney.com/images/logo_blue.png",
                 screenshot: "https://ngenmoney.com/images/splash_artwork.png",
                 author: {
-                  "@type": "Organization",
-                  name: "เงินมานี่ (NgenManee)",
-                  url: "https://ngenmoney.com",
+                  "@type": "Person",
+                  "name": "วรธน นำทอง (Worathon Namthong)",
+                  "alternateName": ["Worathon Namthong", "วรธน นำทอง", "บอลทาโร่"],
+                  "jobTitle": "Founder & CEO (ผู้ก่อตั้งและประธานเจ้าหน้าที่บริหาร)",
+                  "url": "https://ngenmoney.com",
+                },
+                creator: {
+                  "@type": "Person",
+                  "name": "วรธน นำทอง (Worathon Namthong)",
+                  "jobTitle": "Founder & CEO",
+                  "url": "https://ngenmoney.com",
                 },
                 installUrl: [
                   "https://play.google.com/store/apps/details?id=com.savefor.app",
@@ -482,11 +490,23 @@ export default function LandingPage() {
                 ],
               },
               {
+                "@type": "Person",
+                "@id": "https://ngenmoney.com/#developer",
+                name: "วรธน นำทอง (Worathon Namthong)",
+                alternateName: ["Worathon Namthong", "วรธน นำทอง", "บอลทาโร่"],
+                jobTitle: "Founder & CEO (ผู้ก่อตั้งและประธานเจ้าหน้าที่บริหาร)",
+                url: "https://ngenmoney.com",
+                sameAs: [
+                  "https://suparpos.com",
+                  "https://github.com/twanty979-hue",
+                ],
+              },
+              {
                 "@type": "WebSite",
                 "@id": "https://ngenmoney.com/#website",
                 name: "เงินมานี่ (NgenManee)",
                 url: "https://ngenmoney.com",
-                description: "เว็บไซต์ทางการของแอปบันทึกรายรับ-รายจ่าย เงินมานี่ (NgenManee)",
+                description: "เว็บไซต์ทางการของแอปบันทึกรายรับ-รายจ่าย เงินมานี่ (NgenManee) พัฒนาโดย วรธน นำทอง",
                 inLanguage: "th-TH",
                 publisher: {
                   "@id": "https://ngenmoney.com/#organization",
@@ -498,6 +518,11 @@ export default function LandingPage() {
                 name: "เงินมานี่ (NgenManee)",
                 url: "https://ngenmoney.com",
                 logo: "https://ngenmoney.com/images/logo_blue.png",
+                founder: {
+                  "@type": "Person",
+                  "name": "วรธน นำทอง (Worathon Namthong)",
+                  "url": "https://ngenmoney.com",
+                },
                 contactPoint: {
                   "@type": "ContactPoint",
                   email: "support@ngenmoney.com",
@@ -1810,6 +1835,9 @@ export default function LandingPage() {
               <p className="text-sm text-[#718096] max-w-sm leading-relaxed font-light">
                 แอปพลิเคชันบันทึกรายรับ-รายจ่าย สแกนสลิปอัจฉริยะ และวางแผนกระปุกเงินตามฝัน ในสไตล์สมุดบันทึกอบอุ่น ปลอดภัย ไม่เข้าถึงบัญชีธนาคาร
               </p>
+              <div className="text-xs text-[#718096]">
+                ก่อตั้งและสร้างสรรค์โดย <strong className="text-[#1A2412]">วรธน นำทอง (Worathon Namthong)</strong> • Founder & CEO (วัยรุ่นไฟแรงผู้สร้าง SuparPOS & เงินมานี่)
+              </div>
               <div className="text-xs text-[#A0AEC0]">
                 เว็บไซต์ทางการ: <span className="text-[#7EA459] font-semibold">ngenmoney.com</span>
               </div>
@@ -1862,7 +1890,7 @@ export default function LandingPage() {
           {/* Bottom Copyright */}
           <div className="pt-8 border-t border-[#F0EEDC] flex flex-col sm:flex-row items-center justify-between text-xs text-[#718096] gap-4">
             <p>© {new Date().getFullYear()} เงินมานี่ (NgenManee) • ngenmoney.com - สงวนลิขสิทธิ์</p>
-            <p>ออกแบบเพื่อการเงินส่วนบุคคลที่โปร่งใสและปลอดภัย</p>
+            <p>ขับเคลื่อนด้วยไฟวัยรุ่นสตาร์ทอัพโดย <span className="font-semibold text-[#1A2412]">วรธน นำทอง (Worathon Namthong) • Founder & CEO</span></p>
           </div>
         </div>
       </footer>
