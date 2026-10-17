@@ -11,5 +11,8 @@
   },
   "observability": {
     "enabled": true
+  },
+  "build": {
+    "command": "npx opennextjs-cloudflare build"
   }
 }
