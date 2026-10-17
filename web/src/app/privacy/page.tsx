@@ -84,7 +84,10 @@ export default function PrivacyPolicyPage() {
 
             <section className="space-y-2 bg-[#FAFDF5] border border-[#E2EFCF] p-4 rounded-2xl">
               <h2 className="text-base font-bold text-[#5A8238] flex items-center gap-2">
-                <span>🛡️</span> ข้อสำคัญ: สิ่งที่เรา &ldquo;ไม่เก็บรวบรวมอย่างเด็ดขาด&rdquo;
+                <svg className="w-5 h-5 text-[#5A8238]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                <span>ข้อสำคัญ: สิ่งที่เรา &ldquo;ไม่เก็บรวบรวมอย่างเด็ดขาด&rdquo;</span>
               </h2>
               <p className="text-[#2E451C]">
                 เราไม่มีการเข้าถึงบัญชีธนาคารของคุณ ไม่มีการขอชื่อผู้ใช้งานหรือรหัสผ่านธนาคาร (Internet Banking / Mobile Banking PIN)
@@ -143,8 +146,8 @@ export default function PrivacyPolicyPage() {
               </p>
               <div className="p-3 bg-[#FAF7E8] rounded-xl text-xs space-y-1 text-[#4A5568]">
                 <p><strong>ทีมพัฒนา เงินมานี่ (NgenManee)</strong></p>
-                <p>อีเมล: support@ngenmanee.com</p>
-                <p>เว็บไซต์: https://ngenmanee.com</p>
+                <p>อีเมล: support@ngenmoney.com</p>
+                <p>เว็บไซต์: https://ngenmoney.com</p>
               </div>
             </section>
           </div>

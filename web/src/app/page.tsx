@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { IPhone17ProMax } from "@/components/IPhone17ProMax";
 
 interface ChatMessageItem {
   id: string;
@@ -112,9 +113,60 @@ export default function LandingPage() {
   const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>(initialChatMessages);
   const [todayExpense, setTodayExpense] = useState<number>(0);
 
-  // Smart Slip modal state for Tab 1
-  const [slipModalOpen, setSlipModalOpen] = useState<boolean>(true);
+  // Smart Slip modal state & QR interactions
+  const [slipModalOpen, setSlipModalOpen] = useState<boolean>(false);
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [showQrHint, setShowQrHint] = useState<boolean>(false);
   const [slipSaved, setSlipSaved] = useState<boolean>(false);
+  const [slipBadgeCount, setSlipBadgeCount] = useState<number>(18);
+
+  const handleOpenSlipModal = () => {
+    setShowQrHint(false);
+    setSlipSaved(false);
+    setIsScanning(true);
+    setSlipModalOpen(true);
+
+    // Scanning completes after 1.2s
+    setTimeout(() => {
+      setIsScanning(false);
+    }, 1200);
+  };
+
+  const handleSaveSlips = () => {
+    setSlipSaved(true);
+    setTimeout(() => {
+      setSlipModalOpen(false);
+      setSlipBadgeCount(2); // Reduced from 18 to 2
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `slip-batch-${Date.now()}`,
+          role: "card",
+          category: "expense",
+          title: "สแกนสลิป 16 ใบ",
+          amount: "-฿1,602.86",
+          date: "เมื่อสักครู่",
+          subtitle: "ตรวจจับครบทุกธนาคารไทย (กสิกร, SCB, กรุงไทย, BBL, BAY, ttb, ออมสิน, PromptPay) เรียบร้อย",
+        },
+      ]);
+      setTodayExpense((prev) => prev + 1602);
+    }, 600);
+  };
+
+  // When activeTab changes to 1 (Smart Slip), show hint then open modal over notebook
+  useEffect(() => {
+    if (activeTab === 1) {
+      setShowQrHint(true);
+      const hintTimer = setTimeout(() => {
+        setShowQrHint(false);
+        handleOpenSlipModal();
+      }, 1200);
+      return () => clearTimeout(hintTimer);
+    } else if (activeTab === 0) {
+      setShowQrHint(false);
+      setSlipModalOpen(false);
+    }
+  }, [activeTab]);
 
   // Scroll ONLY the inner chat container, NEVER scroll the browser window
   useEffect(() => {
@@ -379,6 +431,96 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#FAF7E8] text-[#2D3748] selection:bg-[#E2EFCF] selection:text-[#5A8238]">
+      {/* Schema.org Structured Data for SEO Rich Snippets */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "SoftwareApplication",
+                "@id": "https://ngenmoney.com/#app",
+                name: "เงินมานี่ (NgenManee)",
+                alternateName: ["SaveFor", "เงินมานี่", "NgenManee"],
+                applicationCategory: "FinanceApplication",
+                applicationSubCategory: "PersonalFinanceApplication",
+                operatingSystem: "iOS 15.0+, Android 8.0+",
+                offers: {
+                  "@type": "Offer",
+                  price: "0",
+                  priceCurrency: "THB",
+                },
+                aggregateRating: {
+                  "@type": "AggregateRating",
+                  ratingValue: "4.9",
+                  reviewCount: "128",
+                  bestRating: "5",
+                  worstRating: "1",
+                },
+                featureList: [
+                  "สแกนสลิปโอนเงินอัตโนมัติจากอัลบั้มย้อนหลัง 60 วัน",
+                  "ตรวจจับครบทุกธนาคารไทย (กสิกร, SCB, กรุงไทย, BBL, BAY, ttb, ออมสิน, พร้อมเพย์)",
+                  "บันทึกรายรับ-รายจ่ายสไตล์แชทสมุดโน้ต",
+                  "กระปุกเงินตามฝันและคำนวณระยะเวลาออม",
+                  "วิเคราะห์กระแสเงินสดและอัตราการออมด้วย Donut Chart",
+                  "ล็อคความเป็นส่วนตัวด้วย Face ID / Touch ID",
+                ],
+                description:
+                  "แอปบันทึกรายรับ-รายจ่ายที่อบอุ่นและฉลาดที่สุด สแกนสลิปโอนเงินบันทึกอัตโนมัติในพริบตา ตั้งเป้ากระปุกเงินตามฝัน วิเคราะห์สุขภาพการเงิน ปลอดภัยด้วย Face ID และไม่เข้าถึงบัญชีธนาคาร",
+                url: "https://ngenmoney.com",
+                image: "https://ngenmoney.com/images/logo_blue.png",
+                screenshot: "https://ngenmoney.com/images/splash_artwork.png",
+                author: {
+                  "@type": "Organization",
+                  name: "เงินมานี่ (NgenManee)",
+                  url: "https://ngenmoney.com",
+                },
+                installUrl: [
+                  "https://play.google.com/store/apps/details?id=com.savefor.app",
+                  "https://apps.apple.com/app/savefor/id6809708026",
+                ],
+              },
+              {
+                "@type": "WebSite",
+                "@id": "https://ngenmoney.com/#website",
+                name: "เงินมานี่ (NgenManee)",
+                url: "https://ngenmoney.com",
+                description: "เว็บไซต์ทางการของแอปบันทึกรายรับ-รายจ่าย เงินมานี่ (NgenManee)",
+                inLanguage: "th-TH",
+                publisher: {
+                  "@id": "https://ngenmoney.com/#organization",
+                },
+              },
+              {
+                "@type": "Organization",
+                "@id": "https://ngenmoney.com/#organization",
+                name: "เงินมานี่ (NgenManee)",
+                url: "https://ngenmoney.com",
+                logo: "https://ngenmoney.com/images/logo_blue.png",
+                contactPoint: {
+                  "@type": "ContactPoint",
+                  email: "support@ngenmoney.com",
+                  contactType: "customer support",
+                },
+              },
+              {
+                "@type": "FAQPage",
+                "@id": "https://ngenmoney.com/#faq",
+                mainEntity: faqs.map((faq) => ({
+                  "@type": "Question",
+                  name: faq.q,
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: faq.a,
+                  },
+                })),
+              },
+            ],
+          }),
+        }}
+      />
+
       {/* ─────────────────────────────────────────────────────────────
           1. HEADER / NAVBAR
       ───────────────────────────────────────────────────────────── */}
@@ -427,14 +569,8 @@ export default function LandingPage() {
             </a>
           </nav>
 
-          {/* CTA & Admin */}
+          {/* CTA Download Button */}
           <div className="flex items-center gap-3">
-            <Link
-              href="/admin"
-              className="hidden lg:inline-flex text-xs font-medium text-[#718096] hover:text-[#2D3748] px-3 py-1.5 rounded-lg border border-[#E2E8F0] hover:bg-white transition-all"
-            >
-              แดชบอร์ดแอดมิน
-            </Link>
             <a
               href="#download"
               className="inline-flex items-center gap-2 bg-[#7EA459] hover:bg-[#5A8238] text-white font-medium text-sm px-5 py-2.5 rounded-full shadow-xs hover:shadow-md transition-all transform hover:-translate-y-0.5 active:translate-y-0"
@@ -490,7 +626,7 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 mb-8">
                 {/* App Store Button */}
                 <a
-                  href="https://apps.apple.com"
+                  href="https://apps.apple.com/app/savefor/id6809708026"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-[#1A2412] hover:bg-black text-white px-6 py-3.5 rounded-2xl shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 active:translate-y-0"
@@ -510,7 +646,7 @@ export default function LandingPage() {
 
                 {/* Google Play Button */}
                 <a
-                  href="https://play.google.com"
+                  href="https://play.google.com/store/apps/details?id=com.savefor.app"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-[#1A2412] hover:bg-black text-white px-6 py-3.5 rounded-2xl shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 active:translate-y-0"
@@ -528,6 +664,7 @@ export default function LandingPage() {
                   </div>
                 </a>
               </div>
+
 
               {/* Trust Badges */}
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-6 text-xs text-[#718096]">
@@ -577,20 +714,15 @@ export default function LandingPage() {
                 ))}
               </div>
 
-              {/* iPhone 16 Pro Frame with EXACT Real App UI & Animations */}
-              <div className="relative w-[310px] sm:w-[330px] bg-gradient-to-b from-[#2B2E26] via-[#1A1D15] to-[#12140F] rounded-[52px] p-2.5 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.38)] ring-1 ring-white/20 border-2 border-[#4A4E42]/40">
-                {/* Metallic Bezel Reflection Ring */}
-                <div className="absolute inset-0 rounded-[52px] pointer-events-none ring-1 ring-inset ring-white/10" />
-
+              {/* iPhone 17 Pro Max Frame with EXACT Real App UI & Animations */}
+              <IPhone17ProMax className="w-[315px] sm:w-[335px]" variant="black">
                 {/* Inner Screen Container */}
-                <div className="w-full h-[620px] sm:h-[660px] bg-[#FAF7E8] rounded-[44px] overflow-hidden relative shadow-inner flex flex-col font-sans select-none bg-[linear-gradient(to_right,#EFE9D2_1px,transparent_1px),linear-gradient(to_bottom,#EFE9D2_1px,transparent_1px)] bg-[size:16px_16px]">
+                <div className="w-full h-full bg-[#FAF7E8] overflow-hidden relative flex flex-col font-sans select-none bg-[linear-gradient(to_right,#EFE9D2_1px,transparent_1px),linear-gradient(to_bottom,#EFE9D2_1px,transparent_1px)] bg-[size:16px_16px]">
                   {/* Status Bar */}
-                  <div className="pt-2 px-6 pb-1.5 flex items-center justify-between text-[11px] font-semibold text-[#1A2412] z-30">
+                  <div className="pt-2.5 px-6 pb-1.5 flex items-center justify-between text-[11px] font-semibold text-[#1A2412] z-30">
                     <span>01:08</span>
-                    {/* Dynamic Island */}
-                    <div className="w-24 h-4.5 bg-black rounded-full flex items-center justify-end pr-1.5 gap-1 shadow-xs">
-                      <div className="w-2 h-2 rounded-full bg-[#0D1409] border border-[#22C55E]/40" />
-                    </div>
+                    {/* Dynamic Island spacer so text and battery do not collide with the real Dynamic Island */}
+                    <div className="w-24 h-4.5" />
                     {/* Signal & Battery */}
                     <div className="flex items-center gap-1 text-[#1A2412]">
                       <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
@@ -607,8 +739,8 @@ export default function LandingPage() {
                       SIMULATED APP SCREENS (EXACT MATCH TO USER SCREENSHOTS)
                   ════════════════════════════════════════════════════════════ */}
                   
-                  {/* ──── SCREEN 0: CHAT NOTEBOOK (LIVE ANIMATED) ──── */}
-                  {activeTab === 0 && (
+                  {/* ──── SCREEN 0 & 1: NOTEBOOK & SMART SLIP SCANNER (UNIFIED) ──── */}
+                  {(activeTab === 0 || activeTab === 1) && (
                     <div className="flex-1 flex flex-col justify-between overflow-hidden relative animate-fadeIn">
                       {/* Top Header Card (Exact match to screenshot 1) */}
                       <div className="px-3 pt-1 z-20">
@@ -637,18 +769,46 @@ export default function LandingPage() {
 
                           {/* Quick Header Actions */}
                           <div className="flex items-center gap-1.5">
-                            {/* QR Scanner button with glowing RED badge 18 */}
-                            <button
-                              onClick={() => setActiveTab(1)}
-                              className="w-8 h-8 rounded-xl bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center relative shadow-2xs hover:scale-105 transition-transform"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                              </svg>
-                              <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-black px-1 py-0.2 rounded-full border border-white animate-pulse">
-                                18
-                              </span>
-                            </button>
+                            {/* QR Scanner button with glowing RED badge & guide hint */}
+                            <div className="relative">
+                              <button
+                                onClick={() => {
+                                  if (slipModalOpen) {
+                                    setSlipModalOpen(false);
+                                  } else {
+                                    handleOpenSlipModal();
+                                  }
+                                }}
+                                className={`w-8 h-8 rounded-xl bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center relative shadow-2xs hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                  showQrHint || activeTab === 1
+                                    ? "ring-4 ring-[#7EA459]/50 animate-pulse scale-105"
+                                    : ""
+                                }`}
+                                title="แตะเพื่อสแกนสลิป"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                </svg>
+                                {slipBadgeCount > 0 && (
+                                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-black px-1 py-0.2 rounded-full border border-white animate-pulse">
+                                    {slipBadgeCount}
+                                  </span>
+                                )}
+                              </button>
+
+                              {/* Pointer Tooltip Hint */}
+                              {showQrHint && (
+                                <div className="absolute top-10 -right-6 z-30 animate-bounce pointer-events-none">
+                                  <div className="bg-[#1A2412] text-white text-[9px] font-bold px-2 py-1 rounded-xl shadow-xl flex items-center gap-1 whitespace-nowrap">
+                                    <span className="w-1.5 h-1.5 bg-[#7EA459] rounded-full animate-ping" />
+                                    <span>แตะปุ่มนี้เพื่อสแกนสลิป</span>
+                                    <svg className="w-2.5 h-2.5 text-[#7EA459]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7" />
+                                    </svg>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
 
                             <div className="w-8 h-8 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 flex items-center justify-center">
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -925,97 +1085,148 @@ export default function LandingPage() {
                           </button>
                         </div>
                       </div>
-                    </div>
-                  )}
 
-                  {/* ──── SCREEN 1: SMART SLIP OCR (EXACT MATCH TO SCREENSHOT 3) ──── */}
-                  {activeTab === 1 && (
-                    <div className="flex-1 p-3 flex flex-col justify-center items-center relative animate-fadeIn">
-                      {/* Dimmed Background Notebook */}
-                      <div className="absolute inset-0 bg-black/35 backdrop-blur-2xs z-10" />
+                      {/* OVERLAY: SMART SLIP OCR MODAL (Overlays on top of the notebook) */}
+                      {slipModalOpen && (
+                        <div className="absolute inset-0 z-40 flex flex-col justify-end p-3 animate-fadeIn">
+                          {/* Darkened backdrop */}
+                          <div
+                            onClick={() => setSlipModalOpen(false)}
+                            className="absolute inset-0 bg-black/45 backdrop-blur-2xs transition-opacity cursor-pointer"
+                          />
 
-                      {/* Modal Sheet from Screenshot 3 */}
-                      <div className="relative z-20 w-full bg-[#FAF5E6] rounded-3xl p-4 border border-[#E8E2CB] shadow-2xl space-y-3">
-                        {/* Modal Header */}
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
-                            <Image
-                              src="/images/logo_blue.png"
-                              alt="Logo"
-                              width={28}
-                              height={28}
-                              className="rounded-lg"
-                            />
-                            <div>
-                              <div className="text-xs font-bold text-[#1A2412]">SaveFor</div>
-                              <div className="text-[9px] text-gray-500">สรุปยอดสแกนทั้งหมด</div>
-                            </div>
+                          {/* Modal Sheet from Screenshot 3 */}
+                          <div className="relative z-10 w-full bg-[#FAF5E6] rounded-3xl p-4 border border-[#E8E2CB] shadow-2xl space-y-3 animate-slide-up">
+                            {isScanning ? (
+                              /* Live Scanning Progress */
+                              <div className="py-5 px-3 space-y-3 text-center">
+                                <div className="relative w-44 h-20 mx-auto bg-white rounded-xl border border-gray-200 p-2 shadow-inner overflow-hidden flex items-center justify-center gap-1.5 flex-wrap">
+                                  <Image src="/images/banks/kbank.png" alt="KBank" width={18} height={18} className="rounded-full shadow-xs" />
+                                  <Image src="/images/banks/scb.png" alt="SCB" width={18} height={18} className="rounded-full shadow-xs" />
+                                  <Image src="/images/banks/ktb.png" alt="KTB" width={18} height={18} className="rounded-full shadow-xs" />
+                                  <Image src="/images/banks/bbl.png" alt="BBL" width={18} height={18} className="rounded-full shadow-xs" />
+                                  <Image src="/images/banks/bay.png" alt="BAY" width={18} height={18} className="rounded-full shadow-xs" />
+                                  <Image src="/images/banks/ttb.png" alt="TTB" width={18} height={18} className="rounded-full shadow-xs" />
+                                  <Image src="/images/banks/gsb.png" alt="GSB" width={18} height={18} className="rounded-full shadow-xs" />
+                                  <Image src="/images/banks/promptpay.png" alt="PromptPay" width={18} height={18} className="rounded-full shadow-xs" />
+                                  <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#7EA459] to-transparent shadow-[0_0_8px_#7EA459] animate-laser" />
+                                </div>
+
+                                <div>
+                                  <div className="text-xs font-bold text-[#1A2412] flex items-center justify-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-[#7EA459] animate-ping" />
+                                    <span>กำลังตรวจจับและอ่านสลิป 16 ใบ...</span>
+                                  </div>
+                                  <div className="text-[10px] text-gray-500 mt-1">
+                                    ตรวจจับครบทุกธนาคารไทย (กสิกร, SCB, กรุงไทย, BBL, BAY, ttb, ออมสิน, พร้อมเพย์)
+                                  </div>
+                                </div>
+
+                                <div className="w-48 mx-auto h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                  <div className="h-full bg-[#7EA459] rounded-full animate-pulse w-full" />
+                                </div>
+                              </div>
+                            ) : (
+                              /* Result Sheet (Exact match to Screenshot 3 with ALL BANKS) */
+                              <>
+                                <div className="flex items-start justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Image
+                                      src="/images/logo_blue.png"
+                                      alt="Logo"
+                                      width={28}
+                                      height={28}
+                                      className="rounded-lg"
+                                    />
+                                    <div>
+                                      <div className="text-xs font-bold text-[#1A2412]">SaveFor</div>
+                                      <div className="text-[9px] text-gray-500">สรุปยอดสแกนทั้งหมด</div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] font-bold bg-[#FDF0D5] text-[#9A6700] px-2.5 py-0.5 rounded-full border border-[#F3DBA7]">
+                                      16/16 ใบ
+                                    </span>
+                                    <button
+                                      onClick={() => setSlipModalOpen(false)}
+                                      className="w-5 h-5 rounded-full bg-black/5 hover:bg-black/15 text-gray-500 flex items-center justify-center transition-colors cursor-pointer"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="text-center py-0.5">
+                                  <div className="text-[10px] text-gray-500">ยอดเงินรวมทั้งสิ้น</div>
+                                  <div className="text-2xl font-black text-[#1A2412] tracking-tight mt-0.5">
+                                    ฿1602.86
+                                  </div>
+                                </div>
+
+                                {/* Bank Breakdown: ALL BANKS */}
+                                <div className="bg-[#F6EED8] p-2 rounded-2xl border border-[#E8E0C5]">
+                                  <div className="grid grid-cols-4 gap-1.5">
+                                    {[
+                                      { name: "กสิกร", logo: "/images/banks/kbank.png", count: 3 },
+                                      { name: "ไทยพาณิชย์", logo: "/images/banks/scb.png", count: 3 },
+                                      { name: "กรุงไทย", logo: "/images/banks/ktb.png", count: 2 },
+                                      { name: "กรุงเทพ", logo: "/images/banks/bbl.png", count: 2 },
+                                      { name: "กรุงศรี", logo: "/images/banks/bay.png", count: 2 },
+                                      { name: "ทีทีบี", logo: "/images/banks/ttb.png", count: 2 },
+                                      { name: "ออมสิน", logo: "/images/banks/gsb.png", count: 1 },
+                                      { name: "พร้อมเพย์", logo: "/images/banks/promptpay.png", count: 1 },
+                                    ].map((b, i) => (
+                                      <div
+                                        key={i}
+                                        className="bg-white/90 rounded-lg py-1 px-1 flex items-center justify-center gap-1 border border-black/5 shadow-2xs"
+                                      >
+                                        <Image
+                                          src={b.logo}
+                                          alt={b.name}
+                                          width={13}
+                                          height={13}
+                                          className="rounded-full shrink-0"
+                                        />
+                                        <span className="text-[9px] font-black text-[#1A2412]">
+                                          x{b.count}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="bg-[#EBF7EE] border border-[#BDE8C6] p-2 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-bold text-[#2E9E66]">
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  <span>พร้อมบันทึกสลิปทั้งหมด 16 รายการ</span>
+                                </div>
+
+                                <div className="text-center text-[9px] text-gray-400">
+                                  ปัดซ้ายเพื่อดูสลิปทีละใบ
+                                </div>
+
+                                <div className="space-y-1.5 pt-1">
+                                  <div className="w-full py-1.5 bg-[#4B4B4B] text-white text-[10px] font-bold rounded-xl text-center shadow-xs">
+                                    สรุปยอดรวม (16 ใบ)
+                                  </div>
+                                  <button
+                                    onClick={handleSaveSlips}
+                                    className="w-full py-2.5 bg-[#6F9745] hover:bg-[#5E8238] text-white text-xs font-bold rounded-xl text-center shadow-md active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                    </svg>
+                                    <span>{slipSaved ? "บันทึกสำเร็จ 16 ใบเรียบร้อยแล้ว!" : "บันทึกทั้งหมด (16 ใบ • ฿1602.86)"}</span>
+                                  </button>
+                                </div>
+                              </>
+                            )}
                           </div>
-                          <span className="text-[10px] font-bold bg-[#FDF0D5] text-[#9A6700] px-2.5 py-0.5 rounded-full border border-[#F3DBA7]">
-                            16/16 ใบ
-                          </span>
                         </div>
-
-                        {/* Total Amount Box */}
-                        <div className="text-center py-2">
-                          <div className="text-[10px] text-gray-500">ยอดเงินรวมทั้งสิ้น</div>
-                          <div className="text-2xl font-black text-[#1A2412] tracking-tight mt-0.5">
-                            ฿1602.86
-                          </div>
-                        </div>
-
-                        {/* Bank Badges Pill */}
-                        <div className="bg-[#F6EED8] p-2 rounded-2xl flex items-center justify-center gap-4 text-xs font-bold">
-                          <div className="flex items-center gap-1.5">
-                            <Image
-                              src="/images/banks/kbank.png"
-                              alt="KBank"
-                              width={18}
-                              height={18}
-                              className="rounded-full"
-                            />
-                            <span className="text-xs text-gray-700">x8</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <Image
-                              src="/images/banks/scb.png"
-                              alt="SCB"
-                              width={18}
-                              height={18}
-                              className="rounded-full"
-                            />
-                            <span className="text-xs text-gray-700">x8</span>
-                          </div>
-                        </div>
-
-                        {/* Ready to Save Tag */}
-                        <div className="bg-[#EBF7EE] border border-[#BDE8C6] p-2 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-bold text-[#2E9E66]">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>พร้อมบันทึกสลิปทั้งหมด 16 รายการ</span>
-                        </div>
-
-                        <div className="text-center text-[9px] text-gray-400">
-                          ปัดซ้ายเพื่อดูสลิปทีละใบ
-                        </div>
-
-                        {/* Actions */}
-                        <div className="space-y-1.5 pt-1">
-                          <div className="w-full py-1.5 bg-[#4B4B4B] text-white text-[10px] font-bold rounded-xl text-center shadow-xs">
-                            สรุปยอดรวม (16 ใบ)
-                          </div>
-                          <button
-                            onClick={() => setSlipSaved(true)}
-                            className="w-full py-2.5 bg-[#6F9745] hover:bg-[#5E8238] text-white text-xs font-bold rounded-xl text-center shadow-md active:scale-98 transition-all flex items-center justify-center gap-1.5 animate-pulse"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                            </svg>
-                            <span>{slipSaved ? "บันทึกสำเร็จเรียบร้อยแล้ว!" : "บันทึกทั้งหมด (16 ใบ • ฿1602.86)"}</span>
-                          </button>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   )}
 
@@ -1258,7 +1469,7 @@ export default function LandingPage() {
                     <div className="w-24 h-1 bg-gray-400 rounded-full" />
                   </div>
                 </div>
-              </div>
+              </IPhone17ProMax>
 
               {/* Active Screen Caption Box */}
               <div className="mt-4 text-center max-w-xs">
@@ -1354,7 +1565,7 @@ export default function LandingPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center font-bold">✓</div>
-                  <span>สรุปยอดเงินรวมทั้งสิ้น และจำแนกตามธนาคาร (กสิกร, ไทยพาณิชย์, พร้อมเพย์)</span>
+                  <span>สรุปยอดเงินรวมทั้งสิ้น และจำแนกครบทุกธนาคาร (กสิกร, ไทยพาณิชย์, กรุงไทย, กรุงเทพ, กรุงศรี, ทีทีบี, ออมสิน, พร้อมเพย์)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 rounded-full bg-[#E2EFCF] text-[#5A8238] flex items-center justify-center font-bold">✓</div>
@@ -1362,49 +1573,37 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-            <div className="lg:col-span-6 flex items-center justify-center gap-4">
-              <div className="w-48 sm:w-56 rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100">
-                <Image
-                  src="/images/screenshots/screen_slip_picker.png"
-                  alt="สแกนสลิปจากอัลบั้ม"
-                  width={240}
-                  height={520}
-                  className="w-full h-auto object-cover"
-                />
-              </div>
-              <div className="w-48 sm:w-56 rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100">
-                <Image
-                  src="/images/screenshots/screen_slip_result.png"
-                  alt="สรุปยอดสแกนสลิป"
-                  width={240}
-                  height={520}
-                  className="w-full h-auto object-cover"
-                />
-              </div>
+            <div className="lg:col-span-6 flex items-center justify-center gap-4 sm:gap-6">
+              <IPhone17ProMax
+                src="/images/mockups/mockup_slip_picker.png"
+                alt="สแกนสลิปจากอัลบั้ม ย้อนหลังได้สูงสุด 60 วัน"
+                className="w-44 sm:w-56"
+                variant="black"
+              />
+              <IPhone17ProMax
+                src="/images/mockups/mockup_slip_result.png"
+                alt="สรุปยอดสแกนสลิป แยกธนาคารอัตโนมัติ"
+                className="w-44 sm:w-56"
+                variant="black"
+              />
             </div>
           </div>
 
           {/* Feature 2: Chat Style Home & Dreams */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-white rounded-3xl p-6 sm:p-10 border border-[#E8E2CB] shadow-xs mb-12">
-            <div className="lg:col-span-6 order-2 lg:order-1 flex items-center justify-center gap-4">
-              <div className="w-48 sm:w-56 rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100">
-                <Image
-                  src="/images/screenshots/screen_home.png"
-                  alt="หน้าแรกสไตล์แชท"
-                  width={240}
-                  height={520}
-                  className="w-full h-auto object-cover"
-                />
-              </div>
-              <div className="w-48 sm:w-56 rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100">
-                <Image
-                  src="/images/screenshots/screen_dreams.png"
-                  alt="รายการที่ตั้งไว้ & กระปุกเงินตามฝัน"
-                  width={240}
-                  height={520}
-                  className="w-full h-auto object-cover"
-                />
-              </div>
+            <div className="lg:col-span-6 order-2 lg:order-1 flex items-center justify-center gap-4 sm:gap-6">
+              <IPhone17ProMax
+                src="/images/mockups/mockup_home.png"
+                alt="หน้าแรกสไตล์แชทสมุดโน้ต"
+                className="w-44 sm:w-56"
+                variant="black"
+              />
+              <IPhone17ProMax
+                src="/images/mockups/mockup_dreams.png"
+                alt="รายการที่ตั้งไว้ & กระปุกเงินตามฝัน"
+                className="w-44 sm:w-56"
+                variant="black"
+              />
             </div>
 
             <div className="lg:col-span-6 order-1 lg:order-2 space-y-4">
@@ -1463,17 +1662,15 @@ export default function LandingPage() {
             </div>
 
             <div className="lg:col-span-6 flex items-center justify-center">
-              <div className="w-56 sm:w-64 rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100">
-                <Image
-                  src="/images/screenshots/screen_dashboard.png"
-                  alt="แดชบอร์ดการเงิน เงินมานี่"
-                  width={280}
-                  height={600}
-                  className="w-full h-auto object-cover"
-                />
-              </div>
+              <IPhone17ProMax
+                src="/images/mockups/mockup_dashboard.png"
+                alt="แดชบอร์ดการเงิน เงินมานี่"
+                className="w-56 sm:w-68"
+                variant="black"
+              />
             </div>
           </div>
+
         </div>
       </section>
 
@@ -1548,7 +1745,7 @@ export default function LandingPage() {
               {/* Dual Store Download Buttons */}
               <div className="flex flex-col sm:flex-row items-center gap-4">
                 <a
-                  href="https://apps.apple.com"
+                  href="https://apps.apple.com/app/savefor/id6809708026"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-[#1A2412] px-6 py-3.5 rounded-2xl shadow-md transition-transform hover:-translate-y-0.5 active:translate-y-0 font-medium"
@@ -1567,7 +1764,7 @@ export default function LandingPage() {
                 </a>
 
                 <a
-                  href="https://play.google.com"
+                  href="https://play.google.com/store/apps/details?id=com.savefor.app"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-[#1A2412] px-6 py-3.5 rounded-2xl shadow-md transition-transform hover:-translate-y-0.5 active:translate-y-0 font-medium"
@@ -1657,11 +1854,6 @@ export default function LandingPage() {
                   <a href="mailto:support@ngenmoney.com" className="hover:text-[#7EA459] transition-colors">
                     support@ngenmoney.com
                   </a>
-                </li>
-                <li>
-                  <Link href="/admin" className="hover:text-[#7EA459] transition-colors text-xs text-[#A0AEC0]">
-                    เข้าสู่ระบบแอดมิน
-                  </Link>
                 </li>
               </ul>
             </div>

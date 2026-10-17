@@ -57,7 +57,10 @@ export default function DeleteAccountPage() {
           {/* Option 1: In-App */}
           <div className="p-6 rounded-2xl bg-[#FAFDF5] border border-[#E2EFCF] space-y-3">
             <h2 className="text-base font-bold text-[#5A8238] flex items-center gap-2">
-              <span>📱</span> วิธีที่ 1: ลบบัญชีได้ทันทีผ่านแอป เงินมานี่ (แนะนำ)
+              <svg className="w-5 h-5 text-[#5A8238]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              <span>วิธีที่ 1: ลบบัญชีได้ทันทีผ่านแอป เงินมานี่ (แนะนำ)</span>
             </h2>
             <ol className="list-decimal pl-5 text-sm text-[#2E451C] space-y-1.5">
               <li>เปิดแอปพลิเคชัน <strong>เงินมานี่</strong> บนโทรศัพท์มือถือของคุณ</li>
@@ -71,7 +74,10 @@ export default function DeleteAccountPage() {
           {/* Option 2: Web Form */}
           <div className="p-6 rounded-2xl bg-white border border-[#E8E2CB] shadow-xs space-y-4">
             <h2 className="text-base font-bold text-[#1A2412] flex items-center gap-2">
-              <span>🌐</span> วิธีที่ 2: ส่งคำร้องขอลบบัญชีผ่านแบบฟอร์มนี้
+              <svg className="w-5 h-5 text-[#1A2412]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+              </svg>
+              <span>วิธีที่ 2: ส่งคำร้องขอลบบัญชีผ่านแบบฟอร์มนี้</span>
             </h2>
             <p className="text-xs text-[#718096]">
               หากคุณได้ลบแอปไปแล้วหรือไม่สะดวกเข้าใช้งานแอป สามารถกรอกอีเมลที่ใช้ลงทะเบียนเพื่อให้ทีมงานดำเนินการลบบัญชีให้คุณ
@@ -79,7 +85,11 @@ export default function DeleteAccountPage() {
 
             {isSubmitted ? (
               <div className="p-6 rounded-2xl bg-[#E2EFCF] border border-[#C5DCAB] text-center space-y-2">
-                <div className="text-3xl">✅</div>
+                <div className="w-12 h-12 rounded-full bg-[#5A8238] text-white flex items-center justify-center mx-auto">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
                 <h3 className="font-bold text-base text-[#1A2412]">
                   ได้รับคำร้องขอลบบัญชีของคุณเรียบร้อยแล้ว
                 </h3>
@@ -116,8 +126,11 @@ export default function DeleteAccountPage() {
                   />
                 </div>
 
-                <div className="p-3 bg-red-50 rounded-xl border border-red-100 text-xs text-red-700">
-                  ⚠️ คำเตือน: เมื่อบัญชีถูกลบ ประวัติรายรับ-รายจ่าย เป้าหมายกระปุกเงิน และข้อมูลทั้งหมดจะไม่สามารถกู้คืนได้
+                <div className="p-3 bg-red-50 rounded-xl border border-red-100 text-xs text-red-700 flex items-start gap-2">
+                  <svg className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span>คำเตือน: เมื่อบัญชีถูกลบ ประวัติรายรับ-รายจ่าย เป้าหมายกระปุกเงิน และข้อมูลทั้งหมดจะไม่สามารถกู้คืนได้</span>
                 </div>
 
                 <button
