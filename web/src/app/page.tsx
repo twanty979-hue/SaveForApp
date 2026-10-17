@@ -722,23 +722,6 @@ export default function LandingPage() {
 
             {/* Right Column: LIVING ANIMATED APP SIMULATION */}
             <div className="lg:col-span-5 flex flex-col items-center">
-              {/* Feature Switcher Pills */}
-              <div className="flex flex-wrap items-center justify-center gap-1.5 p-1 bg-white/90 backdrop-blur-md rounded-2xl border border-[#E8E2CB] shadow-xs mb-4 text-xs font-semibold">
-                {screenTabs.map((tab, idx) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(idx)}
-                    className={`px-3 py-1.5 rounded-xl transition-all ${
-                      activeTab === idx
-                        ? "bg-[#7EA459] text-white shadow-xs font-bold"
-                        : "text-[#4A5568] hover:text-[#1A2412]"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
               {/* iPhone 17 Pro Max Frame with EXACT Real App UI & Animations */}
               <IPhone17ProMax className="w-[315px] sm:w-[335px]" variant="black">
                 {/* Inner Screen Container */}
