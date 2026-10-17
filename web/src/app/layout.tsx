@@ -126,8 +126,14 @@ export const metadata: Metadata = {
     images: ["/images/splash_artwork.png"],
   },
   icons: {
-    icon: "/images/logo_blue.png",
-    apple: "/images/logo_blue.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/images/logo_blue.png", sizes: "192x192", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: [
+      { url: "/images/logo_blue.png", sizes: "180x180", type: "image/png" },
+    ],
   },
   alternates: {
     canonical: "https://ngenmoney.com",
